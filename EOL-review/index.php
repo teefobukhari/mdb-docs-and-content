@@ -491,10 +491,37 @@ if($loggedIn && $role==='admin' && isset($_GET['export']) && $_GET['export']==='
 $screen=$_GET['screen']??($role==='head'?'queue':'dashboard');
 $assets=[]; $stats=['total'=>0,'active'=>0,'eol'=>0,'over4'=>0]; $admins=[]; $heads=[]; $segments=[];
 $auditRows=[]; $loginRows=[]; $appRows=[]; $syncRows=[]; $logtab=$_GET['logtab']??'audit';
+$dash=['kpi'=>['pend'=>0,'decided'=>0,'scanFail'=>0,'warrExp'=>0],'segTotals'=>[],'models'=>[],'scan'=>[],'warranty'=>[],'decByDay'=>[]];
 if($loggedIn&&$conn){
     if($role==='admin'){
         if($r=$conn->query("SELECT COUNT(*) t,SUM(is_eol) ee,SUM(over_four_years) o FROM eol_assets")->fetch_assoc()){
             $stats['total']=(int)$r['t'];$stats['eol']=(int)$r['ee'];$stats['over4']=(int)$r['o'];$stats['active']=$stats['total']-$stats['eol']; }
+        if($screen==='dashboard'){
+            // Additional read-only aggregates that power the Command Center visuals.
+            if($r=$conn->query("SELECT
+                    SUM(is_eol=1 AND decision IS NULL) pend,
+                    SUM(decision IS NOT NULL) decided,
+                    SUM(last_scan_status='FAILED') scanFail,
+                    SUM(last_scan_status='SUCCESS') scanOk,
+                    SUM(warranty_expiry IS NOT NULL AND warranty_expiry<CURDATE()) warrExp,
+                    SUM(warranty_expiry IS NOT NULL AND warranty_expiry>=CURDATE() AND warranty_expiry<DATE_ADD(CURDATE(),INTERVAL 90 DAY)) warrSoon,
+                    SUM(warranty_expiry IS NOT NULL AND warranty_expiry>=DATE_ADD(CURDATE(),INTERVAL 90 DAY)) warrAct,
+                    SUM(warranty_expiry IS NULL) warrUnk,
+                    COUNT(DISTINCT NULLIF(department,'')) segs, COUNT(*) tot
+                    FROM eol_assets")->fetch_assoc()){
+                $dash['kpi']=array_map('intval',$r);
+                $dash['scan']=['SUCCESS'=>(int)$r['scanOk'],'FAILED'=>(int)$r['scanFail'],'OTHER'=>max(0,(int)$r['tot']-(int)$r['scanOk']-(int)$r['scanFail'])];
+                $dash['warranty']=['expired'=>(int)$r['warrExp'],'soon'=>(int)$r['warrSoon'],'active'=>(int)$r['warrAct'],'unknown'=>(int)$r['warrUnk']];
+            }
+            if($rs=$conn->query("SELECT department,COUNT(*) total,SUM(is_eol) eol FROM eol_assets WHERE department<>'' AND department IS NOT NULL GROUP BY department ORDER BY total DESC LIMIT 8"))
+                while($row=$rs->fetch_assoc()) $dash['segTotals'][]=['dept'=>$row['department'],'total'=>(int)$row['total'],'eol'=>(int)$row['eol']];
+            if($rs=$conn->query("SELECT COALESCE(NULLIF(model,''),'Unknown') model,COUNT(*) c FROM eol_assets GROUP BY model ORDER BY c DESC LIMIT 6"))
+                while($row=$rs->fetch_assoc()) $dash['models'][]=['model'=>$row['model'],'c'=>(int)$row['c']];
+            $tmp=[];
+            if($rs=$conn->query("SELECT DATE(decided_at) d,COUNT(*) c FROM eol_assets WHERE decided_at IS NOT NULL GROUP BY DATE(decided_at) ORDER BY d DESC LIMIT 14"))
+                while($row=$rs->fetch_assoc()) $tmp[]=['d'=>$row['d'],'c'=>(int)$row['c']];
+            $dash['decByDay']=array_reverse($tmp);
+        }
         if($screen==='inventory'){
             $w=[];$p=[];$t='';
             $fDept=trim($_GET['dept']??'');$fScan=trim($_GET['scan']??'');$fEol=trim($_GET['eol']??'');$q=trim($_GET['q']??'');
@@ -713,6 +740,17 @@ select option{background:#0e1630;color:var(--ink)}
 .fbring small{font-size:9px;letter-spacing:.15em;color:var(--mut);margin-top:3px;font-weight:700}
 .fbleg{display:flex;flex-direction:column;gap:10px;font-size:12.5px}
 .fbleg .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:middle}
+.fbleg b{color:var(--ink)}
+/* stacked bar */
+.stack{display:flex;height:22px;border-radius:8px;overflow:hidden;border:1px solid var(--bd);margin:8px 0 18px}
+.stack i{height:100%;transition:width 1s cubic-bezier(.16,1,.3,1)}
+.stkleg{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;font-size:12px}
+.stkleg div{display:flex;align-items:center;gap:8px;color:var(--mut)}
+.stkleg .dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+.stkleg b{margin-left:auto;color:var(--ink);font-family:ui-monospace,Menlo,monospace}
+/* sparkline / area trend */
+.spark-svg{width:100%;height:100%;display:block;overflow:visible}
+.spark-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--mut2);font-size:12.5px}
 
 /* TABLE / inputs in dark */
 .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
@@ -925,15 +963,30 @@ function render_notices($error,$success){
         <div class="glass kpi ok"><div class="ic-badge"><?=icon('check-circle')?></div><div class="lab">Active</div><b class="count" data-to="<?=(int)$stats['active']?>">0</b></div>
         <div class="glass kpi eol"><div class="ic-badge"><?=icon('alert')?></div><div class="lab">Flagged EoL</div><b class="count" data-to="<?=(int)$stats['eol']?>">0</b></div>
         <div class="glass kpi warn"><div class="ic-badge"><?=icon('clock')?></div><div class="lab">Over 4 years</div><b class="count" data-to="<?=(int)$stats['over4']?>">0</b></div>
+        <!-- Secondary KPI row -->
+        <div class="glass kpi warn"><div class="ic-badge"><?=icon('queue')?></div><div class="lab">Pending decisions</div><b class="count" data-to="<?=(int)$dash['kpi']['pend']?>">0</b></div>
+        <div class="glass kpi ok"><div class="ic-badge"><?=icon('check')?></div><div class="lab">Decided</div><b class="count" data-to="<?=(int)$dash['kpi']['decided']?>">0</b></div>
+        <div class="glass kpi eol"><div class="ic-badge"><?=icon('activity')?></div><div class="lab">Scan failures</div><b class="count" data-to="<?=(int)$dash['kpi']['scanFail']?>">0</b></div>
+        <div class="glass kpi blue"><div class="ic-badge"><?=icon('shield')?></div><div class="lab">Warranty expired</div><b class="count" data-to="<?=(int)$dash['kpi']['warrExp']?>">0</b></div>
         <!-- Lifecycle pipeline -->
         <div class="glass pipeline span-all">
           <div class="tile-h"><span><?=icon('activity')?> Asset Lifecycle Pipeline</span></div>
           <div class="flow" id="flow"></div>
         </div>
+        <!-- Decisions over time (full-width trend) -->
+        <div class="glass panel span-all"><div class="tile-h"><span><?=icon('activity')?> Decision Throughput · last runs</span></div><div class="cbox" id="fxTime" style="height:170px"></div></div>
         <!-- Segment ranking -->
         <div class="glass panel span-2"><h3>EoL Risk by Segment</h3><div class="cbox"><canvas id="cSeg" role="img" aria-label="Ranking of End-of-Life flags by segment"></canvas></div></div>
         <!-- Decision core -->
         <div class="glass panel span-2"><h3>Decision Core</h3><div class="cbox"><canvas id="cDec" role="img" aria-label="Breakdown of segment-head decisions on End-of-Life devices"></canvas></div></div>
+        <!-- Fleet distribution -->
+        <div class="glass panel span-2"><h3>Fleet Distribution by Segment</h3><div class="cbox" id="fxSeg"></div></div>
+        <!-- Scan health -->
+        <div class="glass panel span-2"><h3>Scan Health</h3><div class="cbox" id="fxScan"></div></div>
+        <!-- Warranty status -->
+        <div class="glass panel span-2"><h3>Warranty Status</h3><div class="cbox" id="fxWarr"></div></div>
+        <!-- Top models -->
+        <div class="glass panel span-2"><h3>Top Device Models</h3><div class="cbox" id="fxModels"></div></div>
       </section>
 
     <?php elseif($role==='admin'&&$screen==='inventory'):?>
@@ -1051,6 +1104,7 @@ function render_notices($error,$success){
 const seg=<?php $l=[];$v=[];$rs=$conn->query("SELECT department,SUM(is_eol) e FROM eol_assets GROUP BY department ORDER BY e DESC");if($rs)while($r=$rs->fetch_assoc()){$l[]=$r['department'];$v[]=(int)$r['e'];}echo json_encode(['labels'=>$l,'data'=>$v]);?>;
 const dec=<?php $rs=$conn->query("SELECT SUM(decision='Replace') r,SUM(decision='Extend') e,SUM(decision='Return') t,SUM(is_eol=1 AND decision IS NULL) p FROM eol_assets");$r=$rs?$rs->fetch_assoc():[];echo json_encode([(int)($r['r']??0),(int)($r['e']??0),(int)($r['t']??0),(int)($r['p']??0)]);?>;
 const stats=<?php echo json_encode(['total'=>(int)$stats['total'],'active'=>(int)$stats['active'],'eol'=>(int)$stats['eol'],'over4'=>(int)$stats['over4']]);?>;
+const dash=<?php echo json_encode($dash);?>;
 (function(){
   const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
   const easeOut=t=>1-Math.pow(1-t,3);
@@ -1101,6 +1155,32 @@ const stats=<?php echo json_encode(['total'=>(int)$stats['total'],'active'=>(int
     flow.innerHTML=stages.map(([n,v,c])=>`<div class="stage ${c}"><div class="bar"><span class="v">${(v||0).toLocaleString()}</span><span class="n">${n}</span></div>${arrow}</div>`).join('');
     requestAnimationFrame(()=>{flow.querySelectorAll('.stage').forEach((s,i)=>{const v=stages[i][1]||0;s.querySelector('.bar').style.setProperty('--w',Math.max(6,Math.round(v/max*100))+'%');});});
   }
+
+  // ---- dependency-free CSS/SVG visuals (always render) ----
+  function fmt(n){return (n||0).toLocaleString();}
+  function barlist(id,items){var el=document.getElementById(id);if(!el)return;
+    var mx=items.reduce(function(m,x){return Math.max(m,x.v);},1);
+    el.innerHTML='<div class="fbbars">'+items.map(function(x){return '<div class="fbrow"><span class="fbl">'+x.l+'</span><span class="fbt"><i style="width:'+Math.max(3,Math.round(x.v/mx*100))+'%'+(x.c?';background:'+x.c:'')+'"></i></span><b>'+fmt(x.v)+'</b></div>';}).join('')+'</div>';}
+  function donut(id,segs,center){var el=document.getElementById(id);if(!el)return;
+    var tot=segs.reduce(function(a,s){return a+s.v;},0)||1,acc=0,stops=[];
+    segs.forEach(function(s){stops.push(s.c+' '+(acc/tot*360)+'deg '+((acc+s.v)/tot*360)+'deg');acc+=s.v;});
+    el.innerHTML='<div class="fbdonut"><div class="fbring" style="background:conic-gradient('+stops.join(',')+')"><span>'+fmt(tot)+'<small>'+center+'</small></span></div><div class="fbleg">'+segs.map(function(s){return '<div><span class="dot" style="background:'+s.c+'"></span>'+s.l+' <b>'+fmt(s.v)+'</b></div>';}).join('')+'</div></div>';}
+  function stacked(id,segs){var el=document.getElementById(id);if(!el)return;
+    var tot=segs.reduce(function(a,s){return a+s.v;},0)||1;
+    el.innerHTML='<div class="stack">'+segs.map(function(s){return '<i style="width:'+(s.v/tot*100)+'%;background:'+s.c+'"></i>';}).join('')+'</div><div class="stkleg">'+segs.map(function(s){return '<div><span class="dot" style="background:'+s.c+'"></span>'+s.l+'<b>'+fmt(s.v)+'</b></div>';}).join('')+'</div>';}
+  function sparkline(id,pts){var el=document.getElementById(id);if(!el)return;
+    if(!pts.length){el.innerHTML='<div class="spark-empty">No decisions recorded yet.</div>';return;}
+    var W=600,H=120,pad=12,n=pts.length,max=Math.max.apply(null,pts.map(function(p){return p.c;}).concat(1));
+    var x=function(i){return pad+i*((W-2*pad)/Math.max(1,n-1));},y=function(v){return H-pad-v/max*(H-2*pad);};
+    var line=pts.map(function(p,i){return (i?'L':'M')+x(i).toFixed(1)+' '+y(p.c).toFixed(1);}).join(' ');
+    var area=line+' L'+x(n-1).toFixed(1)+' '+(H-pad)+' L'+x(0).toFixed(1)+' '+(H-pad)+' Z';
+    el.innerHTML='<svg class="spark-svg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none"><defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#38bdf8" stop-opacity=".45"/><stop offset="1" stop-color="#38bdf8" stop-opacity="0"/></linearGradient></defs><path d="'+area+'" fill="url(#sg)"/><path d="'+line+'" fill="none" stroke="#38bdf8" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/></svg>';}
+
+  barlist('fxSeg',(dash.segTotals||[]).map(function(s){return {l:s.dept,v:s.total};}));
+  donut('fxScan',[{l:'Success',v:(dash.scan.SUCCESS||0),c:'#34d399'},{l:'Failed',v:(dash.scan.FAILED||0),c:'#fb7185'},{l:'Other',v:(dash.scan.OTHER||0),c:'#6f82a6'}],'SCANS');
+  stacked('fxWarr',[{l:'Expired',v:(dash.warranty.expired||0),c:'#fb7185'},{l:'≤ 90 days',v:(dash.warranty.soon||0),c:'#e6b042'},{l:'Active',v:(dash.warranty.active||0),c:'#34d399'},{l:'Unknown',v:(dash.warranty.unknown||0),c:'#6f82a6'}]);
+  barlist('fxModels',(dash.models||[]).map(function(m){return {l:m.model,v:m.c,c:'linear-gradient(90deg,#4f86d5,#38bdf8)'};}));
+  sparkline('fxTime',(dash.decByDay||[]).map(function(d){return {d:d.d,c:d.c};}));
 
   if(window.Chart){
     Chart.defaults.font.family="'Gotham',system-ui,'Segoe UI',sans-serif";Chart.defaults.color='#93a4c4';
