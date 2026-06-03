@@ -38,6 +38,58 @@ function client_ua(){ $u=$_SERVER['HTTP_USER_AGENT']??''; return $u!==''?substr(
 function dash_row($conn,$sql){ try{ $r=$conn->query($sql); return $r?($r->fetch_assoc()?:[]):[]; }catch(\Throwable $e){ return []; } }
 function dash_all($conn,$sql){ try{ $r=$conn->query($sql); $o=[]; if($r) while($x=$r->fetch_assoc())$o[]=$x; return $o; }catch(\Throwable $e){ return []; } }
 
+/* Normalise a hostname/device key for cross-source correlation (strip domain, upper-case) */
+function norm_host($s){ $s=strtoupper(trim((string)$s)); if($s==='')return ''; $s=explode('.',$s)[0]; return preg_replace('/\s+/','',$s); }
+
+/**
+ * Minimal dependency-free XLSX reader (first worksheet).
+ * Returns [headerRow(array of strings), dataRows(array of numeric arrays)] or [null,null].
+ * Uses ZipArchive + SimpleXML — no composer/PhpSpreadsheet needed.
+ */
+function read_xlsx($path){
+    if(!class_exists('ZipArchive')) return [null,null];
+    $zip=new ZipArchive();
+    if($zip->open($path)!==true) return [null,null];
+    // shared strings
+    $shared=[];
+    if(($s=$zip->getFromName('xl/sharedStrings.xml'))!==false){
+        $xml=@simplexml_load_string($s);
+        if($xml) foreach($xml->si as $si){
+            $t=''; if(isset($si->t)) $t=(string)$si->t;
+            else foreach($si->r as $r) $t.=(string)$r->t;   // rich text runs
+            $shared[]=$t;
+        }
+    }
+    // first worksheet (sheet1.xml is the conventional first sheet)
+    $sheet=$zip->getFromName('xl/worksheets/sheet1.xml');
+    if($sheet===false){ for($i=1;$i<=10;$i++){ if(($sheet=$zip->getFromName("xl/worksheets/sheet$i.xml"))!==false) break; } }
+    $zip->close();
+    if(!$sheet) return [null,null];
+    $xml=@simplexml_load_string($sheet); if(!$xml) return [null,null];
+    $colIdx=function($ref){ $c=preg_replace('/[0-9]/','',$ref); $n=0; for($i=0;$i<strlen($c);$i++){ $n=$n*26+(ord($c[$i])-64); } return $n-1; };
+    $rows=[];
+    foreach($xml->sheetData->row as $row){
+        $cells=[]; $max=-1;
+        foreach($row->c as $c){
+            $ref=(string)$c['r']; $i=$ref!==''?$colIdx($ref):count($cells);
+            $type=(string)$c['t']; $val='';
+            if($type==='s'){ $idx=(int)$c->v; $val=$shared[$idx]??''; }
+            elseif($type==='inlineStr'){ $val=isset($c->is->t)?(string)$c->is->t:''; }
+            else { $val=isset($c->v)?(string)$c->v:''; }
+            $cells[$i]=trim($val); if($i>$max)$max=$i;
+        }
+        $line=[]; for($i=0;$i<=$max;$i++) $line[]=$cells[$i]??'';
+        $rows[]=$line;
+    }
+    // drop fully empty leading rows
+    while($rows && count(array_filter($rows[0],fn($x)=>$x!==''))===0) array_shift($rows);
+    if(!$rows) return [null,null];
+    $hdr=array_map(function($h){return strtolower(trim(preg_replace('/\s+/',' ',$h)));},array_shift($rows));
+    // drop fully empty data rows
+    $rows=array_values(array_filter($rows,fn($r)=>count(array_filter($r,fn($x)=>$x!==''))>0));
+    return [$hdr,$rows];
+}
+
 /* Inline SVG icon set for KPI tiles / chart headers */
 function icon($n,$cls='ic'){
     $p=[
@@ -486,13 +538,21 @@ if($loggedIn && $role==='admin' && $_SERVER['REQUEST_METHOD']==='POST'){
     if(isset($_POST['upload_source']) && isset($_FILES['csv_file']) && $_FILES['csv_file']['error']===UPLOAD_ERR_OK){
         $source=$_POST['upload_source']; $site=trim($_POST['ad_site']??'');
         $rows=[]; $hdr=null;
-        if(($fh=fopen($_FILES['csv_file']['tmp_name'],'r'))!==false){
-            $rawHdr=fgetcsv($fh);
-            if($rawHdr) $hdr=array_map(function($h){return strtolower(trim(preg_replace('/\s+/',' ',$h)));},$rawHdr);
-            while(($r=fgetcsv($fh))!==false) $rows[]=$r;
-            fclose($fh);
+        $fname=strtolower($_FILES['csv_file']['name']??'');
+        $isXlsx=(str_ends_with($fname,'.xlsx')||str_ends_with($fname,'.xlsm'));
+        if($isXlsx){
+            [$hdr,$rows]=read_xlsx($_FILES['csv_file']['tmp_name']);
+            if(!$hdr) $error='Could not read the Excel file (need .xlsx with a header row).';
+        } else {
+            if(($fh=fopen($_FILES['csv_file']['tmp_name'],'r'))!==false){
+                $rawHdr=fgetcsv($fh);
+                if($rawHdr) $hdr=array_map(function($h){return strtolower(trim(preg_replace('/\s+/',' ',$h)));},$rawHdr);
+                while(($r=fgetcsv($fh))!==false) $rows[]=$r;
+                fclose($fh);
+            }
         }
-        if(!$hdr||!$rows){ $error='CSV is empty or unreadable.'; }
+        if($error!==''){ /* keep prior parse error */ }
+        elseif(!$hdr||!$rows){ $error='File is empty or unreadable.'; }
         else {
             $col=function($name)use($hdr){ $n=strtolower(trim($name));
                 foreach($hdr as $i=>$h){if($h===$n||str_replace(' ','_',$h)===$n||str_replace('_',' ',$h)===$n)return $i;} return null; };
@@ -590,6 +650,7 @@ $screen=$_GET['screen']??($role==='head'?'queue':'dashboard');
 $assets=[]; $stats=['total'=>0,'active'=>0,'eol'=>0,'over4'=>0]; $admins=[]; $heads=[]; $segments=[];
 $auditRows=[]; $loginRows=[]; $appRows=[]; $syncRows=[]; $logtab=$_GET['logtab']??'audit';
 $dash=['kpi'=>[],'segTotals'=>[],'decByDay'=>[],'scan'=>[],'warranty'=>[],'intune'=>[],'adOs'=>[],'src'=>[]];
+$unified=[]; $ucov=['unique'=>0,'core3'=>0,'me'=>0,'ad'=>0,'intune'=>0,'dark'=>0,'me_only'=>0,'unmanaged'=>0,'missing_ad'=>0]; $unifiedTotal=0;
 if($loggedIn&&$conn){
     if($role==='admin'){
         if($r=$conn->query("SELECT COUNT(*) t,SUM(is_eol) ee,SUM(over_four_years) o FROM eol_assets")->fetch_assoc()){
@@ -662,6 +723,31 @@ if($loggedIn&&$conn){
             elseif($logtab==='logins'){ $rs=$conn->query("SELECT * FROM eol_login_log ORDER BY id DESC LIMIT 200"); while($row=$rs->fetch_assoc())$loginRows[]=$row; }
             elseif($logtab==='sync'){ $rs=$conn->query("SELECT * FROM eol_sync_runs ORDER BY id DESC LIMIT 100"); while($row=$rs->fetch_assoc())$syncRows[]=$row; }
             elseif($logtab==='app'){ $rs=$conn->query("SELECT * FROM eol_app_log ORDER BY id DESC LIMIT 200"); while($row=$rs->fetch_assoc())$appRows[]=$row; }
+        }
+        if($screen==='unified'){
+            // Correlate every source on a normalised hostname key -> one row per device.
+            $uq=trim($_GET['uq']??''); $ufilter=$_GET['uf']??'';
+            $U=[];
+            $touch=function($k,$disp)use(&$U){ if($k==='')return; if(!isset($U[$k]))$U[$k]=['name'=>$disp,'me'=>0,'ad'=>0,'intune'=>0,'dark'=>0,'segment'=>'','eol'=>0,'decision'=>'','ad_status'=>'','ad_site'=>'','compliance'=>'','dark_eol'=>0]; };
+            foreach(dash_all($conn,"SELECT asset_name,department,is_eol,decision FROM eol_assets LIMIT 8000") as $r){ $k=norm_host($r['asset_name']); $touch($k,$r['asset_name']); if($k){ $U[$k]['me']=1;$U[$k]['segment']=$r['department']??'';$U[$k]['eol']=(int)$r['is_eol'];$U[$k]['decision']=$r['decision']??''; } }
+            foreach(dash_all($conn,"SELECT computer_name,account_status,site FROM eol_ad LIMIT 8000") as $r){ $k=norm_host($r['computer_name']); $touch($k,$r['computer_name']); if($k){ $U[$k]['ad']=1;$U[$k]['ad_status']=$r['account_status']??'';$U[$k]['ad_site']=$r['site']??''; } }
+            foreach(dash_all($conn,"SELECT device_name,compliance FROM eol_intune LIMIT 8000") as $r){ $k=norm_host($r['device_name']); $touch($k,$r['device_name']); if($k){ $U[$k]['intune']=1;$U[$k]['compliance']=$r['compliance']??''; } }
+            foreach(dash_all($conn,"SELECT hostname,eol FROM eol_darksight LIMIT 8000") as $r){ $k=norm_host($r['hostname']); $touch($k,$r['hostname']); if($k){ $U[$k]['dark']=1;$U[$k]['dark_eol']=(int)($r['eol']??0); } }
+            $ucov=['unique'=>count($U),'core3'=>0,'me'=>0,'ad'=>0,'intune'=>0,'dark'=>0,'me_only'=>0,'unmanaged'=>0,'missing_ad'=>0];
+            foreach($U as $u){
+                $ucov['me']+=$u['me'];$ucov['ad']+=$u['ad'];$ucov['intune']+=$u['intune'];$ucov['dark']+=$u['dark'];
+                if($u['me']&&$u['ad']&&$u['intune'])$ucov['core3']++;
+                if($u['me']&&!$u['ad']&&!$u['intune']&&!$u['dark'])$ucov['me_only']++;
+                if(!$u['intune'])$ucov['unmanaged']++;
+                if($u['me']&&!$u['ad'])$ucov['missing_ad']++;
+            }
+            $unified=array_values($U);
+            usort($unified,function($a,$b){ $sa=$a['me']+$a['ad']+$a['intune']+$a['dark']; $sb=$b['me']+$b['ad']+$b['intune']+$b['dark']; return $sa!==$sb?$sa-$sb:strcmp($a['name'],$b['name']); });
+            if($uq!=='') $unified=array_values(array_filter($unified,fn($u)=>stripos($u['name'],$uq)!==false||stripos($u['segment'],$uq)!==false));
+            if($ufilter==='gaps') $unified=array_values(array_filter($unified,fn($u)=>($u['me']+$u['ad']+$u['intune']+$u['dark'])<3));
+            elseif($ufilter==='unmanaged') $unified=array_values(array_filter($unified,fn($u)=>!$u['intune']));
+            elseif($ufilter==='eol') $unified=array_values(array_filter($unified,fn($u)=>$u['eol']));
+            $unifiedTotal=count($unified); $unified=array_slice($unified,0,300);
         }
     } elseif($role==='head'&&$myDepts){
         $ph=rtrim(str_repeat('?,',count($myDepts)),','); $t=str_repeat('s',count($myDepts));
@@ -775,6 +861,96 @@ tr.eol{background:linear-gradient(90deg,#fdeee7,transparent 55%)}.tag{font-famil
 .spark-svg{width:100%;height:100%;display:block;overflow:visible}.spark-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12.5px}
 @media(max-width:1000px){.app{grid-template-columns:1fr}.login-shell{grid-template-columns:1fr}.login-hero{display:none}.cards,.charts,.grid2,.form-grid,.kgrid,.bento{grid-template-columns:1fr 1fr}.span-2,.span-4{grid-column:auto}}
 @media(max-width:620px){.cards,.kgrid,.bento{grid-template-columns:1fr}}
+
+/* ============================================================
+   MODERN THEME v2 — refreshed palette, glass, gradients
+   (declared last so it takes precedence over the base rules)
+   ============================================================ */
+:root{
+  --primary:#4f7cff;--primary2:#7c5cff;--dark:#0b2a4a;--navy:#0a1f3c;--ink:#0e1726;
+  --muted:#6b7a90;--light:#c7d6f5;--soft:#eaf1ff;--bg:#eef3fb;--card:#fff;--border:#e4ebf7;
+  --orange:#ff6a3d;--gold:#f6a821;--green:#22c55e;--ok:#0ea371;--teal:#10b3a3;--violet:#7c5cff;--lav:#A898AF;--danger:#e23d5b;
+  --grad:linear-gradient(135deg,#4f7cff,#7c5cff);--grad2:linear-gradient(135deg,#0b2a4a,#4f7cff);
+  --shadow:0 18px 50px -24px rgba(31,52,120,.45);--ring:0 0 0 4px rgba(79,124,255,.18);
+}
+body{background:
+  radial-gradient(800px 540px at 8% -6%,rgba(124,92,255,.10),transparent 60%),
+  radial-gradient(760px 520px at 100% 0%,rgba(16,179,163,.10),transparent 55%),
+  radial-gradient(900px 700px at 90% 110%,rgba(79,124,255,.10),transparent 55%),
+  linear-gradient(135deg,#f3f7ff,#eaf1fb)}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;box-shadow:var(--ring);border-radius:12px}
+input:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:var(--ring)}
+
+/* buttons */
+.btn{background:var(--grad);border-radius:13px;box-shadow:0 10px 24px -10px rgba(79,124,255,.7);transition:transform .15s,box-shadow .15s,filter .15s}
+.btn:hover{transform:translateY(-1px);filter:brightness(1.05);box-shadow:0 14px 30px -10px rgba(79,124,255,.8)}
+.btn.light{background:#fff;color:var(--dark);border:1.5px solid var(--border);box-shadow:0 8px 20px -12px rgba(31,52,120,.35)}
+.btn.light:hover{border-color:var(--primary)}
+
+/* sidebar — glassy gradient with glow active pill */
+.sidebar{background:linear-gradient(170deg,#0b2a4a 0%,#11224d 55%,#0a1838 100%);position:relative;box-shadow:0 0 60px rgba(8,18,40,.4)}
+.sidebar::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(420px 200px at 20% 0%,rgba(124,92,255,.22),transparent 60%),radial-gradient(360px 220px at 90% 100%,rgba(16,179,163,.18),transparent 60%)}
+.nav{position:relative;z-index:1}
+.nav a{position:relative;border-radius:12px;color:rgba(255,255,255,.82)}
+.nav a:hover{background:rgba(255,255,255,.08);color:#fff}
+.nav a.on{background:#fff;color:var(--dark);font-weight:700;box-shadow:0 10px 24px -12px rgba(0,0,0,.6)}
+.nav a.on::before{content:'';position:absolute;left:-7px;top:9px;bottom:9px;width:4px;border-radius:4px;background:var(--grad);box-shadow:0 0 12px var(--primary)}
+.navsec{color:rgba(255,255,255,.45)}
+.sidebar .brand,.nav{position:relative;z-index:1}
+
+/* topbar gradient title */
+.topbar h1{background:var(--grad2);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* cards / panels — bigger radius, gradient hairline, lift */
+.card,.panel,.kpi,.qcard,.rcard,.table-wrap,.sync-info{border-radius:18px;border:1px solid var(--border);box-shadow:var(--shadow)}
+.panel:hover{box-shadow:0 22px 54px -26px rgba(31,52,120,.5)}
+.panel h3{font-size:14px}.panel h3 svg{color:var(--primary)}
+
+/* KPI accents refreshed */
+.kpi::before{height:4px}
+.kpi .ic{background:var(--soft);color:var(--primary);border-radius:11px}
+.kpi.ok .ic{background:#dcfce9;color:var(--ok)}.kpi.ok::before{background:linear-gradient(90deg,#86efac,var(--ok))}.kpi.ok b{color:var(--ok)}
+.kpi.eol .ic{background:#ffe4dc;color:var(--orange)}.kpi.eol::before{background:linear-gradient(90deg,#ffb39c,var(--orange))}.kpi.eol b{color:var(--orange)}
+.kpi.warn .ic{background:#fdeecb;color:var(--gold)}.kpi.warn::before{background:linear-gradient(90deg,#fbd884,var(--gold))}.kpi.warn b{color:#c9881a}
+.kpi.teal .ic{background:#d2f4ef;color:var(--teal)}.kpi.teal::before{background:linear-gradient(90deg,#7fe3d8,var(--teal))}.kpi.teal b{color:var(--teal)}
+.kpi:not(.ok):not(.eol):not(.warn):not(.teal)::before{background:var(--grad)}
+
+/* tables */
+thead th{background:linear-gradient(180deg,#f3f7ff,#eaf1fb);color:var(--dark)}
+tbody tr:hover{background:#f5f8ff}
+tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
+.dept{background:#eaf1ff;color:var(--primary);border:1px solid #dbe6ff;font-weight:700}
+.pill.ok{background:#dcfce9;color:var(--ok)}.pill.fail{background:#fde7eb;color:var(--danger)}
+.tabs a.on,.dec.Extend{background:var(--grad);color:#fff}
+
+/* unified screen */
+.screen-intro{color:var(--muted);font-size:13.5px;margin:0 0 16px;max-width:780px;line-height:1.65}
+.srcdots{display:inline-flex;gap:5px}
+.srcdots i{width:9px;height:9px;border-radius:50%;background:#dde5f1;display:inline-block}
+.srcdots i.on.me{background:var(--dark)}.srcdots i.on.ad{background:var(--primary)}.srcdots i.on.it{background:var(--teal)}.srcdots i.on.dk{background:var(--violet)}
+.miss{font-size:11px;color:#aebccf;font-style:italic}
+
+/* login modern */
+.login-shell{border-radius:26px}
+.login-hero{background:linear-gradient(150deg,#4f7cff 0%,#3a55c7 38%,#0b2a4a 100%);position:relative;overflow:hidden}
+.login-hero::after{content:'';position:absolute;width:420px;height:420px;border-radius:50%;top:-150px;right:-120px;background:radial-gradient(circle,rgba(124,92,255,.55),transparent 60%)}
+.login-hero::before{content:'';position:absolute;width:320px;height:320px;border-radius:50%;bottom:-120px;left:-80px;background:radial-gradient(circle,rgba(16,179,163,.45),transparent 60%)}
+.login-hero>*{position:relative;z-index:1}
+
+/* ===== responsive: off-canvas sidebar ===== */
+.appbar{display:none}.scrim{display:none}
+@media(max-width:1000px){
+  .app{grid-template-columns:1fr}
+  .appbar{display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:45;background:linear-gradient(120deg,#0b2a4a,#11224d);padding:11px 16px;box-shadow:var(--shadow)}
+  .appbar img{height:24px}
+  .hamburger{background:rgba(255,255,255,.12);border:0;color:#fff;width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;cursor:pointer}.hamburger svg{width:20px;height:20px}
+  .sidebar{position:fixed;inset:0 auto 0 0;width:256px;z-index:60;transform:translateX(-100%);transition:transform .26s ease}
+  .sidebar.open{transform:none}
+  .scrim{display:block;position:fixed;inset:0;background:rgba(8,16,32,.5);z-index:50;opacity:0;visibility:hidden;transition:opacity .26s}.scrim.show{opacity:1;visibility:visible}
+  .main{padding:18px 16px}
+}
+@media(max-width:620px){.main{padding:14px 12px}.topbar h1{font-size:22px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;transition-duration:.001ms!important}}
 </style></head><body>
 
 <?php if(!$loggedIn): ?>
@@ -813,8 +989,13 @@ tr.eol{background:linear-gradient(90deg,#fdeee7,transparent 55%)}.tag{font-famil
 </div></div>
 
 <?php else:?>
+<header class="appbar">
+  <button class="hamburger" id="navToggle" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+  <img src="<?=$LOGO?>" alt="CATRION" onerror="this.style.display='none'">
+</header>
+<div class="scrim" id="navScrim" hidden></div>
 <div class="app">
-  <aside class="sidebar">
+  <aside class="sidebar" id="sidebar">
     <div class="brand"><img src="<?=$LOGO?>" alt="CATRION" onerror="this.style.display='none'"></div>
     <nav class="nav">
       <?php if($role==='admin'):?>
@@ -825,6 +1006,7 @@ tr.eol{background:linear-gradient(90deg,#fdeee7,transparent 55%)}.tag{font-famil
         <a class="<?=$screen==='segments'?'on':''?>" href="?screen=segments">Segment Heads</a>
         <a class="<?=$screen==='reports'?'on':''?>" href="?screen=reports">Reports</a>
         <a class="<?=$screen==='sources'?'on':''?>" href="?screen=sources">Data Sources</a>
+        <a class="<?=$screen==='unified'?'on':''?>" href="?screen=unified">Unified View</a>
         <a class="<?=$screen==='audit'?'on':''?>" href="?screen=audit">Audit Log</a>
       <?php else:?>
         <div class="navsec">My Area</div>
@@ -835,7 +1017,7 @@ tr.eol{background:linear-gradient(90deg,#fdeee7,transparent 55%)}.tag{font-famil
   </aside>
   <div class="content"><main class="main">
     <div class="topbar"><div>
-      <h1><?=['dashboard'=>'Command Center','inventory'=>'Asset Inventory','admins'=>'Admin Users','segments'=>'Segment Heads','reports'=>'Reports','sources'=>'Data Sources','audit'=>'Audit Log','queue'=>'Replacement Queue'][$screen]??'Asset Lifecycle'?></h1>
+      <h1><?=['dashboard'=>'Command Center','inventory'=>'Asset Inventory','admins'=>'Admin Users','segments'=>'Segment Heads','reports'=>'Reports','sources'=>'Data Sources','unified'=>'Unified Asset View','audit'=>'Audit Log','queue'=>'Replacement Queue'][$screen]??'Asset Lifecycle'?></h1>
       <div class="meta">Signed in as <?=e($fullName)?> • <?=e($prn)?> • <?=$role==='admin'?'IT Administrator':'Segment Head'?></div>
     </div>
     <?php if($role==='admin'&&$screen==='inventory'):?>
@@ -971,23 +1153,20 @@ tr.eol{background:linear-gradient(90deg,#fdeee7,transparent 55%)}.tag{font-famil
       </div>
 
       <div class="panel" style="margin-bottom:16px">
-        <h3>Upload <?=['darksight'=>'Darksight','intune'=>'Intune','ad'=>'Active Directory'][$srcTab]?> CSV</h3>
+        <?php $isAd=$srcTab==='ad'; ?>
+        <h3>Upload <?=['darksight'=>'Darksight','intune'=>'Intune','ad'=>'Active Directory'][$srcTab]?> <?=$isAd?'(Excel .xlsx)':'CSV'?></h3>
         <form method="post" enctype="multipart/form-data" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
           <input type="hidden" name="upload_source" value="<?=e($srcTab)?>">
-          <?php if($srcTab==='ad'):?>
-          <div class="field" style="margin:0;min-width:140px"><label>Site</label>
+          <?php if($isAd):?>
+          <div class="field" style="margin:0;min-width:170px"><label>Site / Company</label>
             <select name="ad_site" required style="min-height:44px">
-              <option value="">Select site…</option>
-              <option>RUH</option><option>JED</option><option>DMM</option><option>MED</option>
-              <option>AHB</option><option>GIZ</option><option>TIF</option><option>TUU</option>
-              <option>YNB</option><option>ELQ</option><option>ABT</option><option>HAS</option>
-              <option>AJF</option><option>URY</option><option>TUI</option><option>RAE</option>
-              <option>WAE</option><option>DWD</option><option>SHW</option><option>BHH</option>
-              <option>HOF</option><option>AQI</option><option>HQ</option><option>Other</option>
+              <option value="">Select company…</option>
+              <option>CATRION</option>
+              <option>SaudiaCatering</option>
             </select></div>
           <?php endif;?>
-          <div class="field" style="margin:0;flex:1;min-width:200px"><label>CSV File</label>
-            <input type="file" name="csv_file" accept=".csv,.txt" required style="min-height:44px;padding:10px 14px"></div>
+          <div class="field" style="margin:0;flex:1;min-width:200px"><label><?=$isAd?'Excel File':'CSV File'?></label>
+            <input type="file" name="csv_file" accept="<?=$isAd?'.xlsx,.xlsm':'.csv,.txt'?>" required style="min-height:44px;padding:10px 14px"></div>
           <button class="btn sm" type="submit">Upload &amp; import</button>
         </form>
         <div style="margin-top:10px;font-size:11.5px;color:var(--muted)">
@@ -1027,6 +1206,51 @@ tr.eol{background:linear-gradient(90deg,#fdeee7,transparent 55%)}.tag{font-famil
       <?php endif;?>
       </div>
 
+    <?php elseif($role==='admin'&&$screen==='unified'):
+        $pc=fn($n)=>number_format((int)$n);
+        $uqv=e($_GET['uq']??''); $ufv=$_GET['uf']??'';
+    ?>
+      <p class="screen-intro">One row per device, correlated across <b>ManageEngine</b>, <b>Active Directory</b>, <b>Intune</b> and <b>Darksight</b> by hostname — so coverage gaps and blind spots surface immediately.</p>
+      <section class="kgrid">
+        <div class="kpi"><div class="kh"><span>Unique devices</span><span class="ic"><?=icon('layers')?></span></div><b class="count" data-to="<?=(int)$ucov['unique']?>">0</b></div>
+        <div class="kpi ok"><div class="kh"><span>Core-3 covered</span><span class="ic"><?=icon('check-circle')?></span></div><b class="count" data-to="<?=(int)$ucov['core3']?>">0</b><em>ME + AD + Intune</em></div>
+        <div class="kpi warn"><div class="kh"><span>Unmanaged (no Intune)</span><span class="ic"><?=icon('cpu')?></span></div><b class="count" data-to="<?=(int)$ucov['unmanaged']?>">0</b></div>
+        <div class="kpi eol"><div class="kh"><span>Missing from AD</span><span class="ic"><?=icon('users')?></span></div><b class="count" data-to="<?=(int)$ucov['missing_ad']?>">0</b></div>
+      </section>
+      <section class="bento" style="margin-bottom:16px">
+        <div class="panel span-2"><h3><?=icon('layers')?>Source Coverage</h3><div class="cbox" id="uxCov" style="height:auto"></div></div>
+        <div class="panel span-2"><h3><?=icon('shield')?>Correlation Overview</h3><div class="cbox" id="uxMix" style="height:auto"></div></div>
+      </section>
+      <form method="get" class="filters"><input type="hidden" name="screen" value="unified">
+        <input name="uq" placeholder="Search device or segment…" value="<?=$uqv?>" style="max-width:280px">
+        <select name="uf" onchange="this.form.submit()">
+          <option value="">All devices</option>
+          <option value="gaps" <?=$ufv==='gaps'?'selected':''?>>Coverage gaps (&lt;3 sources)</option>
+          <option value="unmanaged" <?=$ufv==='unmanaged'?'selected':''?>>Unmanaged (no Intune)</option>
+          <option value="eol" <?=$ufv==='eol'?'selected':''?>>Flagged EoL</option>
+        </select>
+        <button class="btn sm" type="submit">Filter</button>
+        <span style="color:var(--muted);font-size:12px;margin-inline-start:auto"><?=$pc($unifiedTotal)?> match · showing <?=count($unified)?></span>
+      </form>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Device</th><th>Segment</th><th>Sources</th><th>ManageEngine</th><th>Active Directory</th><th>Intune</th><th>Darksight</th></tr></thead>
+        <tbody>
+        <?php foreach($unified as $u): $cnt=$u['me']+$u['ad']+$u['intune']+$u['dark']; ?>
+          <tr class="<?=$u['eol']?'eol':''?>">
+            <td class="tag" style="font-weight:700;color:var(--ink)"><?=e($u['name'])?></td>
+            <td><?=$u['segment']?'<span class="dept">'.e($u['segment']).'</span>':'<span style="color:var(--muted)">—</span>'?></td>
+            <td><span class="srcdots" title="<?=$cnt?> of 4 sources">
+              <i class="<?=$u['me']?'on me':''?>"></i><i class="<?=$u['ad']?'on ad':''?>"></i><i class="<?=$u['intune']?'on it':''?>"></i><i class="<?=$u['dark']?'on dk':''?>"></i>
+            </span></td>
+            <td><?php if($u['me']):?><span class="pill <?=$u['eol']?'fail':'ok'?>"><span class="d"></span><?=$u['eol']?'EoL':'Active'?></span><?php else:?><span class="miss">absent</span><?php endif;?></td>
+            <td><?php if($u['ad']):?><span class="pill <?=($u['ad_status']==='Enabled')?'ok':'fail'?>"><span class="d"></span><?=e($u['ad_status']?:'AD')?></span> <?=$u['ad_site']?'<span class="tag">'.e($u['ad_site']).'</span>':''?><?php else:?><span class="miss">absent</span><?php endif;?></td>
+            <td><?php if($u['intune']):?><span class="pill <?=($u['compliance']==='Compliant')?'ok':'fail'?>"><span class="d"></span><?=e($u['compliance']?:'Managed')?></span><?php else:?><span class="miss">absent</span><?php endif;?></td>
+            <td><?php if($u['dark']):?><?=$u['dark_eol']>0?'<span class="pill fail"><span class="d"></span>'.(int)$u['dark_eol'].' EoL SW</span>':'<span class="pill ok"><span class="d"></span>Clean</span>'?><?php else:?><span class="miss">absent</span><?php endif;?></td>
+          </tr>
+        <?php endforeach; if(!$unified):?><tr><td colspan="7" class="empty">No correlated devices yet. Upload sources under <b>Data Sources</b>.</td></tr><?php endif;?>
+        </tbody>
+      </table></div>
+
     <?php elseif($role==='head'&&$screen==='queue'):?>
       <?php if(!$assets):?><div class="panel empty"><h3 style="color:var(--ink)">Nothing to action</h3><p>No devices in your segment(s) are flagged End-of-Life.</p></div>
       <?php else:?><div class="queue"><?php foreach($assets as $a): $done=!empty($a['decision']);?>
@@ -1045,6 +1269,17 @@ tr.eol{background:linear-gradient(90deg,#fdeee7,transparent 55%)}.tag{font-famil
   <footer class="appfoot"><div>Created by CATRION IT Team</div><?=$POLICY?></footer>
   </div>
 </div>
+
+<script>
+/* Mobile off-canvas navigation (all screens) */
+(function(){
+  var t=document.getElementById('navToggle'),s=document.getElementById('sidebar'),c=document.getElementById('navScrim');
+  function open(o){ if(!s||!c)return; s.classList.toggle('open',o); c.hidden=!o; requestAnimationFrame(function(){c.classList.toggle('show',o);}); if(t)t.setAttribute('aria-expanded',o?'true':'false'); }
+  if(t)t.addEventListener('click',function(){open(!s.classList.contains('open'));});
+  if(c)c.addEventListener('click',function(){open(false);});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape')open(false);});
+})();
+</script>
 
 <?php if($role==='admin'&&$screen==='dashboard'):?>
 <script>
@@ -1111,6 +1346,30 @@ const dash=<?php echo json_encode($dash);?>;
     var sc=document.getElementById('cSeg'); if(sc){barlist(sc.parentNode.id||(sc.parentNode.id='fxSegFb'),seg.labels.map(function(l,i){return {l:l,v:seg.data[i]||0,c:'linear-gradient(90deg,#D45B25,#5A92DB)'};}));}
     var dcp=document.getElementById('cDec'); if(dcp){donut(dcp.parentNode.id||(dcp.parentNode.id='fxDecFb'),[{l:'Replace',v:dec[0],c:'#D45B25'},{l:'Extend',v:dec[1],c:'#5A92DB'},{l:'Return',v:dec[2],c:'#A898AF'},{l:'Pending',v:dec[3],c:'#ACC8ED'}],'EoL');}
   }
+})();
+</script>
+<?php endif;?>
+
+<?php if($role==='admin'&&$screen==='unified'):?>
+<script>
+const ucov=<?php echo json_encode($ucov);?>;
+(function(){
+  var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches, easeOut=function(t){return 1-Math.pow(1-t,3);};
+  function fmt(n){return (n||0).toLocaleString();}
+  document.querySelectorAll('.count').forEach(function(el){var to=+el.dataset.to||0;if(reduce||!to){el.textContent=fmt(to);return;}var t0=performance.now();(function s(now){var p=Math.min(1,(now-t0)/1000);el.textContent=fmt(Math.round(easeOut(p)*to));if(p<1)requestAnimationFrame(s);})(t0);});
+  // source coverage bars
+  (function(){var el=document.getElementById('uxCov');if(!el)return;
+    var items=[['ManageEngine',ucov.me,'#003F53'],['Active Directory',ucov.ad,'#5A92DB'],['Intune',ucov.intune,'#0E9F8E'],['Darksight',ucov.dark,'#7c5cff']];
+    var mx=Math.max(1,ucov.unique);
+    el.innerHTML='<div class="barlist">'+items.map(function(x){return '<div class="brow"><span class="bl">'+x[0]+'</span><span class="bt"><i style="width:'+Math.max(3,Math.round(x[1]/mx*100))+'%;background:'+x[2]+'"></i></span><b>'+fmt(x[1])+'</b></div>';}).join('')+'</div>';
+  })();
+  // correlation overview donut (core-3 vs unmanaged vs me-only)
+  (function(){var el=document.getElementById('uxMix');if(!el)return;
+    var segs=[['Core-3 covered',ucov.core3,'#0E9F8E'],['Unmanaged',ucov.unmanaged,'#D45B25'],['ME-only',ucov.me_only,'#BE8617']];
+    var tot=segs.reduce(function(a,s){return a+s[1];},0)||1,acc=0,stops=[];
+    segs.forEach(function(s){stops.push(s[2]+' '+(acc/tot*360)+'deg '+((acc+s[1])/tot*360)+'deg');acc+=s[1];});
+    el.innerHTML='<div class="dwrap"><div class="dring" style="background:conic-gradient('+stops.join(',')+')"><span>'+fmt(ucov.unique)+'<small>DEVICES</small></span></div><div class="dleg">'+segs.map(function(s){return '<div><span class="dot" style="background:'+s[2]+'"></span>'+s[0]+' <b>'+fmt(s[1])+'</b></div>';}).join('')+'</div></div>';
+  })();
 })();
 </script>
 <?php endif;?>
