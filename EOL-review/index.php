@@ -9,8 +9,10 @@
  * Logs:  eol_login_log, eol_audit_log, eol_app_log, eol_sync_runs.
  * Config: ALL credentials loaded from /var/secrets/.env — nothing hardcoded.
  *
- * NOTE: This revision improves UI/UX only. All authentication, database,
- *       sync and business logic is unchanged from the original.
+ * UI:   "Mission Control" — cinematic dark glass / HUD theme with bento
+ *       dashboard, animated fleet-health ring and lifecycle pipeline.
+ *       All authentication / database / sync / business logic is UNCHANGED;
+ *       the dashboard visuals are computed client-side from existing data.
  */
 if (session_status() === PHP_SESSION_NONE) session_start();
 
@@ -55,6 +57,9 @@ function icon($n,$cls='ic'){
         'clock'=>'<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
         'arrow'=>'<path d="M5 12h14M13 6l6 6-6 6"/>',
         'box'=>'<path d="m21 8-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8"/>',
+        'activity'=>'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+        'target'=>'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>',
+        'cpu'=>'<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/>',
         'inbox-empty'=>'<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
     ];
     $b=$p[$n]??$p['box'];
@@ -519,237 +524,286 @@ if($loggedIn&&$conn){
 }
 $LOGO='https://e-services.catrion.com/EOL/image/catrion-logo-white.png';
 $POLICY='<div class="policy"><a href="https://www.catrion.com/terms-and-conditions" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</a><span aria-hidden="true">•</span><a href="https://www.catrion.com/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a><span aria-hidden="true">•</span><a href="https://www.catrion.com/cookie-policy" target="_blank" rel="noopener noreferrer">Cookie Policy</a></div>';
-$SCREEN_TITLES=['dashboard'=>'Dashboard','inventory'=>'Asset Inventory','admins'=>'Admin Users','segments'=>'Segment Heads','reports'=>'Reports','audit'=>'Audit Log','queue'=>'Replacement Queue'];
+$SCREEN_TITLES=['dashboard'=>'Command Center','inventory'=>'Asset Inventory','admins'=>'Admin Users','segments'=>'Segment Heads','reports'=>'Reports','audit'=>'Audit Log','queue'=>'Replacement Queue'];
 $pageTitle=$SCREEN_TITLES[$screen]??'Asset Lifecycle';
 ?>
 <!doctype html><html lang="en"><head><meta charset="utf-8"><title>CATRION · <?=e($loggedIn?$pageTitle:'Asset Lifecycle')?></title>
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="dark">
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 @font-face{font-family:'Gotham';font-weight:300;src:url('fonts/Gotham-Light.woff') format('woff');font-display:swap}
 @font-face{font-family:'Gotham';font-weight:500;src:url('fonts/Gotham-Medium.woff') format('woff');font-display:swap}
 @font-face{font-family:'Gotham';font-weight:700;src:url('fonts/Gotham-Bold.woff') format('woff');font-display:swap}
-:root{--primary:#4f86d5;--primary-d:#1a5fa8;--dark:#003F53;--navy:#062b58;--ink:#0f172a;--muted:#586b82;--light:#ACC8ED;--soft:#D6E4F6;--bg:#f0f7ff;--card:#fff;--border:#dae5f5;--orange:#D45B25;--gold:#BE8617;--lav:#A898AF;--ok:#047857;--danger:#b91c1c;--shadow:0 4px 20px rgba(0,40,100,.08);--shadow-md:0 8px 36px rgba(0,40,100,.12);--shadow-lg:0 24px 70px rgba(0,57,122,.15);--ring:0 0 0 4px rgba(79,134,213,.30);--t:.18s ease}
+:root{
+  --blue:#4f86d5;--cyan:#38bdf8;--teal:#2dd4bf;--orange:#ff7a45;--gold:#e6b042;--lav:#b39ddb;
+  --ok:#34d399;--danger:#fb7185;
+  --bg0:#05070f;--bg1:#0a0f1f;--bg2:#0e1630;
+  --glass:rgba(255,255,255,.045);--glass2:rgba(255,255,255,.07);--bd:rgba(255,255,255,.10);--bd2:rgba(255,255,255,.16);
+  --ink:#eaf1ff;--mut:#93a4c4;--mut2:#6f82a6;
+  --glow:0 0 0 1px rgba(79,134,213,.30),0 10px 40px -12px rgba(31,90,200,.55);
+  --shadow:0 18px 50px -20px rgba(0,0,0,.65);
+  --t:.2s ease}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{margin:0;font-family:'Gotham',system-ui,'Segoe UI',sans-serif;font-weight:300;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5}
+body{margin:0;font-family:'Gotham',system-ui,'Segoe UI',sans-serif;font-weight:300;color:var(--ink);-webkit-font-smoothing:antialiased;line-height:1.5;
+  background:
+    radial-gradient(900px 600px at 12% -8%,rgba(56,189,248,.16),transparent 60%),
+    radial-gradient(820px 560px at 100% 0%,rgba(255,122,69,.10),transparent 55%),
+    radial-gradient(900px 720px at 85% 110%,rgba(45,212,191,.10),transparent 55%),
+    linear-gradient(160deg,#070b16,#05070f 55%,#04060c)}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;opacity:.5;
+  background-image:linear-gradient(rgba(120,160,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(120,160,255,.05) 1px,transparent 1px);
+  background-size:46px 46px;-webkit-mask-image:radial-gradient(ellipse 80% 70% at 50% 0%,#000 35%,transparent 100%);mask-image:radial-gradient(ellipse 80% 70% at 50% 0%,#000 35%,transparent 100%)}
 a{text-decoration:none;color:inherit}b,strong,h1,h2,h3{font-weight:700}
+.mono{font-family:ui-monospace,'SF Mono',Menlo,monospace}
 svg.ic{width:18px;height:18px;flex-shrink:0;display:block}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--light);border-radius:4px}::-webkit-scrollbar-thumb:hover{background:var(--primary)}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:rgba(120,150,210,.3);border-radius:5px}::-webkit-scrollbar-thumb:hover{background:var(--blue)}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.switch:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(56,189,248,.5);border-radius:10px}
+.skip-link{position:absolute;left:12px;top:-60px;z-index:200;background:var(--blue);color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;font-size:13px;transition:top var(--t)}.skip-link:focus{top:12px}
 
-/* Visible keyboard focus everywhere */
-a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.switch:focus-visible{outline:none;box-shadow:var(--ring);border-radius:10px}
-.skip-link{position:absolute;left:12px;top:-60px;z-index:200;background:var(--primary-d);color:#fff;padding:10px 16px;border-radius:10px;font-weight:700;font-size:13px;transition:top var(--t)}
-.skip-link:focus{top:12px}
-
-/* LOGIN */
-.login-page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(145deg,#e8f2ff 0%,#f2f8ff 55%,#ddeeff 100%)}
-.login-shell{width:100%;max-width:1060px;min-height:620px;display:grid;grid-template-columns:.92fr 1.08fr;background:#fff;border:1px solid var(--border);border-radius:26px;box-shadow:var(--shadow-lg);overflow:hidden}
-.login-hero{background:linear-gradient(150deg,#1a5fa8 0%,#003F53 50%,#011e30 100%);color:#fff;padding:48px;display:flex;flex-direction:column;justify-content:space-between;position:relative;overflow:hidden}
-.login-hero::before{content:'';position:absolute;top:-100px;right:-80px;width:380px;height:380px;border-radius:50%;background:rgba(255,255,255,.05);pointer-events:none}
-.login-hero::after{content:'';position:absolute;bottom:-120px;left:-60px;width:300px;height:300px;border-radius:50%;background:rgba(79,134,213,.1);pointer-events:none}
+/* ===== LOGIN ===== */
+.login-page{position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+.login-shell{width:100%;max-width:1080px;min-height:620px;display:grid;grid-template-columns:1.02fr 1fr;background:rgba(12,18,38,.55);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--bd);border-radius:28px;box-shadow:var(--shadow);overflow:hidden}
+.login-hero{position:relative;overflow:hidden;color:#fff;padding:50px;display:flex;flex-direction:column;justify-content:space-between;background:linear-gradient(155deg,rgba(20,52,110,.65),rgba(6,20,42,.55) 55%,rgba(4,10,22,.7));border-right:1px solid var(--bd)}
+.login-hero::before{content:'';position:absolute;width:460px;height:460px;border-radius:50%;top:-160px;right:-130px;background:radial-gradient(circle,rgba(56,189,248,.5),transparent 62%);filter:blur(20px);animation:drift 14s ease-in-out infinite}
+.login-hero::after{content:'';position:absolute;width:360px;height:360px;border-radius:50%;bottom:-140px;left:-90px;background:radial-gradient(circle,rgba(45,212,191,.4),transparent 62%);filter:blur(18px);animation:drift 18s ease-in-out infinite reverse}
+@keyframes drift{0%,100%{transform:translate(0,0)}50%{transform:translate(26px,-22px)}}
 .brand{display:flex;align-items:center;gap:13px;position:relative;z-index:1}.brand img{height:30px}
-.login-hero h1{font-size:30px;line-height:1.18;margin:34px 0 12px;position:relative;z-index:1}
-.login-hero>p{line-height:1.75;color:rgba(255,255,255,.85);margin:0 0 28px;position:relative;z-index:1;font-size:13.5px}
-.hero-features{display:flex;flex-direction:column;gap:13px;position:relative;z-index:1}
-.hero-feat{display:flex;align-items:center;gap:11px;font-size:12.5px;color:rgba(255,255,255,.9)}
-.hero-feat svg{width:18px;height:18px;color:var(--light);flex-shrink:0}
-.login-panel{padding:52px;display:flex;flex-direction:column;justify-content:center}
-.lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.16em;color:var(--primary);margin-bottom:12px;display:flex;align-items:center;gap:10px}
-.lbl::before{content:'';width:22px;height:2px;background:var(--primary);border-radius:1px}
-.login-panel h2{font-size:27px;margin:0 0 6px;letter-spacing:-.01em}.sub{color:var(--muted);line-height:1.7;margin:0 0 26px;font-size:13.5px}
+.login-hero h1{font-size:33px;line-height:1.16;margin:36px 0 14px;position:relative;z-index:1;letter-spacing:-.01em}
+.login-hero h1 .accent{background:linear-gradient(90deg,var(--cyan),var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent}
+.login-hero>p{line-height:1.75;color:rgba(220,232,255,.78);margin:0 0 30px;position:relative;z-index:1;font-size:13.5px;max-width:380px}
+.hero-features{display:flex;flex-direction:column;gap:14px;position:relative;z-index:1}
+.hero-feat{display:flex;align-items:center;gap:12px;font-size:12.5px;color:rgba(226,236,255,.9)}
+.hero-feat .hf-ic{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:rgba(56,189,248,.14);border:1px solid rgba(56,189,248,.3);color:var(--cyan);flex-shrink:0}
+.hero-feat .hf-ic svg{width:17px;height:17px}
+.login-panel{padding:54px;display:flex;flex-direction:column;justify-content:center;background:rgba(8,12,26,.35)}
+.lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.18em;color:var(--cyan);margin-bottom:13px;display:flex;align-items:center;gap:10px}
+.lbl::before{content:'';width:22px;height:2px;background:linear-gradient(90deg,var(--cyan),transparent);border-radius:1px}
+.login-panel h2{font-size:28px;margin:0 0 6px;letter-spacing:-.01em}.sub{color:var(--mut);line-height:1.7;margin:0 0 26px;font-size:13.5px}
 
-/* NOTICES / TOASTS */
+/* NOTICES */
 .notices{display:flex;flex-direction:column;gap:10px;margin:0 0 18px}
-.notice{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:12px;border-left:3px solid #a7f3d0;background:#f0fdf4;color:var(--ok);font-weight:500;font-size:13.5px;animation:slideIn .25s ease}
-.notice svg{width:18px;height:18px;flex-shrink:0;margin-top:1px}
-.notice span{flex:1}
-.notice.error{border-left-color:#fca5a5;background:#fff8f8;color:var(--danger)}
-.notice-x{background:none;border:0;color:inherit;cursor:pointer;opacity:.55;padding:2px;border-radius:6px;flex-shrink:0;line-height:0}
-.notice-x:hover{opacity:1;background:rgba(0,0,0,.05)}
+.notice{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:12px;border:1px solid rgba(52,211,153,.35);background:rgba(52,211,153,.10);color:#a7f3d0;font-weight:500;font-size:13.5px;animation:slideIn .25s ease;backdrop-filter:blur(8px)}
+.notice svg{width:18px;height:18px;flex-shrink:0;margin-top:1px}.notice span{flex:1}
+.notice.error{border-color:rgba(251,113,133,.4);background:rgba(251,113,133,.12);color:#fecdd3}
+.notice-x{background:none;border:0;color:inherit;cursor:pointer;opacity:.6;padding:2px;border-radius:6px;flex-shrink:0;line-height:0}.notice-x:hover{opacity:1;background:rgba(255,255,255,.08)}
 @keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
 
-.field{margin-bottom:18px}label{display:block;margin-bottom:8px;font-weight:700;font-size:12.5px;color:var(--dark);letter-spacing:.01em}
-input,select,textarea{width:100%;min-height:50px;border:1.5px solid var(--border);border-radius:11px;padding:0 16px;font-size:14.5px;font-family:inherit;background:#fff;color:var(--ink);transition:border-color var(--t),box-shadow var(--t)}
-textarea{padding:12px 16px;min-height:72px;resize:vertical;font-size:13.5px;line-height:1.5}
-input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring)}
-input::placeholder{color:#9fbbdb}
-.otp-input{letter-spacing:.5em;font-size:20px;text-align:center;font-weight:700;font-family:ui-monospace,Menlo,monospace}
-.hint{font-size:11.5px;color:var(--muted);margin-top:7px}
+.field{margin-bottom:18px}label{display:block;margin-bottom:8px;font-weight:700;font-size:12px;color:#c8d6f2;letter-spacing:.02em}
+input,select,textarea{width:100%;min-height:50px;border:1px solid var(--bd);border-radius:12px;padding:0 16px;font-size:14.5px;font-family:inherit;background:rgba(255,255,255,.04);color:var(--ink);transition:border-color var(--t),box-shadow var(--t),background var(--t)}
+textarea{padding:12px 16px;min-height:74px;resize:vertical;font-size:13.5px;line-height:1.5}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--cyan);background:rgba(255,255,255,.06);box-shadow:0 0 0 4px rgba(56,189,248,.16)}
+input::placeholder{color:#5f7099}
+select option{background:#0e1630;color:var(--ink)}
+.otp-input{letter-spacing:.5em;font-size:21px;text-align:center;font-weight:700}
+.hint{font-size:11.5px;color:var(--mut2);margin-top:7px}
 
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:50px;border:0;border-radius:11px;background:linear-gradient(140deg,#1a5fa8,var(--primary));color:#fff;font-size:14px;font-weight:700;cursor:pointer;padding:0 22px;font-family:inherit;transition:filter var(--t),transform var(--t),box-shadow var(--t);box-shadow:0 4px 14px rgba(79,134,213,.35);letter-spacing:.02em}
+.btn{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:50px;border:0;border-radius:12px;background:linear-gradient(135deg,var(--blue),var(--cyan));color:#03101f;font-size:14px;font-weight:700;cursor:pointer;padding:0 22px;font-family:inherit;transition:filter var(--t),transform var(--t),box-shadow var(--t);box-shadow:0 8px 26px -8px rgba(56,189,248,.6);letter-spacing:.02em}
 .btn svg{width:17px;height:17px}
-.btn:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 7px 22px rgba(79,134,213,.45)}
+.btn:hover{filter:brightness(1.07);transform:translateY(-1px);box-shadow:0 12px 32px -8px rgba(56,189,248,.7)}
 .btn:active{transform:translateY(0);filter:brightness(.97)}
 .btn[disabled],.btn.loading{opacity:.75;cursor:progress;pointer-events:none;transform:none}
-.btn.light{background:#fff;color:var(--ink);border:1.5px solid var(--border);box-shadow:var(--shadow);letter-spacing:normal}
-.btn.light:hover{background:var(--soft);border-color:var(--light);transform:translateY(-1px);box-shadow:var(--shadow-md)}
-.btn.sm{min-height:40px;font-size:12.5px;padding:0 15px;box-shadow:0 3px 10px rgba(79,134,213,.25)}
-.btn.sm svg{width:15px;height:15px}
-.btn.sm.light{box-shadow:var(--shadow)}
+.btn.light{background:rgba(255,255,255,.05);color:var(--ink);border:1px solid var(--bd2);box-shadow:none}
+.btn.light:hover{background:rgba(255,255,255,.1);border-color:var(--cyan)}
+.btn.sm{min-height:40px;font-size:12.5px;padding:0 15px;box-shadow:0 6px 18px -8px rgba(56,189,248,.6)}.btn.sm svg{width:15px;height:15px}
 .btn.light .ms-logo i{display:block;border-radius:1px}
-.spinner{width:16px;height:16px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
-.btn.light .spinner{border-color:rgba(79,134,213,.3);border-top-color:var(--primary)}
+.spinner{width:16px;height:16px;border:2.5px solid rgba(3,16,31,.35);border-top-color:#03101f;border-radius:50%;animation:spin .7s linear infinite}
+.btn.light .spinner{border-color:rgba(56,189,248,.3);border-top-color:var(--cyan)}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-.sep{display:flex;align-items:center;gap:12px;margin:22px 0;color:var(--muted);font-size:11.5px;font-weight:500;letter-spacing:.04em}.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--border)}
-.foot{text-align:center;color:#7d93a8;font-size:11.5px;margin-top:20px;font-weight:500}
-.policy{margin-top:8px;display:flex;gap:9px;justify-content:center;flex-wrap:wrap}.policy a{color:var(--primary);font-weight:500;transition:color var(--t)}.policy a:hover{color:var(--dark);text-decoration:underline}.policy span{opacity:.4}
+.sep{display:flex;align-items:center;gap:12px;margin:22px 0;color:var(--mut2);font-size:11.5px;font-weight:500;letter-spacing:.04em}.sep::before,.sep::after{content:"";flex:1;height:1px;background:var(--bd)}
+.foot{text-align:center;color:var(--mut2);font-size:11.5px;margin-top:20px;font-weight:500}
+.policy{margin-top:8px;display:flex;gap:9px;justify-content:center;flex-wrap:wrap}.policy a{color:var(--cyan);font-weight:500;transition:color var(--t)}.policy a:hover{color:#fff;text-decoration:underline}.policy span{opacity:.4}
 
-/* APP SHELL */
-.app{display:grid;grid-template-columns:256px 1fr;min-height:100vh}
+/* ===== APP SHELL ===== */
+.app{position:relative;z-index:1;display:grid;grid-template-columns:262px 1fr;min-height:100vh}
 .appbar{display:none}
-.sidebar{background:linear-gradient(180deg,#003d52 0%,#062554 58%,#04193e 100%);color:#fff;padding:24px 14px;display:flex;flex-direction:column;gap:3px;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sidebar{background:linear-gradient(180deg,rgba(13,22,46,.85),rgba(7,12,26,.85));backdrop-filter:blur(16px);border-right:1px solid var(--bd);color:#fff;padding:24px 14px;display:flex;flex-direction:column;gap:3px;position:sticky;top:0;height:100vh;overflow-y:auto}
 .sidebar .brand{margin-bottom:18px;padding-left:6px}.sidebar .brand img{height:27px}
-.user-chip{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:11px 13px;margin-bottom:16px;display:flex;align-items:center;gap:10px}
-.user-avatar{width:36px;height:36px;border-radius:10px;flex-shrink:0;background:linear-gradient(135deg,var(--primary),#89b4e8);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
-.user-info .un{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:158px}
-.user-info .ur{font-size:10px;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:.07em;margin-top:2px}
-.nav a{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:10px;font-weight:500;color:rgba(255,255,255,.78);font-size:13px;transition:background var(--t),color var(--t);margin-bottom:2px}
-.nav a:hover{background:rgba(255,255,255,.10);color:#fff}
-.nav a.on{background:#fff;color:var(--dark);font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.18)}
-.nav a svg{width:17px;height:17px;opacity:.8}
-.nav a.on svg{opacity:1}
-.nav a:focus-visible{box-shadow:0 0 0 3px rgba(255,255,255,.55)}
-.navsec{font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.4);margin:16px 0 7px 13px;font-weight:700}
+.user-chip{background:var(--glass);border:1px solid var(--bd);border-radius:14px;padding:11px 13px;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.user-avatar{width:38px;height:38px;border-radius:11px;flex-shrink:0;background:linear-gradient(135deg,var(--blue),var(--cyan));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#03101f;box-shadow:0 0 18px -2px rgba(56,189,248,.6)}
+.user-info .un{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px}
+.user-info .ur{font-size:9.5px;color:var(--cyan);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+.nav a{position:relative;display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:11px;font-weight:500;color:#9fb2d6;font-size:13px;transition:background var(--t),color var(--t);margin-bottom:2px}
+.nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav a.on{background:linear-gradient(90deg,rgba(56,189,248,.18),rgba(56,189,248,.04));color:#fff;font-weight:700}
+.nav a.on::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:linear-gradient(var(--cyan),var(--teal));box-shadow:0 0 12px var(--cyan)}
+.nav a svg{width:17px;height:17px;opacity:.85}.nav a.on svg{opacity:1;color:var(--cyan)}
+.nav a:focus-visible{box-shadow:0 0 0 2px rgba(56,189,248,.6)}
+.navsec{font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--mut2);margin:16px 0 7px 13px;font-weight:700}
 .sidebar form.signout{margin-top:auto;padding-top:14px}
-.sidebar .btn.light{border-color:rgba(255,255,255,.14);color:rgba(255,255,255,.9);background:rgba(255,255,255,.08);box-shadow:none}
-.sidebar .btn.light:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.25);transform:none}
-.scrim{display:none}
+.sidebar .btn.light{width:100%}
 
-.content{display:flex;flex-direction:column;min-height:100vh;background:var(--bg)}
+.content{display:flex;flex-direction:column;min-height:100vh}
 .main{flex:1;padding:28px 32px}
-.topbar{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:26px}
-.topbar h1{margin:0;font-size:26px;letter-spacing:-.02em}.topbar .meta{color:var(--muted);font-size:13px;margin-top:5px}
-.topbar .meta b{color:var(--dark);font-weight:700}
+.topbar{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+.topbar h1{margin:0;font-size:27px;letter-spacing:-.02em}
+.topbar .meta{color:var(--mut);font-size:12.5px;margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.topbar .meta b{color:#dbe6ff;font-weight:700}
+.livedot{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--teal);background:rgba(45,212,191,.12);border:1px solid rgba(45,212,191,.3);padding:3px 9px;border-radius:20px}
+.livedot::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--teal);box-shadow:0 0 8px var(--teal);animation:pulse 1.8s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
 
-/* STAT CARDS */
-.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
-.card{background:#fff;border:1px solid var(--border);border-radius:18px;padding:22px;box-shadow:var(--shadow);position:relative;overflow:hidden;transition:transform var(--t),box-shadow var(--t)}
-.card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
-.card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--light),var(--primary))}
-.card.eol::after{background:linear-gradient(90deg,#f5a87a,var(--orange))}.card.warn::after{background:linear-gradient(90deg,#f0d08a,var(--gold))}.card.ok::after{background:linear-gradient(90deg,#6ee7b7,var(--ok))}
-.card-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.card span{color:var(--muted);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.07em}
-.card-ic{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--soft);color:var(--primary)}
-.card-ic svg{width:18px;height:18px}
-.card.eol .card-ic{background:#fdeae0;color:var(--orange)}.card.warn .card-ic{background:#fbf0d5;color:var(--gold)}.card.ok .card-ic{background:#dcfce7;color:var(--ok)}
-.card b{display:block;font-size:38px;color:var(--dark);margin:10px 0 0;letter-spacing:-.03em;line-height:1.05}
-.card.eol b{color:var(--orange)}.card.warn b{color:var(--gold)}.card.ok b{color:var(--ok)}
+/* glass panel base */
+.glass{background:var(--glass);border:1px solid var(--bd);border-radius:20px;box-shadow:var(--shadow);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.tile-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.tile-h span{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:var(--mut)}
+.tile-h .tag-live{font-size:9px;color:var(--teal)}
 
-/* PANELS & CHARTS */
-.charts{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:22px}
-.panel{background:#fff;border:1px solid var(--border);border-radius:18px;padding:22px 24px;box-shadow:var(--shadow)}
-.panel h3{margin:0 0 16px;color:var(--dark);font-size:14px;letter-spacing:.01em;display:flex;align-items:center;gap:9px}
-.panel h3::before{content:'';width:3px;height:15px;border-radius:2px;background:linear-gradient(to bottom,var(--primary),var(--light));flex-shrink:0}
-.cbox{height:240px}
+/* ===== BENTO DASHBOARD ===== */
+.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;grid-auto-rows:auto}
+.tile{padding:20px}
+.tile-ring{grid-column:span 2;grid-row:span 2;padding:22px;display:flex;flex-direction:column}
+.ringwrap{flex:1;display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.ring{position:relative;width:188px;height:188px;flex-shrink:0;margin:6px auto}
+.ring svg{transform:rotate(-90deg);width:100%;height:100%;overflow:visible}
+.ring .trk{fill:none;stroke:rgba(255,255,255,.06);stroke-width:14}
+.ring .arc{fill:none;stroke-width:14;stroke-linecap:round;filter:drop-shadow(0 0 6px currentColor);transition:stroke-dashoffset 1.3s cubic-bezier(.16,1,.3,1)}
+.ring-c{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.ring-c b{font-size:42px;letter-spacing:-.03em;line-height:1;background:linear-gradient(120deg,#fff,var(--cyan));-webkit-background-clip:text;background-clip:text;color:transparent}
+.ring-c small{font-size:9.5px;text-transform:uppercase;letter-spacing:.16em;color:var(--mut);margin-top:6px}
+.ring-legend{display:flex;flex-direction:column;gap:11px;min-width:150px;flex:1}
+.rl{display:flex;align-items:center;gap:10px;font-size:12.5px}
+.rl .dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;box-shadow:0 0 10px currentColor}
+.rl .nm{color:var(--mut);flex:1}.rl .vv{font-weight:700;font-family:ui-monospace,Menlo,monospace}
 
-/* FILTERS */
+.kpi{padding:18px 20px;position:relative;overflow:hidden}
+.kpi .ic-badge{width:36px;height:36px;border-radius:11px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.06);border:1px solid var(--bd)}
+.kpi .ic-badge svg{width:18px;height:18px}
+.kpi .lab{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--mut);margin-top:14px}
+.kpi b{display:block;font-size:36px;letter-spacing:-.03em;line-height:1.05;margin-top:6px;font-variant-numeric:tabular-nums}
+.kpi .spark{position:absolute;right:0;bottom:0;left:0;height:46px;opacity:.55}
+.kpi.blue b{color:#bfe0ff}.kpi.blue .ic-badge{color:var(--cyan)}
+.kpi.ok b{color:#a7f3d0}.kpi.ok .ic-badge{color:var(--ok)}
+.kpi.eol b{color:#ffd0bd}.kpi.eol .ic-badge{color:var(--orange)}
+.kpi.warn b{color:#ffe6ab}.kpi.warn .ic-badge{color:var(--gold)}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,currentColor,transparent);opacity:.5}
+.kpi.blue::after{color:var(--cyan)}.kpi.ok::after{color:var(--ok)}.kpi.eol::after{color:var(--orange)}.kpi.warn::after{color:var(--gold)}
+
+.span-all{grid-column:1/-1}.span-2{grid-column:span 2}
+.pipeline{padding:22px 24px}
+.flow{display:flex;align-items:stretch;gap:0;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}
+.stage{flex:1 1 0;min-width:130px;position:relative;padding:4px 6px}
+.stage .bar{height:78px;border-radius:14px;border:1px solid var(--bd);background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));display:flex;flex-direction:column;justify-content:center;padding:0 16px;position:relative;overflow:hidden}
+.stage .bar::before{content:'';position:absolute;left:0;top:0;bottom:0;width:var(--w,0%);transition:width 1.2s cubic-bezier(.16,1,.3,1);opacity:.9}
+.stage.s0 .bar::before{background:linear-gradient(90deg,rgba(79,134,213,.5),rgba(79,134,213,.12))}
+.stage.s1 .bar::before{background:linear-gradient(90deg,rgba(52,211,153,.5),rgba(52,211,153,.12))}
+.stage.s2 .bar::before{background:linear-gradient(90deg,rgba(230,176,66,.5),rgba(230,176,66,.12))}
+.stage.s3 .bar::before{background:linear-gradient(90deg,rgba(255,122,69,.55),rgba(255,122,69,.12))}
+.stage.s4 .bar::before{background:linear-gradient(90deg,rgba(56,189,248,.5),rgba(56,189,248,.12))}
+.stage .v{position:relative;font-size:26px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.stage .n{position:relative;font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin-top:2px}
+.stage .conn{position:absolute;top:50%;right:-9px;transform:translateY(-50%);z-index:2;color:var(--mut2);opacity:.7}
+.stage:last-child .conn{display:none}.stage .conn svg{width:18px;height:18px}
+.cbox{height:250px;position:relative}
+/* Chart.js graceful fallback (pure CSS, used only if the chart library fails to load) */
+.fbbars{display:flex;flex-direction:column;gap:11px;padding-top:6px}
+.fbrow{display:flex;align-items:center;gap:10px;font-size:11.5px}
+.fbrow .fbl{width:130px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+.fbrow .fbt{flex:1;height:12px;background:rgba(255,255,255,.06);border-radius:6px;overflow:hidden}
+.fbrow .fbt i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--orange),var(--cyan));box-shadow:0 0 10px -2px var(--cyan)}
+.fbrow b{width:34px;text-align:right;font-family:ui-monospace,Menlo,monospace}
+.fbdonut{display:flex;align-items:center;gap:26px;justify-content:center;height:100%;flex-wrap:wrap}
+.fbring{width:172px;height:172px;border-radius:50%;position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fbring::after{content:'';position:absolute;inset:26px;border-radius:50%;background:#0c1226;border:1px solid var(--bd)}
+.fbring span{position:relative;z-index:1;font-size:30px;font-weight:700;display:flex;flex-direction:column;align-items:center;color:var(--ink)}
+.fbring small{font-size:9px;letter-spacing:.15em;color:var(--mut);margin-top:3px;font-weight:700}
+.fbleg{display:flex;flex-direction:column;gap:10px;font-size:12.5px}
+.fbleg .dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:middle}
+
+/* TABLE / inputs in dark */
 .filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center}
-.search-wrap{position:relative;flex:1;min-width:220px;max-width:300px}
-.search-wrap svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--muted);pointer-events:none}
-.search-wrap input{padding-left:38px;min-height:42px;border-radius:10px;font-size:13px;width:100%}
-.filters select{min-height:42px;min-width:140px;border-radius:10px;font-size:13px}
-
-/* TABLE */
-.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:16px;background:#fff;box-shadow:var(--shadow)}
+.search-wrap{position:relative;flex:1;min-width:220px;max-width:310px}
+.search-wrap svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:var(--mut);pointer-events:none}
+.search-wrap input{padding-left:38px;min-height:42px;border-radius:11px;font-size:13px;width:100%}
+.filters select{min-height:42px;min-width:144px;border-radius:11px;font-size:13px}
+.table-wrap{overflow:auto;border:1px solid var(--bd);border-radius:18px;background:var(--glass);box-shadow:var(--shadow);backdrop-filter:blur(12px)}
 table{width:100%;border-collapse:collapse;font-size:12.5px;min-width:760px}
-thead th{background:linear-gradient(180deg,#f4f9ff,#edf4ff);color:var(--dark);font-weight:700;text-align:left;padding:12px 14px;border-bottom:1.5px solid var(--border);white-space:nowrap;font-size:10px;letter-spacing:.07em;text-transform:uppercase;position:sticky;top:0;z-index:1}
-td{padding:11px 14px;border-bottom:1px solid #f0f7ff;vertical-align:middle}
-tbody tr{transition:background var(--t)}
-tbody tr:hover{background:#f5faff}
+thead th{background:rgba(255,255,255,.04);color:#bcd0f3;font-weight:700;text-align:left;padding:13px 14px;border-bottom:1px solid var(--bd);white-space:nowrap;font-size:10px;letter-spacing:.08em;text-transform:uppercase;position:sticky;top:0;z-index:1;backdrop-filter:blur(10px)}
+td{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.05);vertical-align:middle}
+tbody tr{transition:background var(--t)}tbody tr:hover{background:rgba(56,189,248,.06)}
 tbody tr:last-child td{border-bottom:none}
-tr.eol{background:linear-gradient(90deg,#fef2ec,transparent 60%)}
-tr.eol:hover{background:linear-gradient(90deg,#fde5d9,#fdf6ff 60%)}
-.tag{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--muted)}
-.dept{background:var(--soft);color:var(--dark);padding:3px 9px;border-radius:7px;font-size:11px;white-space:nowrap;font-weight:700;display:inline-block}
+tr.eol{background:linear-gradient(90deg,rgba(255,122,69,.10),transparent 62%)}
+tr.eol:hover{background:linear-gradient(90deg,rgba(255,122,69,.16),rgba(56,189,248,.04) 62%)}
+.tag{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;color:var(--mut)}
+.dept{background:rgba(79,134,213,.16);color:#bfe0ff;padding:3px 9px;border-radius:7px;font-size:11px;white-space:nowrap;font-weight:700;display:inline-block;border:1px solid rgba(79,134,213,.25)}
 
-/* PILLS */
 .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.02em}
 .pill .d{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.pill.ok{background:#dcfce7;color:var(--ok)}.pill.ok .d{background:var(--ok)}.pill.fail{background:#fee2e2;color:var(--danger)}.pill.fail .d{background:var(--danger)}
+.pill.ok{background:rgba(52,211,153,.14);color:#6ee7b7;border:1px solid rgba(52,211,153,.3)}.pill.ok .d{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.pill.fail{background:rgba(251,113,133,.14);color:#fda4af;border:1px solid rgba(251,113,133,.3)}.pill.fail .d{background:var(--danger);box-shadow:0 0 8px var(--danger)}
 
-/* SWITCH */
-.switch{width:46px;height:26px;border-radius:13px;background:#cbd5e1;position:relative;border:0;cursor:pointer;transition:background var(--t),box-shadow var(--t);flex-shrink:0}
-.switch:hover{box-shadow:0 0 0 3px rgba(212,91,37,.18)}.switch.on{background:var(--orange)}
-.switch::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15);transition:transform .2s cubic-bezier(.4,0,.2,1)}
-.switch.on::after{transform:translateX(20px)}
+.switch{width:48px;height:26px;border-radius:13px;background:rgba(255,255,255,.14);position:relative;border:1px solid var(--bd);cursor:pointer;transition:background var(--t),box-shadow var(--t);flex-shrink:0}
+.switch:hover{box-shadow:0 0 0 3px rgba(255,122,69,.22)}.switch.on{background:linear-gradient(90deg,var(--orange),#ff9a6b);border-color:transparent;box-shadow:0 0 14px -2px var(--orange)}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.4);transition:transform .2s cubic-bezier(.4,0,.2,1)}
+.switch.on::after{transform:translateX(22px)}
 
-.dateedit{font-family:ui-monospace,Menlo,monospace;font-size:11px;width:140px;min-height:38px;border-radius:9px;padding:0 10px}
+.dateedit{font-family:ui-monospace,Menlo,monospace;font-size:11px;width:144px;min-height:38px;border-radius:9px;padding:0 10px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.form-grid .full{grid-column:1/-1}
-.linkbtn{background:none;border:none;color:var(--primary);font-weight:700;font-size:12.5px;cursor:pointer;padding:4px 6px;border-radius:7px;transition:color var(--t),background var(--t)}.linkbtn:hover{color:var(--dark);background:var(--soft)}
+.panel{padding:22px 24px}
+.panel h3{margin:0 0 16px;color:#dbe6ff;font-size:14px;letter-spacing:.01em;display:flex;align-items:center;gap:9px}
+.panel h3::before{content:'';width:3px;height:15px;border-radius:2px;background:linear-gradient(var(--cyan),var(--teal));box-shadow:0 0 10px var(--cyan);flex-shrink:0}
+.linkbtn{background:none;border:none;color:var(--cyan);font-weight:700;font-size:12.5px;cursor:pointer;padding:4px 6px;border-radius:7px;transition:color var(--t),background var(--t)}.linkbtn:hover{color:#fff;background:rgba(56,189,248,.12)}
 
 /* QUEUE */
 .queue{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:18px}
-.qcard{background:#fff;border:1px solid var(--border);border-radius:18px;padding:20px;box-shadow:var(--shadow);position:relative;overflow:hidden;transition:transform var(--t),box-shadow var(--t)}
-.qcard:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
-.qcard::before{content:"";position:absolute;left:0;top:0;width:4px;height:100%;background:linear-gradient(to bottom,var(--orange),#f5a87a)}
-.qcard.done::before{background:linear-gradient(to bottom,var(--ok),#4ade80)}
+.qcard{padding:20px;position:relative;overflow:hidden}
+.qcard::before{content:"";position:absolute;left:0;top:0;width:4px;height:100%;background:linear-gradient(var(--orange),#ff9a6b);box-shadow:0 0 14px var(--orange)}
+.qcard.done::before{background:linear-gradient(var(--ok),#6ee7b7);box-shadow:0 0 14px var(--ok)}
 .qhead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.qcard h4{margin:0;font-size:13px;font-family:ui-monospace,Menlo,monospace}.qcard .qs{font-size:11.5px;color:var(--muted);margin-top:3px}
-.qbadge{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:4px 9px;border-radius:20px;background:#fdeae0;color:var(--orange);white-space:nowrap}
-.qcard.done .qbadge{background:#dcfce7;color:var(--ok)}
+.qcard h4{margin:0;font-size:13px;font-family:ui-monospace,Menlo,monospace}.qcard .qs{font-size:11.5px;color:var(--mut);margin-top:3px}
+.qbadge{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:4px 9px;border-radius:20px;background:rgba(255,122,69,.16);color:#ffcaб4;color:#ffcab4;white-space:nowrap;border:1px solid rgba(255,122,69,.3)}
+.qcard.done .qbadge{background:rgba(52,211,153,.16);color:#6ee7b7;border-color:rgba(52,211,153,.3)}
 .qcard dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:12.5px;margin:14px 0}
-.qcard dt{color:var(--muted)}.qcard dd{text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:500;margin:0}
-.qnote{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:11px 13px;font-size:12.5px;margin-bottom:12px;line-height:1.55}
-.qnote span{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700;margin-bottom:4px}
-.decided{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:11px 13px;font-size:12.5px}
-.decided .h{color:var(--ok);font-weight:700;display:flex;gap:7px;align-items:center;margin-bottom:5px}
-.decided .h svg{width:16px;height:16px}
-.dec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 9px;border-radius:7px;display:inline-block}
-.dec.Replace{background:#fdeee7;color:var(--orange)}.dec.Extend{background:var(--soft);color:var(--dark)}.dec.Return{background:#f0eaf2;color:#7d6f86}
+.qcard dt{color:var(--mut)}.qcard dd{text-align:right;font-family:ui-monospace,Menlo,monospace;font-size:11.5px;font-weight:500;margin:0}
+.qnote{background:rgba(255,255,255,.04);border:1px solid var(--bd);border-radius:11px;padding:11px 13px;font-size:12.5px;margin-bottom:12px;line-height:1.55}
+.qnote span{display:block;font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);font-weight:700;margin-bottom:4px}
+.decided{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.3);border-radius:11px;padding:11px 13px;font-size:12.5px}
+.decided .h{color:#6ee7b7;font-weight:700;display:flex;gap:7px;align-items:center;margin-bottom:5px}.decided .h svg{width:16px;height:16px}
+.dec{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:3px 9px;border-radius:7px;display:inline-block;border:1px solid var(--bd)}
+.dec.Replace{background:rgba(255,122,69,.16);color:#ffcab4}.dec.Extend{background:rgba(79,134,213,.16);color:#bfe0ff}.dec.Return{background:rgba(179,157,219,.16);color:#d6c8f0}
 
-/* REPORTS */
-.rcards{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:20px}.rcard{flex:1;min-width:210px;background:#fff;border:1px solid var(--border);border-radius:18px;padding:22px;box-shadow:var(--shadow)}
-.rcard h4{margin:0 0 6px;font-size:13.5px;color:var(--dark)}.rcard p{font-size:12.5px;color:var(--muted);margin-bottom:16px;line-height:1.5}
-
-/* TABS */
 .tabs{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
-.tabs a{padding:9px 16px;border-radius:10px;font-size:13px;font-weight:700;background:#fff;border:1.5px solid var(--border);color:var(--muted);transition:all var(--t)}
-.tabs a:hover{border-color:var(--light);color:var(--dark)}
-.tabs a.on{background:linear-gradient(135deg,var(--dark),var(--primary));color:#fff;border-color:transparent;box-shadow:0 4px 12px rgba(79,134,213,.3)}
+.tabs a{padding:9px 16px;border-radius:11px;font-size:13px;font-weight:700;background:var(--glass);border:1px solid var(--bd);color:var(--mut);transition:all var(--t)}
+.tabs a:hover{border-color:var(--bd2);color:#dbe6ff}
+.tabs a.on{background:linear-gradient(135deg,var(--blue),var(--cyan));color:#03101f;border-color:transparent;box-shadow:0 6px 18px -8px rgba(56,189,248,.7)}
 
-/* LOG BADGES */
 .lvl{font-size:10px;font-weight:700;padding:3px 9px;border-radius:7px;letter-spacing:.03em}
-.lvl.INFO{background:#dbeafe;color:#1d4ed8}.lvl.WARN{background:#fef3c7;color:#92400e}.lvl.ERROR{background:#fee2e2;color:var(--danger)}
-.st{font-size:10px;font-weight:700;padding:3px 9px;border-radius:7px;background:#f1f5f9;color:var(--muted)}
-.st.SUCCESS{background:#dcfce7;color:var(--ok)}.st.OTP_SENT{background:#dbeafe;color:#1d4ed8}
-.st[class*="FAIL"]{background:#fee2e2;color:var(--danger)}.st.LOGOUT{background:#fef3c7;color:#92400e}
+.lvl.INFO{background:rgba(79,134,213,.18);color:#bfe0ff}.lvl.WARN{background:rgba(230,176,66,.18);color:#ffe6ab}.lvl.ERROR{background:rgba(251,113,133,.18);color:#fda4af}
+.st{font-size:10px;font-weight:700;padding:3px 9px;border-radius:7px;background:rgba(255,255,255,.06);color:var(--mut)}
+.st.SUCCESS{background:rgba(52,211,153,.16);color:#6ee7b7}.st.OTP_SENT{background:rgba(79,134,213,.18);color:#bfe0ff}
+.st[class*="FAIL"]{background:rgba(251,113,133,.18);color:#fda4af}.st.LOGOUT{background:rgba(230,176,66,.18);color:#ffe6ab}
 
-.empty{text-align:center;padding:60px 20px;color:var(--muted)}
-.empty svg{width:46px;height:46px;color:var(--light);margin-bottom:14px}
-.empty h3{color:var(--ink);margin:0 0 6px}
-.appfoot{padding:20px 32px;border-top:1px solid var(--border);text-align:center;color:var(--muted);font-size:12px;font-weight:500;background:#fff}.appfoot .policy{margin-top:8px}
-.sync-info{display:flex;align-items:flex-start;gap:11px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 18px;margin-bottom:16px;color:var(--muted);line-height:1.7;font-size:13px}.sync-info svg{width:20px;height:20px;color:var(--primary);flex-shrink:0;margin-top:1px}.sync-info b{color:var(--dark)}
+.empty{text-align:center;padding:60px 20px;color:var(--mut)}
+.empty svg{width:46px;height:46px;color:var(--mut2);margin-bottom:14px}.empty h3{color:var(--ink);margin:0 0 6px}
+.appfoot{padding:20px 32px;border-top:1px solid var(--bd);text-align:center;color:var(--mut);font-size:12px;font-weight:500}.appfoot .policy{margin-top:8px}
+.sync-info{display:flex;align-items:flex-start;gap:11px;border-radius:14px;padding:14px 18px;margin-bottom:16px;color:var(--mut);line-height:1.7;font-size:13px}.sync-info svg{width:20px;height:20px;color:var(--cyan);flex-shrink:0;margin-top:1px}.sync-info b{color:#dbe6ff}
 
-@media(max-width:1100px){.cards{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:1100px){.bento{grid-template-columns:repeat(2,1fr)}.tile-ring{grid-column:span 2;grid-row:auto}.span-2{grid-column:span 2}}
 @media(max-width:900px){
   .app{grid-template-columns:1fr}
-  .appbar{display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:45;background:linear-gradient(120deg,#003d52,#062554);color:#fff;padding:12px 16px;box-shadow:var(--shadow)}
-  .appbar img{height:24px}.appbar .ab-title{font-weight:700;font-size:15px;margin-inline-start:2px}
-  .hamburger{background:rgba(255,255,255,.12);border:0;color:#fff;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer}
-  .hamburger svg{width:20px;height:20px}
-  .sidebar{position:fixed;inset:0 auto 0 0;width:264px;z-index:60;transform:translateX(-100%);transition:transform .26s ease;height:100vh}
-  .sidebar.open{transform:none;box-shadow:var(--shadow-lg)}
-  .scrim{display:block;position:fixed;inset:0;background:rgba(4,16,32,.5);z-index:50;opacity:0;visibility:hidden;transition:opacity .26s ease}
+  .appbar{display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:45;background:rgba(10,16,34,.85);backdrop-filter:blur(14px);border-bottom:1px solid var(--bd);color:#fff;padding:12px 16px}
+  .appbar img{height:24px}.appbar .ab-title{font-weight:700;font-size:15px}
+  .hamburger{background:rgba(255,255,255,.08);border:1px solid var(--bd);color:#fff;width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;cursor:pointer}.hamburger svg{width:20px;height:20px}
+  .sidebar{position:fixed;inset:0 auto 0 0;width:268px;z-index:60;transform:translateX(-100%);transition:transform .26s ease}
+  .sidebar.open{transform:none}
+  .scrim{display:block;position:fixed;inset:0;background:rgba(2,5,12,.6);z-index:50;opacity:0;visibility:hidden;transition:opacity .26s ease;backdrop-filter:blur(2px)}
   .scrim.show{opacity:1;visibility:visible}
   .login-shell{grid-template-columns:1fr}.login-hero{display:none}
-  .charts,.grid2,.form-grid{grid-template-columns:1fr}.main{padding:20px 18px}
-  .login-panel{padding:38px 28px}
+  .bento,.grid2,.form-grid{grid-template-columns:1fr}.tile-ring,.span-2,.span-all{grid-column:auto}
+  .main{padding:20px 16px}.login-panel{padding:38px 26px}
 }
-@media(max-width:600px){.cards{grid-template-columns:1fr}.main{padding:16px 14px}}
+@media(max-width:600px){.bento{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}html{scroll-behavior:auto}}
 </style></head><body>
 
 <a class="skip-link" href="#main">Skip to main content</a>
 
 <?php
-/* Reusable notice/toast block (aria-live region) */
 function render_notices($error,$success){
-    if($error===''&&$success==='') { echo '<div class="notices" aria-live="polite"></div>'; return; }
     echo '<div class="notices" aria-live="polite">';
     if($error!==''){ echo '<div class="notice error" role="alert">'.icon('alert').'<span>'.e($error).'</span><button type="button" class="notice-x" aria-label="Dismiss message" data-dismiss>'.icon('x').'</button></div>'; }
     if($success!==''){ echo '<div class="notice" role="status" data-autodismiss>'.icon('check-circle').'<span>'.e($success).'</span><button type="button" class="notice-x" aria-label="Dismiss message" data-dismiss>'.icon('x').'</button></div>'; }
@@ -762,15 +816,15 @@ function render_notices($error,$success){
   <section class="login-hero">
     <div class="brand"><img src="<?=$LOGO?>" alt="CATRION" onerror="this.style.display='none'"></div>
     <div>
-      <h1>Every device,<br>tracked to end-of-life.</h1>
-      <p>Synced live from ManageEngine and linked to the Unified Employees Master List.</p>
+      <h1>Every device,<br><span class="accent">tracked to end-of-life.</span></h1>
+      <p>A live operations console for asset lifecycle — synced from ManageEngine and linked to the Unified Employees Master List.</p>
       <div class="hero-features">
-        <div class="hero-feat"><?=icon('sync')?>Live sync from ManageEngine AMER</div>
-        <div class="hero-feat"><?=icon('shield')?>IT flags EoL · Segment heads decide</div>
-        <div class="hero-feat"><?=icon('audit')?>Full audit trail &amp; CSV export</div>
+        <div class="hero-feat"><span class="hf-ic"><?=icon('sync')?></span>Live sync from ManageEngine AMER</div>
+        <div class="hero-feat"><span class="hf-ic"><?=icon('shield')?></span>IT flags EoL · Segment heads decide</div>
+        <div class="hero-feat"><span class="hf-ic"><?=icon('audit')?></span>Full audit trail &amp; CSV export</div>
       </div>
     </div>
-    <div class="foot" style="color:rgba(255,255,255,.65);text-align:left">© 2026 CATRION • IT Digital &amp; Transformation</div>
+    <div class="foot" style="text-align:left">© 2026 CATRION • IT Digital &amp; Transformation</div>
   </section>
   <section class="login-panel" id="main">
     <div class="lbl"><span>Secure Access</span></div>
@@ -783,7 +837,7 @@ function render_notices($error,$success){
         <input id="login_prn" name="login_prn" inputmode="numeric" autocomplete="username" pattern="^140\d{5}$" maxlength="8" placeholder="140xxxxx" value="<?=e($_POST['login_prn']??$_SESSION['eol_pending_prn']??'')?>" <?=$showOtp?'':'autofocus'?> required>
         <?php if(!$showOtp):?><div class="hint">Your 8-digit employee number, e.g. 140xxxxx.</div><?php endif;?></div>
       <?php if($showOtp||!empty($_SESSION['eol_pending_prn'])):?>
-        <div class="field"><label for="otp">Verification Code</label><input id="otp" class="otp-input" name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="\d{4}" maxlength="4" placeholder="••••" autofocus required></div>
+        <div class="field"><label for="otp">Verification Code</label><input id="otp" class="otp-input mono" name="otp" inputmode="numeric" autocomplete="one-time-code" pattern="\d{4}" maxlength="4" placeholder="••••" autofocus required></div>
         <button class="btn" type="submit" style="width:100%"><?=icon('check')?>Verify &amp; sign in</button>
       <?php else:?>
         <button class="btn" type="submit" style="width:100%"><?=icon('arrow')?>Send verification code</button>
@@ -820,7 +874,7 @@ function render_notices($error,$success){
     <nav class="nav" aria-label="Primary">
       <?php if($role==='admin'):?>
         <div class="navsec">Administration</div>
-        <a class="<?=$screen==='dashboard'?'on':''?>" href="?screen=dashboard" <?=$screen==='dashboard'?'aria-current="page"':''?>><?=icon('dashboard')?>Dashboard</a>
+        <a class="<?=$screen==='dashboard'?'on':''?>" href="?screen=dashboard" <?=$screen==='dashboard'?'aria-current="page"':''?>><?=icon('dashboard')?>Command Center</a>
         <a class="<?=$screen==='inventory'?'on':''?>" href="?screen=inventory" <?=$screen==='inventory'?'aria-current="page"':''?>><?=icon('inventory')?>Asset Inventory</a>
         <a class="<?=$screen==='admins'?'on':''?>" href="?screen=admins" <?=$screen==='admins'?'aria-current="page"':''?>><?=icon('admins')?>Admin Users</a>
         <a class="<?=$screen==='segments'?'on':''?>" href="?screen=segments" <?=$screen==='segments'?'aria-current="page"':''?>><?=icon('segments')?>Segment Heads</a>
@@ -831,12 +885,12 @@ function render_notices($error,$success){
         <a class="on" href="?screen=queue" aria-current="page"><?=icon('queue')?>Replacement Queue</a>
       <?php endif;?>
     </nav>
-    <form method="post" class="signout"><button class="btn light" name="logout" style="width:100%"><?=icon('logout')?>Sign out</button></form>
+    <form method="post" class="signout"><button class="btn light" name="logout"><?=icon('logout')?>Sign out</button></form>
   </aside>
   <div class="content"><main class="main" id="main">
     <div class="topbar"><div>
       <h1><?=e($pageTitle)?></h1>
-      <div class="meta">Signed in as <b><?=e($fullName)?></b> • <?=e($prn)?> • <?=$role==='admin'?'IT Administrator':'Segment Head'?></div>
+      <div class="meta"><span class="livedot">Live</span> Signed in as <b><?=e($fullName)?></b> • <?=e($prn)?> • <?=$role==='admin'?'IT Administrator':'Segment Head'?></div>
     </div>
     <?php if($role==='admin'&&$screen==='inventory'):?>
       <form method="post" style="margin:0" data-sync><button class="btn sm" name="sync_amer"><?=icon('sync')?><span>Sync from ManageEngine</span></button></form>
@@ -845,19 +899,45 @@ function render_notices($error,$success){
     <?php render_notices($error,$success); ?>
 
     <?php if($role==='admin'&&$screen==='dashboard'):?>
-      <section class="cards">
-        <div class="card"><div class="card-top"><span>Total assets</span><span class="card-ic"><?=icon('box')?></span></div><b><?=e($stats['total'])?></b></div>
-        <div class="card ok"><div class="card-top"><span>Active</span><span class="card-ic"><?=icon('check-circle')?></span></div><b><?=e($stats['active'])?></b></div>
-        <div class="card eol"><div class="card-top"><span>Flagged EoL</span><span class="card-ic"><?=icon('alert')?></span></div><b><?=e($stats['eol'])?></b></div>
-        <div class="card warn"><div class="card-top"><span>Over 4 years old</span><span class="card-ic"><?=icon('clock')?></span></div><b><?=e($stats['over4'])?></b></div>
-      </section>
-      <section class="charts">
-        <div class="panel"><h3>EoL flags by segment</h3><div class="cbox"><canvas id="cSeg" role="img" aria-label="Bar chart of End-of-Life flags by segment"></canvas></div></div>
-        <div class="panel"><h3>Head decisions on EoL devices</h3><div class="cbox"><canvas id="cDec" role="img" aria-label="Doughnut chart of segment-head decisions on End-of-Life devices"></canvas></div></div>
+      <section class="bento">
+        <!-- Fleet health ring -->
+        <div class="glass tile-ring">
+          <div class="tile-h"><span><?=icon('target')?> Fleet Health Index</span><span class="tag-live">real-time</span></div>
+          <div class="ringwrap">
+            <div class="ring" id="ring" data-total="<?=(int)$stats['total']?>" data-eol="<?=(int)$stats['eol']?>" data-over4="<?=(int)$stats['over4']?>">
+              <svg viewBox="0 0 200 200">
+                <circle class="trk" cx="100" cy="100" r="84"></circle>
+                <circle class="arc" id="arcActive" cx="100" cy="100" r="84" stroke="#34d399"></circle>
+                <circle class="arc" id="arcAging"  cx="100" cy="100" r="84" stroke="#e6b042"></circle>
+                <circle class="arc" id="arcEol"    cx="100" cy="100" r="84" stroke="#ff7a45"></circle>
+              </svg>
+              <div class="ring-c"><b id="ringPct">0%</b><small>Operational</small></div>
+            </div>
+            <div class="ring-legend">
+              <div class="rl"><span class="dot" style="background:#34d399;color:#34d399"></span><span class="nm">Healthy active</span><span class="vv" id="lgActive">0</span></div>
+              <div class="rl"><span class="dot" style="background:#e6b042;color:#e6b042"></span><span class="nm">Aging 4+ yrs</span><span class="vv" id="lgAging">0</span></div>
+              <div class="rl"><span class="dot" style="background:#ff7a45;color:#ff7a45"></span><span class="nm">Flagged EoL</span><span class="vv" id="lgEol">0</span></div>
+            </div>
+          </div>
+        </div>
+        <!-- KPI tiles -->
+        <div class="glass kpi blue"><div class="ic-badge"><?=icon('box')?></div><div class="lab">Total assets</div><b class="count" data-to="<?=(int)$stats['total']?>">0</b></div>
+        <div class="glass kpi ok"><div class="ic-badge"><?=icon('check-circle')?></div><div class="lab">Active</div><b class="count" data-to="<?=(int)$stats['active']?>">0</b></div>
+        <div class="glass kpi eol"><div class="ic-badge"><?=icon('alert')?></div><div class="lab">Flagged EoL</div><b class="count" data-to="<?=(int)$stats['eol']?>">0</b></div>
+        <div class="glass kpi warn"><div class="ic-badge"><?=icon('clock')?></div><div class="lab">Over 4 years</div><b class="count" data-to="<?=(int)$stats['over4']?>">0</b></div>
+        <!-- Lifecycle pipeline -->
+        <div class="glass pipeline span-all">
+          <div class="tile-h"><span><?=icon('activity')?> Asset Lifecycle Pipeline</span></div>
+          <div class="flow" id="flow"></div>
+        </div>
+        <!-- Segment ranking -->
+        <div class="glass panel span-2"><h3>EoL Risk by Segment</h3><div class="cbox"><canvas id="cSeg" role="img" aria-label="Ranking of End-of-Life flags by segment"></canvas></div></div>
+        <!-- Decision core -->
+        <div class="glass panel span-2"><h3>Decision Core</h3><div class="cbox"><canvas id="cDec" role="img" aria-label="Breakdown of segment-head decisions on End-of-Life devices"></canvas></div></div>
       </section>
 
     <?php elseif($role==='admin'&&$screen==='inventory'):?>
-      <div class="sync-info"><?=icon('info')?><div>Assets sync <b>directly from ManageEngine</b> (AMER / <?=e($_ENV['AMER_DB_Name']??'SDPnew')?>). Click “Sync from ManageEngine” to pull the latest. EoL flags and head decisions are preserved across syncs.</div></div>
+      <div class="glass sync-info"><?=icon('info')?><div>Assets sync <b>directly from ManageEngine</b> (AMER / <?=e($_ENV['AMER_DB_Name']??'SDPnew')?>). Click “Sync from ManageEngine” to pull the latest. EoL flags and head decisions are preserved across syncs.</div></div>
       <form method="get" class="filters"><input type="hidden" name="screen" value="inventory">
         <div class="search-wrap"><?=icon('search')?><label class="sr-only" for="fq">Search assets</label>
           <input id="fq" name="q" placeholder="Search asset, user, login, tag, IP…" value="<?=e($_GET['q']??'')?>"></div>
@@ -873,25 +953,25 @@ function render_notices($error,$success){
         <thead><tr><th scope="col">Asset / Model</th><th scope="col">User</th><th scope="col">Last Login</th><th scope="col">Segment</th><th scope="col">Scan</th><th scope="col">Service Tag</th><th scope="col">IP</th><th scope="col">Warranty</th><th scope="col">4+ yrs</th><th scope="col">EoL</th></tr></thead>
         <tbody><?php if(!$assets):?><tr><td colspan="10"><div class="empty"><?=icon('inventory')?><h3>No assets yet</h3><p>Click “Sync from ManageEngine” to pull the latest inventory.</p></div></td></tr><?php endif; foreach($assets as $a):?>
           <tr class="<?=(int)$a['is_eol']?'eol':''?>">
-            <td><div class="tag" style="font-weight:700"><?=e($a['asset_name'])?></div><div style="font-size:11px;color:var(--muted)"><?=e(trim($a['manufacturer'].' '.$a['model']))?></div></td>
+            <td><div class="tag" style="font-weight:700;color:var(--ink)"><?=e($a['asset_name'])?></div><div style="font-size:11px;color:var(--mut)"><?=e(trim($a['manufacturer'].' '.$a['model']))?></div></td>
             <td><?=e($a['asset_user'])?></td><td class="tag"><?=e($a['last_login_user'])?></td>
             <td><span class="dept"><?=e($a['department'])?></span></td>
             <td><span class="pill <?=$a['last_scan_status']==='SUCCESS'?'ok':'fail'?>"><span class="d"></span><?=e($a['last_scan_status'])?></span></td>
             <td class="tag"><?=e($a['service_tag'])?></td><td class="tag"><?=e(strtok($a['ip_addresses']??'',','))?></td>
             <td><form method="post" style="margin:0"><input type="hidden" name="save_warranty" value="1"><input type="hidden" name="asset_id" value="<?=(int)$a['id']?>"><label class="sr-only" for="warr<?=(int)$a['id']?>">Warranty expiry for <?=e($a['asset_name'])?></label><input id="warr<?=(int)$a['id']?>" type="date" name="warranty_expiry" class="dateedit" value="<?=e($a['warranty_expiry'])?>" onchange="this.form.submit()"></form></td>
-            <td><span class="dec <?=(int)$a['over_four_years']?'Replace':''?>" style="<?=(int)$a['over_four_years']?'':'color:var(--muted)'?>"><?=(int)$a['over_four_years']?'YES':'no'?></span></td>
+            <td><span class="dec <?=(int)$a['over_four_years']?'Replace':''?>" style="<?=(int)$a['over_four_years']?'':'color:var(--mut);background:transparent;border-color:transparent'?>"><?=(int)$a['over_four_years']?'YES':'no'?></span></td>
             <td><form method="post" style="margin:0"><input type="hidden" name="toggle_eol" value="1"><input type="hidden" name="asset_id" value="<?=(int)$a['id']?>"><button type="submit" role="switch" aria-checked="<?=(int)$a['is_eol']?'true':'false'?>" aria-label="<?=(int)$a['is_eol']?'Remove End-of-Life flag from':'Flag End-of-Life:'?> <?=e($a['asset_name'])?>" class="switch <?=(int)$a['is_eol']?'on':''?>"></button></form></td>
           </tr><?php endforeach;?></tbody>
       </table></div>
 
     <?php elseif($role==='admin'&&$screen==='admins'):?>
       <section class="grid2">
-        <div class="panel"><h3>Add / update admin</h3>
+        <div class="glass panel"><h3>Add / update admin</h3>
           <form method="post" class="form-grid"><input type="hidden" name="save_admin" value="1">
             <div class="full"><label for="admin_prn">PRN (master list)</label><input id="admin_prn" name="admin_prn" inputmode="numeric" maxlength="8" placeholder="140xxxxx" required></div>
             <div class="full"><label for="admin_role">Role · scope</label><select id="admin_role" name="admin_role"><option>IT Admin · All segments</option><option>IT Admin · JED sites only</option><option>Super Admin · All segments</option><option>Read-only · Reports</option></select></div>
             <div class="full"><button class="btn" type="submit"><?=icon('check')?>Save admin</button></div></form></div>
-        <div class="panel"><h3>Administrators</h3>
+        <div class="glass panel"><h3>Administrators</h3>
           <div class="table-wrap"><table style="min-width:auto">
             <thead><tr><th scope="col">PRN</th><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Scope</th><th scope="col">Last Login</th><th scope="col">Status</th><th scope="col"><span class="sr-only">Actions</span></th></tr></thead>
             <tbody><?php foreach($admins as $a):?><tr>
@@ -899,26 +979,26 @@ function render_notices($error,$success){
               <td class="tag"><?=e($a['last_login']??'—')?></td><td><span class="pill <?=(int)$a['is_active']?'ok':'fail'?>"><span class="d"></span><?=(int)$a['is_active']?'Active':'Suspended'?></span></td>
               <td style="white-space:nowrap"><form method="post" style="display:inline;margin:0"><input type="hidden" name="admin_prn" value="<?=e($a['prn'])?>"><button class="linkbtn" name="admin_action" value="<?=(int)$a['is_active']?'suspend':'activate'?>"><?=(int)$a['is_active']?'Suspend':'Activate'?></button></form>
                 <form method="post" style="display:inline;margin:0"><input type="hidden" name="admin_prn" value="<?=e($a['prn'])?>"><button class="linkbtn" style="color:var(--danger)" name="admin_action" value="remove" onclick="return confirm('Remove this admin?')">Remove</button></form></td>
-            </tr><?php endforeach; if(!$admins):?><tr><td colspan="7" style="color:var(--muted)">No administrators yet.</td></tr><?php endif;?></tbody></table></div></div>
+            </tr><?php endforeach; if(!$admins):?><tr><td colspan="7" style="color:var(--mut)">No administrators yet.</td></tr><?php endif;?></tbody></table></div></div>
       </section>
 
     <?php elseif($role==='admin'&&$screen==='segments'):?>
       <section class="grid2">
-        <div class="panel"><h3>Map segment to head</h3>
+        <div class="glass panel"><h3>Map segment to head</h3>
           <form method="post" class="form-grid"><input type="hidden" name="save_head" value="1">
             <div class="full"><label for="department">Department / segment</label><input id="department" name="department" placeholder="e.g. Airports Lounges - JED" required></div>
             <div class="full"><label for="head_prn">Head PRN</label><input id="head_prn" name="head_prn" inputmode="numeric" maxlength="8" placeholder="140xxxxx" required></div>
             <div class="full"><button class="btn" type="submit"><?=icon('check')?>Save mapping</button></div></form></div>
-        <div class="panel"><h3>Segment heads</h3>
+        <div class="glass panel"><h3>Segment heads</h3>
           <div class="table-wrap"><table style="min-width:auto"><thead><tr><th scope="col">Segment</th><th scope="col">Head PRN</th><th scope="col">Name</th><th scope="col">Status</th></tr></thead>
-            <tbody><?php foreach($heads as $h):?><tr><td><span class="dept"><?=e($h['department'])?></span></td><td class="tag"><?=e($h['head_prn'])?></td><td><?=e($h['FULL_NAME']??'—')?></td><td><span class="pill <?=(int)$h['is_active']?'ok':'fail'?>"><span class="d"></span><?=(int)$h['is_active']?'Active':'Inactive'?></span></td></tr><?php endforeach; if(!$heads):?><tr><td colspan="4" style="color:var(--muted)">No mappings yet.</td></tr><?php endif;?></tbody></table></div></div>
+            <tbody><?php foreach($heads as $h):?><tr><td><span class="dept"><?=e($h['department'])?></span></td><td class="tag"><?=e($h['head_prn'])?></td><td><?=e($h['FULL_NAME']??'—')?></td><td><span class="pill <?=(int)$h['is_active']?'ok':'fail'?>"><span class="d"></span><?=(int)$h['is_active']?'Active':'Inactive'?></span></td></tr><?php endforeach; if(!$heads):?><tr><td colspan="4" style="color:var(--mut)">No mappings yet.</td></tr><?php endif;?></tbody></table></div></div>
       </section>
 
     <?php elseif($role==='admin'&&$screen==='reports'):?>
       <div class="filters"><a class="btn sm" href="?export=assets&kind=all"><?=icon('download')?>Full inventory CSV</a>
         <a class="btn sm" href="?export=assets&kind=eol"><?=icon('download')?>End-of-Life CSV</a>
         <a class="btn sm light" href="?export=assets&kind=over4"><?=icon('download')?>Over-4-years CSV</a></div>
-      <div class="panel"><h3>EoL decisions by segment</h3>
+      <div class="glass panel"><h3>EoL decisions by segment</h3>
         <div class="table-wrap"><table style="min-width:auto"><thead><tr><th scope="col">Segment</th><th scope="col">Total</th><th scope="col">EoL</th><th scope="col">Replace</th><th scope="col">Extend</th><th scope="col">Return</th><th scope="col">Pending</th></tr></thead>
           <tbody><?php $rs=$conn->query("SELECT department,COUNT(*) total,SUM(is_eol) eol,SUM(decision='Replace') rep,SUM(decision='Extend') ext,SUM(decision='Return') ret,SUM(is_eol=1 AND decision IS NULL) pend FROM eol_assets GROUP BY department ORDER BY department"); while($r=$rs->fetch_assoc()):?>
             <tr><td><span class="dept"><?=e($r['department'])?></span></td><td class="tag"><?=(int)$r['total']?></td><td class="tag" style="color:var(--orange);font-weight:700"><?=(int)$r['eol']?></td><td class="tag"><?=(int)$r['rep']?></td><td class="tag"><?=(int)$r['ext']?></td><td class="tag"><?=(int)$r['ret']?></td><td class="tag"><?=(int)$r['pend']?></td></tr>
@@ -933,28 +1013,28 @@ function render_notices($error,$success){
       <div class="table-wrap">
       <?php if($logtab==='audit'):?>
         <table><thead><tr><th scope="col">When</th><th scope="col">Actor</th><th scope="col">Action</th><th scope="col">Asset</th><th scope="col">Detail</th><th scope="col">IP</th></tr></thead><tbody>
-        <?php foreach($auditRows as $r):?><tr><td class="tag"><?=e($r['created_at'])?></td><td><?=e($r['actor_name']?:$r['actor_prn'])?></td><td><span class="dec"><?=e($r['action'])?></span></td><td class="tag"><?=e($r['asset_tag'])?></td><td><?=e($r['detail'])?></td><td class="tag"><?=e($r['ip_address'])?></td></tr><?php endforeach; if(!$auditRows):?><tr><td colspan="6" style="color:var(--muted)">No events yet.</td></tr><?php endif;?></tbody></table>
+        <?php foreach($auditRows as $r):?><tr><td class="tag"><?=e($r['created_at'])?></td><td><?=e($r['actor_name']?:$r['actor_prn'])?></td><td><span class="dec"><?=e($r['action'])?></span></td><td class="tag"><?=e($r['asset_tag'])?></td><td><?=e($r['detail'])?></td><td class="tag"><?=e($r['ip_address'])?></td></tr><?php endforeach; if(!$auditRows):?><tr><td colspan="6" style="color:var(--mut)">No events yet.</td></tr><?php endif;?></tbody></table>
       <?php elseif($logtab==='logins'):?>
         <table><thead><tr><th scope="col">When</th><th scope="col">PRN</th><th scope="col">Name</th><th scope="col">Status</th><th scope="col">IP</th></tr></thead><tbody>
-        <?php foreach($loginRows as $r):?><tr><td class="tag"><?=e($r['created_at'])?></td><td class="tag"><?=e($r['prn'])?></td><td><?=e($r['full_name'])?></td><td><span class="st <?=e($r['status'])?>"><?=e($r['status'])?></span></td><td class="tag"><?=e($r['ip_address'])?></td></tr><?php endforeach; if(!$loginRows):?><tr><td colspan="5" style="color:var(--muted)">No login events.</td></tr><?php endif;?></tbody></table>
+        <?php foreach($loginRows as $r):?><tr><td class="tag"><?=e($r['created_at'])?></td><td class="tag"><?=e($r['prn'])?></td><td><?=e($r['full_name'])?></td><td><span class="st <?=e($r['status'])?>"><?=e($r['status'])?></span></td><td class="tag"><?=e($r['ip_address'])?></td></tr><?php endforeach; if(!$loginRows):?><tr><td colspan="5" style="color:var(--mut)">No login events.</td></tr><?php endif;?></tbody></table>
       <?php elseif($logtab==='sync'):?>
         <table><thead><tr><th scope="col">When</th><th scope="col">By</th><th scope="col">Source</th><th scope="col">Processed</th><th scope="col">New</th><th scope="col">Updated</th><th scope="col">Skipped</th><th scope="col">Status</th></tr></thead><tbody>
-        <?php foreach($syncRows as $r):?><tr><td class="tag"><?=e($r['created_at'])?></td><td><?=e($r['run_by_name']?:$r['run_by_prn'])?></td><td><?=e($r['source'])?></td><td class="tag"><?=(int)$r['processed']?></td><td class="tag"><?=(int)$r['inserted']?></td><td class="tag"><?=(int)$r['updated']?></td><td class="tag"><?=(int)$r['skipped']?></td><td><span class="st <?=$r['status']==='OK'?'SUCCESS':'FAIL'?>"><?=e($r['status'])?></span></td></tr><?php endforeach; if(!$syncRows):?><tr><td colspan="8" style="color:var(--muted)">No sync runs.</td></tr><?php endif;?></tbody></table>
+        <?php foreach($syncRows as $r):?><tr><td class="tag"><?=e($r['created_at'])?></td><td><?=e($r['run_by_name']?:$r['run_by_prn'])?></td><td><?=e($r['source'])?></td><td class="tag"><?=(int)$r['processed']?></td><td class="tag"><?=(int)$r['inserted']?></td><td class="tag"><?=(int)$r['updated']?></td><td class="tag"><?=(int)$r['skipped']?></td><td><span class="st <?=$r['status']==='OK'?'SUCCESS':'FAIL'?>"><?=e($r['status'])?></span></td></tr><?php endforeach; if(!$syncRows):?><tr><td colspan="8" style="color:var(--mut)">No sync runs.</td></tr><?php endif;?></tbody></table>
       <?php else:?>
         <table><thead><tr><th scope="col">When</th><th scope="col">Level</th><th scope="col">Context</th><th scope="col">Message</th><th scope="col">IP</th></tr></thead><tbody>
-        <?php foreach($appRows as $r):?><tr><td class="tag"><?=e($r['created_at'])?></td><td><span class="lvl <?=e($r['level'])?>"><?=e($r['level'])?></span></td><td><?=e($r['context'])?></td><td style="max-width:420px"><?=e($r['message'])?></td><td class="tag"><?=e($r['ip_address'])?></td></tr><?php endforeach; if(!$appRows):?><tr><td colspan="5" style="color:var(--muted)">No system logs.</td></tr><?php endif;?></tbody></table>
+        <?php foreach($appRows as $r):?><tr><td class="tag"><?=e($r['created_at'])?></td><td><span class="lvl <?=e($r['level'])?>"><?=e($r['level'])?></span></td><td><?=e($r['context'])?></td><td style="max-width:420px"><?=e($r['message'])?></td><td class="tag"><?=e($r['ip_address'])?></td></tr><?php endforeach; if(!$appRows):?><tr><td colspan="5" style="color:var(--mut)">No system logs.</td></tr><?php endif;?></tbody></table>
       <?php endif;?>
       </div>
 
     <?php elseif($role==='head'&&$screen==='queue'):?>
-      <?php if(!$assets):?><div class="panel empty"><?=icon('inbox-empty')?><h3>Nothing to action</h3><p>No devices in your segment(s) are flagged End-of-Life.</p></div>
+      <?php if(!$assets):?><div class="glass empty"><?=icon('inbox-empty')?><h3>Nothing to action</h3><p>No devices in your segment(s) are flagged End-of-Life.</p></div>
       <?php else:?><div class="queue"><?php foreach($assets as $a): $done=!empty($a['decision']);?>
-        <div class="qcard <?=$done?'done':''?>">
+        <div class="glass qcard <?=$done?'done':''?>">
           <div class="qhead"><div><h4><?=e($a['asset_name'])?></h4><div class="qs"><?=e(trim($a['manufacturer'].' '.$a['model']))?> · <?=e($a['asset_user'])?></div></div>
             <span class="qbadge"><?=$done?'Decided':'Action needed'?></span></div>
           <dl><dt>Service tag</dt><dd><?=e($a['service_tag'])?></dd><dt>Last login</dt><dd><?=e($a['last_login_user'])?></dd><dt>Warranty</dt><dd><?=e($a['warranty_expiry']?:'—')?></dd><dt>Over 4 yrs</dt><dd><?=(int)$a['over_four_years']?'Yes':'No'?></dd></dl>
           <div class="qnote"><span>Note from IT</span><?=e($a['eol_note'])?></div>
-          <?php if($done):?><div class="decided"><div class="h"><?=icon('check-circle')?>Decision recorded <span class="dec <?=e($a['decision'])?>"><?=e($a['decision'])?></span></div><?=$a['decision_note']?e($a['decision_note']).'<br>':''?><span style="color:var(--muted);font-size:11px">by <?=e($a['decided_by_name'])?> · <?=e($a['decided_at'])?></span></div>
+          <?php if($done):?><div class="decided"><div class="h"><?=icon('check-circle')?>Decision recorded <span class="dec <?=e($a['decision'])?>"><?=e($a['decision'])?></span></div><?=$a['decision_note']?e($a['decision_note']).'<br>':''?><span style="color:var(--mut);font-size:11px">by <?=e($a['decided_by_name'])?> · <?=e($a['decided_at'])?></span></div>
           <?php else:?><form method="post"><input type="hidden" name="submit_decision" value="1"><input type="hidden" name="asset_id" value="<?=(int)$a['id']?>">
             <div class="field" style="margin-bottom:10px"><label class="sr-only" for="dec<?=(int)$a['id']?>">Decision for <?=e($a['asset_name'])?></label><select id="dec<?=(int)$a['id']?>" name="decision" required><option value="">Select action…</option><option>Replace</option><option>Extend</option><option>Return</option></select></div>
             <label class="sr-only" for="note<?=(int)$a['id']?>">Decision notes</label><textarea id="note<?=(int)$a['id']?>" name="decision_note" placeholder="Notes (optional)…"></textarea>
@@ -970,29 +1050,92 @@ function render_notices($error,$success){
 <script>
 const seg=<?php $l=[];$v=[];$rs=$conn->query("SELECT department,SUM(is_eol) e FROM eol_assets GROUP BY department ORDER BY e DESC");if($rs)while($r=$rs->fetch_assoc()){$l[]=$r['department'];$v[]=(int)$r['e'];}echo json_encode(['labels'=>$l,'data'=>$v]);?>;
 const dec=<?php $rs=$conn->query("SELECT SUM(decision='Replace') r,SUM(decision='Extend') e,SUM(decision='Return') t,SUM(is_eol=1 AND decision IS NULL) p FROM eol_assets");$r=$rs?$rs->fetch_assoc():[];echo json_encode([(int)($r['r']??0),(int)($r['e']??0),(int)($r['t']??0),(int)($r['p']??0)]);?>;
-if(window.Chart){
- Chart.defaults.font.family="'Gotham',system-ui,'Segoe UI',sans-serif";Chart.defaults.color='#586b82';
- new Chart(cSeg,{type:'bar',data:{labels:seg.labels,datasets:[{data:seg.data,backgroundColor:'#D45B25',borderRadius:7,maxBarThickness:46}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#04193e',padding:10,cornerRadius:8}},scales:{x:{ticks:{font:{size:9},maxRotation:42,minRotation:42},grid:{display:false}},y:{beginAtZero:true,ticks:{precision:0},grid:{color:'#eef4fb'}}}}});
- new Chart(cDec,{type:'doughnut',data:{labels:['Replace','Extend','Return','Pending'],datasets:[{data:dec,backgroundColor:['#D45B25','#5A92DB','#A898AF','#ACC8ED'],borderColor:'#fff',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:16,font:{size:11}}},tooltip:{backgroundColor:'#04193e',padding:10,cornerRadius:8}}}});
-}
+const stats=<?php echo json_encode(['total'=>(int)$stats['total'],'active'=>(int)$stats['active'],'eol'=>(int)$stats['eol'],'over4'=>(int)$stats['over4']]);?>;
+(function(){
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const easeOut=t=>1-Math.pow(1-t,3);
+
+  // animated count-ups
+  document.querySelectorAll('.count').forEach(el=>{
+    const to=+el.dataset.to||0; if(reduce||to===0){el.textContent=to.toLocaleString();return;}
+    const dur=1100,t0=performance.now();
+    (function step(now){const p=Math.min(1,(now-t0)/dur);el.textContent=Math.round(easeOut(p)*to).toLocaleString();if(p<1)requestAnimationFrame(step);})(t0);
+  });
+
+  // fleet health ring (segmented donut)
+  const ring=document.getElementById('ring');
+  if(ring){
+    const total=Math.max(1,+ring.dataset.total||0),eol=+ring.dataset.eol||0,over4=+ring.dataset.over4||0;
+    const agingOnly=Math.max(0,over4-eol), healthy=Math.max(0,total-eol-agingOnly);
+    const C=2*Math.PI*84;
+    const segs=[['arcActive',healthy],['arcAging',agingOnly],['arcEol',eol]];
+    let acc=0;
+    segs.forEach(([id,val])=>{
+      const el=document.getElementById(id);const frac=val/total;
+      el.style.strokeDasharray=C;
+      el.style.strokeDashoffset=C;       // start empty
+      const gap=2; // visual gap deg
+      const len=Math.max(0,frac*C - (val>0?gap:0));
+      // rotate each arc to start where previous ended
+      el.style.transform=`rotate(${(acc/total)*360}deg)`;el.style.transformOrigin='100px 100px';
+      requestAnimationFrame(()=>{el.style.strokeDashoffset=reduce?C-len:C-len;});
+      if(reduce){el.style.strokeDashoffset=C-len;}
+      else{setTimeout(()=>{el.style.strokeDashoffset=C-len;},60);}
+      acc+=val;
+    });
+    document.getElementById('lgActive').textContent=healthy.toLocaleString();
+    document.getElementById('lgAging').textContent=agingOnly.toLocaleString();
+    document.getElementById('lgEol').textContent=eol.toLocaleString();
+    const pct=Math.round((total-eol)/total*100);const pe=document.getElementById('ringPct');
+    if(reduce){pe.textContent=pct+'%';}
+    else{const t0=performance.now();(function s(now){const p=Math.min(1,(now-t0)/1200);pe.textContent=Math.round(easeOut(p)*pct)+'%';if(p<1)requestAnimationFrame(s);})(t0);}
+  }
+
+  // lifecycle pipeline
+  const flow=document.getElementById('flow');
+  if(flow){
+    const arrow='<span class="conn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>';
+    const decided=dec[0]+dec[1]+dec[2];
+    const stages=[['Total fleet',stats.total,'s0'],['Active',stats.active,'s1'],['Aging 4+ yrs',stats.over4,'s2'],['Flagged EoL',stats.eol,'s3'],['Decided',decided,'s4']];
+    const max=Math.max(1,stats.total);
+    flow.innerHTML=stages.map(([n,v,c])=>`<div class="stage ${c}"><div class="bar"><span class="v">${(v||0).toLocaleString()}</span><span class="n">${n}</span></div>${arrow}</div>`).join('');
+    requestAnimationFrame(()=>{flow.querySelectorAll('.stage').forEach((s,i)=>{const v=stages[i][1]||0;s.querySelector('.bar').style.setProperty('--w',Math.max(6,Math.round(v/max*100))+'%');});});
+  }
+
+  if(window.Chart){
+    Chart.defaults.font.family="'Gotham',system-ui,'Segoe UI',sans-serif";Chart.defaults.color='#93a4c4';
+    const tip={backgroundColor:'#0b1224',borderColor:'rgba(255,255,255,.12)',borderWidth:1,padding:10,cornerRadius:10,titleColor:'#eaf1ff',bodyColor:'#cdd9f3'};
+    const cs=document.getElementById('cSeg');
+    if(cs){const ctx=cs.getContext('2d');const g=ctx.createLinearGradient(0,0,cs.width||500,0);g.addColorStop(0,'#ff7a45');g.addColorStop(1,'#38bdf8');
+      new Chart(cs,{type:'bar',data:{labels:seg.labels,datasets:[{data:seg.data,backgroundColor:g,borderRadius:8,maxBarThickness:26}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:tip},scales:{x:{beginAtZero:true,ticks:{precision:0},grid:{color:'rgba(255,255,255,.06)'}},y:{ticks:{font:{size:10}},grid:{display:false}}}}});}
+    const cd=document.getElementById('cDec');
+    if(cd){new Chart(cd,{type:'doughnut',data:{labels:['Replace','Extend','Return','Pending'],datasets:[{data:dec,backgroundColor:['#ff7a45','#4f86d5','#b39ddb','#6f82a6'],borderColor:'rgba(8,12,26,.6)',borderWidth:3,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'66%',plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:15,font:{size:11},color:'#93a4c4'}},tooltip:tip}}});}
+  } else {
+    // Graceful fallback — pure-CSS visuals if Chart.js could not load
+    var sc=document.getElementById('cSeg');
+    if(sc){var mx=Math.max.apply(null,seg.data.concat(1));
+      sc.parentNode.innerHTML='<div class="fbbars">'+seg.labels.map(function(l,i){var v=seg.data[i]||0;return '<div class="fbrow"><span class="fbl">'+l+'</span><span class="fbt"><i style="width:'+Math.max(3,Math.round(v/mx*100))+'%"></i></span><b>'+v+'</b></div>';}).join('')+'</div>';}
+    var dc=document.getElementById('cDec');
+    if(dc){var cols=['#ff7a45','#4f86d5','#b39ddb','#6f82a6'],labs=['Replace','Extend','Return','Pending'],tot=dec.reduce(function(a,b){return a+b;},0)||1,acc=0,stops=[];
+      for(var i=0;i<dec.length;i++){var s=acc/tot*360,en=(acc+dec[i])/tot*360;stops.push(cols[i]+' '+s+'deg '+en+'deg');acc+=dec[i];}
+      dc.parentNode.innerHTML='<div class="fbdonut"><div class="fbring" style="background:conic-gradient('+stops.join(',')+')"><span>'+dec.reduce(function(a,b){return a+b;},0)+'<small>DECISIONS</small></span></div><div class="fbleg">'+labs.map(function(l,i){return '<div><span class="dot" style="background:'+cols[i]+'"></span>'+l+' <b>'+dec[i]+'</b></div>';}).join('')+'</div></div>';}
+  }
+})();
 </script>
 <?php endif;?>
 
 <script>
 /* ---------- UI behaviours (presentation only) ---------- */
 (function(){
-  // Mobile off-canvas navigation
   var tgl=document.getElementById('navToggle'),sb=document.getElementById('sidebar'),sc=document.getElementById('navScrim');
   function openNav(o){ if(!sb||!sc)return; sb.classList.toggle('open',o); sc.hidden=!o; requestAnimationFrame(function(){sc.classList.toggle('show',o);}); if(tgl)tgl.setAttribute('aria-expanded',o?'true':'false'); }
   if(tgl)tgl.addEventListener('click',function(){openNav(!sb.classList.contains('open'));});
   if(sc)sc.addEventListener('click',function(){openNav(false);});
   document.addEventListener('keydown',function(e){if(e.key==='Escape')openNav(false);});
 
-  // Dismiss + auto-dismiss notices
   document.querySelectorAll('[data-dismiss]').forEach(function(b){b.addEventListener('click',function(){var n=b.closest('.notice'); if(n){n.style.transition='opacity .2s,transform .2s';n.style.opacity='0';n.style.transform='translateY(-6px)';setTimeout(function(){n.remove();},200);}});});
   document.querySelectorAll('[data-autodismiss]').forEach(function(n){setTimeout(function(){n.style.transition='opacity .4s';n.style.opacity='0';setTimeout(function(){n.remove();},400);},6000);});
 
-  // Long-running sync: show spinner + disable so users don't double-submit
   document.querySelectorAll('form[data-sync]').forEach(function(f){f.addEventListener('submit',function(){var b=f.querySelector('button');if(!b)return;b.classList.add('loading');var t=b.querySelector('span');if(t)t.textContent='Syncing ManageEngine…';var ic=b.querySelector('svg');if(ic){var s=document.createElement('span');s.className='spinner';ic.replaceWith(s);}});});
 })();
 </script>
