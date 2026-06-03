@@ -46,46 +46,58 @@ function norm_host($s){ $s=strtoupper(trim((string)$s)); if($s==='')return ''; $
  * Returns [headerRow(array of strings), dataRows(array of numeric arrays)] or [null,null].
  * Uses ZipArchive + SimpleXML — no composer/PhpSpreadsheet needed.
  */
+$_XLSX_ERR='';
 function read_xlsx($path){
-    if(!class_exists('ZipArchive')) return [null,null];
+    global $_XLSX_ERR; $_XLSX_ERR='';
+    if(!class_exists('ZipArchive')){ $_XLSX_ERR='PHP zip extension is not enabled on the server — cannot read .xlsx. Enable php-zip, or upload a CSV.'; return [null,null]; }
     $zip=new ZipArchive();
-    if($zip->open($path)!==true) return [null,null];
-    // shared strings
+    if($zip->open($path)!==true){ $_XLSX_ERR='Not a valid .xlsx (Excel) file.'; return [null,null]; }
+
+    // shared strings (namespace-tolerant)
     $shared=[];
     if(($s=$zip->getFromName('xl/sharedStrings.xml'))!==false){
-        $xml=@simplexml_load_string($s);
-        if($xml) foreach($xml->si as $si){
-            $t=''; if(isset($si->t)) $t=(string)$si->t;
-            else foreach($si->r as $r) $t.=(string)$r->t;   // rich text runs
+        $sx=@simplexml_load_string($s);
+        if($sx) foreach($sx->si as $si){
+            $t=''; if(isset($si->t)&&count($si->t)) $t=(string)$si->t;
+            if($t===''){ foreach($si->r as $r){ $t.=(string)$r->t; } }   // rich-text runs
             $shared[]=$t;
         }
     }
-    // first worksheet (sheet1.xml is the conventional first sheet)
-    $sheet=$zip->getFromName('xl/worksheets/sheet1.xml');
-    if($sheet===false){ for($i=1;$i<=10;$i++){ if(($sheet=$zip->getFromName("xl/worksheets/sheet$i.xml"))!==false) break; } }
+
+    // pick the worksheet with the lowest index among all xl/worksheets/sheet*.xml
+    $sheetName=''; $low=PHP_INT_MAX;
+    for($i=0;$i<$zip->numFiles;$i++){
+        $nm=$zip->getNameIndex($i);
+        if(preg_match('#^xl/worksheets/sheet(\d+)\.xml$#i',$nm,$m)){ if((int)$m[1]<$low){ $low=(int)$m[1]; $sheetName=$nm; } }
+    }
+    if($sheetName==='') $sheetName='xl/worksheets/sheet1.xml';
+    $sheet=$zip->getFromName($sheetName);
     $zip->close();
-    if(!$sheet) return [null,null];
-    $xml=@simplexml_load_string($sheet); if(!$xml) return [null,null];
-    $colIdx=function($ref){ $c=preg_replace('/[0-9]/','',$ref); $n=0; for($i=0;$i<strlen($c);$i++){ $n=$n*26+(ord($c[$i])-64); } return $n-1; };
+    if($sheet===false){ $_XLSX_ERR='No worksheet found inside the .xlsx file.'; return [null,null]; }
+
+    $xml=@simplexml_load_string($sheet);
+    if(!$xml){ $_XLSX_ERR='Could not parse the worksheet XML.'; return [null,null]; }
+    $colIdx=function($ref){ $c=preg_replace('/[0-9]/','',$ref); $n=0; $c=strtoupper($c); for($i=0;$i<strlen($c);$i++){ $n=$n*26+(ord($c[$i])-64); } return $n-1; };
     $rows=[];
-    foreach($xml->sheetData->row as $row){
-        $cells=[]; $max=-1;
+    $data = $xml->sheetData ?? null;
+    if($data===null){ $_XLSX_ERR='Worksheet has no data.'; return [null,null]; }
+    foreach($data->row as $row){
+        $cells=[]; $max=-1; $auto=0;
         foreach($row->c as $c){
-            $ref=(string)$c['r']; $i=$ref!==''?$colIdx($ref):count($cells);
+            $ref=(string)$c['r']; $i=$ref!==''?$colIdx($ref):$auto; $auto=$i+1;
             $type=(string)$c['t']; $val='';
-            if($type==='s'){ $idx=(int)$c->v; $val=$shared[$idx]??''; }
+            if($type==='s'){ $val=$shared[(int)$c->v]??''; }
             elseif($type==='inlineStr'){ $val=isset($c->is->t)?(string)$c->is->t:''; }
+            elseif($type==='str'){ $val=(string)$c->v; }
             else { $val=isset($c->v)?(string)$c->v:''; }
             $cells[$i]=trim($val); if($i>$max)$max=$i;
         }
         $line=[]; for($i=0;$i<=$max;$i++) $line[]=$cells[$i]??'';
         $rows[]=$line;
     }
-    // drop fully empty leading rows
     while($rows && count(array_filter($rows[0],fn($x)=>$x!==''))===0) array_shift($rows);
-    if(!$rows) return [null,null];
-    $hdr=array_map(function($h){return strtolower(trim(preg_replace('/\s+/',' ',$h)));},array_shift($rows));
-    // drop fully empty data rows
+    if(!$rows){ $_XLSX_ERR='The Excel sheet appears to be empty.'; return [null,null]; }
+    $hdr=array_map(function($h){return strtolower(trim(preg_replace('/\s+/',' ',preg_replace('/^\xEF\xBB\xBF/','',$h))));},array_shift($rows));
     $rows=array_values(array_filter($rows,fn($r)=>count(array_filter($r,fn($x)=>$x!==''))>0));
     return [$hdr,$rows];
 }
@@ -190,8 +202,6 @@ function taqnyat_msisdn($raw){
     if(strpos($d,'966')!==0) $d='966'.ltrim($d,'0'); return $d;
 }
 function sendOTP($conn,$phone,$otp){
-    // Test mode: skip SMS entirely
-    if(($_ENV['TEST_OTP_MODE']??'0')==='1') return true;
     $url=$_ENV['TAQNYAT_API']??'https://api.taqnyat.sa/v1/messages';
     $token=$_ENV['TAQNYAT_TOKEN_RPA']??'';
     $sender=$_ENV['TAQNYAT_SENDER_RPA']??'CATRION-IT';
@@ -207,13 +217,10 @@ function sendOTP($conn,$phone,$otp){
     return $ok;
 }
 function otp_value(){
-    // In test mode, use the fixed test value
-    if(($_ENV['TEST_OTP_MODE']??'0')==='1') return $_ENV['TEST_OTP_VALUE']??'1234';
-    return (string)rand(1000,9999);
+    return str_pad((string)random_int(0,9999),4,'0',STR_PAD_LEFT);
 }
 function otp_matches($entered,$stored,$expiry){
-    if(($_ENV['TEST_OTP_MODE']??'0')==='1') return $entered===($_ENV['TEST_OTP_VALUE']??'1234');
-    return $entered===(string)$stored && strtotime($expiry)>time();
+    return $entered!=='' && $entered===(string)$stored && $stored!==null && $stored!=='' && strtotime((string)$expiry)>time();
 }
 
 /* ---------- logging ---------- */
@@ -470,7 +477,7 @@ if(!$loggedIn && $_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['eol_login'
             elseif(sendOTP($conn,$mobile,$otp)){
                 $_SESSION['eol_pending_prn']=$inPrn; $showOtp=true;
                 login_event($conn,$inPrn,$emp['FULL_NAME'],$rr['role'],'OTP_SENT');
-                $success='OTP sent.'.(($_ENV['TEST_OTP_MODE']??'0')==='1'?' (Test mode — use '.$_ENV['TEST_OTP_VALUE'].')':'');
+                $success='Verification code sent to your registered mobile.';
             } else { $error='Failed to send OTP.'; }
         }
     }
@@ -538,21 +545,29 @@ if($loggedIn && $role==='admin' && $_SERVER['REQUEST_METHOD']==='POST'){
     if(isset($_POST['upload_source']) && isset($_FILES['csv_file']) && $_FILES['csv_file']['error']===UPLOAD_ERR_OK){
         $source=$_POST['upload_source']; $site=trim($_POST['ad_site']??'');
         $rows=[]; $hdr=null;
-        $fname=strtolower($_FILES['csv_file']['name']??'');
-        $isXlsx=(str_ends_with($fname,'.xlsx')||str_ends_with($fname,'.xlsm'));
-        if($isXlsx){
-            [$hdr,$rows]=read_xlsx($_FILES['csv_file']['tmp_name']);
-            if(!$hdr) $error='Could not read the Excel file (need .xlsx with a header row).';
+        $tmp=$_FILES['csv_file']['tmp_name'];
+        // Detect format by content, not extension: a .xlsx/.xlsm is a ZIP (PK\x03\x04).
+        $magic=@file_get_contents($tmp,false,null,0,4);
+        if($magic==="PK\x03\x04"){
+            [$hdr,$rows]=read_xlsx($tmp);
+            if(!$hdr){ global $_XLSX_ERR; $error=$_XLSX_ERR?:'Could not read the Excel file (need .xlsx with a header row).'; }
         } else {
-            if(($fh=fopen($_FILES['csv_file']['tmp_name'],'r'))!==false){
-                $rawHdr=fgetcsv($fh);
+            // Delimited text — strip BOM and auto-detect delimiter (comma / tab / semicolon / pipe)
+            $raw=@file_get_contents($tmp);
+            if($raw===false||$raw===''){ $error='File is empty or unreadable.'; }
+            else {
+                $raw=preg_replace('/^\xEF\xBB\xBF/','',$raw);
+                $firstLine=strtok($raw,"\r\n"); $delim=','; $best=-1;
+                foreach([','=>substr_count($firstLine,','),"\t"=>substr_count($firstLine,"\t"),';'=>substr_count($firstLine,';'),'|'=>substr_count($firstLine,'|')] as $d=>$cnt){ if($cnt>$best){ $best=$cnt; $delim=$d; } }
+                $fh=fopen('php://temp','r+'); fwrite($fh,$raw); rewind($fh);
+                $rawHdr=fgetcsv($fh,0,$delim);
                 if($rawHdr) $hdr=array_map(function($h){return strtolower(trim(preg_replace('/\s+/',' ',$h)));},$rawHdr);
-                while(($r=fgetcsv($fh))!==false) $rows[]=$r;
+                while(($r=fgetcsv($fh,0,$delim))!==false){ if(count(array_filter($r,fn($x)=>trim((string)$x)!==''))) $rows[]=$r; }
                 fclose($fh);
             }
         }
         if($error!==''){ /* keep prior parse error */ }
-        elseif(!$hdr||!$rows){ $error='File is empty or unreadable.'; }
+        elseif(!$hdr||!$rows){ $error='File is empty or unreadable (no header row or no data found).'; }
         else {
             $col=function($name)use($hdr){ $n=strtolower(trim($name));
                 foreach($hdr as $i=>$h){if($h===$n||str_replace(' ','_',$h)===$n||str_replace('_',' ',$h)===$n)return $i;} return null; };
@@ -1154,7 +1169,7 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
 
       <div class="panel" style="margin-bottom:16px">
         <?php $isAd=$srcTab==='ad'; ?>
-        <h3>Upload <?=['darksight'=>'Darksight','intune'=>'Intune','ad'=>'Active Directory'][$srcTab]?> <?=$isAd?'(Excel .xlsx)':'CSV'?></h3>
+        <h3>Upload <?=['darksight'=>'Darksight','intune'=>'Intune','ad'=>'Active Directory'][$srcTab]?> <?=$isAd?'(Excel .xlsx or CSV)':'(CSV or Excel .xlsx)'?></h3>
         <form method="post" enctype="multipart/form-data" style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
           <input type="hidden" name="upload_source" value="<?=e($srcTab)?>">
           <?php if($isAd):?>
@@ -1165,8 +1180,8 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
               <option>SaudiaCatering</option>
             </select></div>
           <?php endif;?>
-          <div class="field" style="margin:0;flex:1;min-width:200px"><label><?=$isAd?'Excel File':'CSV File'?></label>
-            <input type="file" name="csv_file" accept="<?=$isAd?'.xlsx,.xlsm':'.csv,.txt'?>" required style="min-height:44px;padding:10px 14px"></div>
+          <div class="field" style="margin:0;flex:1;min-width:200px"><label>File (.xlsx or .csv)</label>
+            <input type="file" name="csv_file" accept=".xlsx,.xlsm,.csv,.txt" required style="min-height:44px;padding:10px 14px"></div>
           <button class="btn sm" type="submit">Upload &amp; import</button>
         </form>
         <div style="margin-top:10px;font-size:11.5px;color:var(--muted)">
