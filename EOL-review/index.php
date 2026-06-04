@@ -40,6 +40,8 @@ function dash_all($conn,$sql){ try{ $r=$conn->query($sql); $o=[]; if($r) while($
 
 /* Normalise a hostname/device key for cross-source correlation (strip domain, upper-case) */
 function norm_host($s){ $s=strtoupper(trim((string)$s)); if($s==='')return ''; $s=explode('.',$s)[0]; return preg_replace('/\s+/','',$s); }
+/* AD "account status" varies by export: Enabled / Yes / True / Active / 1 all mean enabled */
+function ad_enabled($v){ $v=strtolower(trim((string)$v)); return in_array($v,['enabled','yes','true','active','1','y','enable'],true); }
 
 /**
  * Minimal dependency-free XLSX reader (first worksheet).
@@ -53,10 +55,22 @@ function read_xlsx($path){
     $zip=new ZipArchive();
     if($zip->open($path)!==true){ $_XLSX_ERR='Not a valid .xlsx (Excel) file.'; return [null,null]; }
 
-    // shared strings (namespace-tolerant)
+    // Strip BOM + namespace prefixes/declarations so SimpleXML works regardless of
+    // whether the exporter uses a default namespace (Excel) or an "x:" prefix (Open XML SDK).
+    $clean=function($s){
+        if($s===false||$s===null) return '';
+        $s=preg_replace('/^\xEF\xBB\xBF/','',$s);                       // UTF-8 BOM
+        $s=preg_replace('#<(/?)[A-Za-z0-9._-]+:#','<$1',$s);            // <x:row> -> <row>
+        $s=preg_replace('/\sxmlns(:[A-Za-z0-9._-]+)?="[^"]*"/','',$s);  // drop xmlns declarations
+        $s=preg_replace('/\s[A-Za-z0-9._-]+:([A-Za-z0-9._-]+=)/',' $1',$s); // r:id="x" -> id="x"
+        return $s;
+    };
+    $load=function($xmlStr)use($clean){ libxml_use_internal_errors(true); return @simplexml_load_string($clean($xmlStr)); };
+
+    // shared strings
     $shared=[];
     if(($s=$zip->getFromName('xl/sharedStrings.xml'))!==false){
-        $sx=@simplexml_load_string($s);
+        $sx=$load($s);
         if($sx) foreach($sx->si as $si){
             $t=''; if(isset($si->t)&&count($si->t)) $t=(string)$si->t;
             if($t===''){ foreach($si->r as $r){ $t.=(string)$r->t; } }   // rich-text runs
@@ -75,12 +89,12 @@ function read_xlsx($path){
     $zip->close();
     if($sheet===false){ $_XLSX_ERR='No worksheet found inside the .xlsx file.'; return [null,null]; }
 
-    $xml=@simplexml_load_string($sheet);
+    $xml=$load($sheet);
     if(!$xml){ $_XLSX_ERR='Could not parse the worksheet XML.'; return [null,null]; }
     $colIdx=function($ref){ $c=preg_replace('/[0-9]/','',$ref); $n=0; $c=strtoupper($c); for($i=0;$i<strlen($c);$i++){ $n=$n*26+(ord($c[$i])-64); } return $n-1; };
-    $rows=[];
-    $data = $xml->sheetData ?? null;
+    $data=$xml->sheetData ?? null;
     if($data===null){ $_XLSX_ERR='Worksheet has no data.'; return [null,null]; }
+    $rows=[];
     foreach($data->row as $row){
         $cells=[]; $max=-1; $auto=0;
         foreach($row->c as $c){
@@ -1213,7 +1227,7 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
         <?php foreach($srcRows as $r):?><tr>
           <td class="tag" style="font-weight:700"><?=e($r['computer_name'])?></td>
           <td><span class="dept"><?=e($r['site'])?></span></td>
-          <td><span class="pill <?=($r['account_status']??'')==='Enabled'?'ok':'fail'?>"><span class="d"></span><?=e($r['account_status'])?></span></td>
+          <td><span class="pill <?=ad_enabled($r['account_status']??'')?'ok':'fail'?>"><span class="d"></span><?=e($r['account_status'])?></span></td>
           <td><?=e($r['os_name'])?></td><td><?=e($r['machine_type'])?></td><td class="tag"><?=e($r['dns_host_name'])?></td>
           <td style="max-width:200px;font-size:11px;word-break:break-all"><?=e($r['ou'])?></td><td><?=e($r['managed_by'])?></td>
           <td class="tag"><?=e($r['last_logon_timestamp'])?></td><td class="tag"><?=e($r['modified_date'])?></td>
@@ -1258,7 +1272,7 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
               <i class="<?=$u['me']?'on me':''?>"></i><i class="<?=$u['ad']?'on ad':''?>"></i><i class="<?=$u['intune']?'on it':''?>"></i><i class="<?=$u['dark']?'on dk':''?>"></i>
             </span></td>
             <td><?php if($u['me']):?><span class="pill <?=$u['eol']?'fail':'ok'?>"><span class="d"></span><?=$u['eol']?'EoL':'Active'?></span><?php else:?><span class="miss">absent</span><?php endif;?></td>
-            <td><?php if($u['ad']):?><span class="pill <?=($u['ad_status']==='Enabled')?'ok':'fail'?>"><span class="d"></span><?=e($u['ad_status']?:'AD')?></span> <?=$u['ad_site']?'<span class="tag">'.e($u['ad_site']).'</span>':''?><?php else:?><span class="miss">absent</span><?php endif;?></td>
+            <td><?php if($u['ad']):?><span class="pill <?=ad_enabled($u['ad_status'])?'ok':'fail'?>"><span class="d"></span><?=e($u['ad_status']?:'AD')?></span> <?=$u['ad_site']?'<span class="tag">'.e($u['ad_site']).'</span>':''?><?php else:?><span class="miss">absent</span><?php endif;?></td>
             <td><?php if($u['intune']):?><span class="pill <?=($u['compliance']==='Compliant')?'ok':'fail'?>"><span class="d"></span><?=e($u['compliance']?:'Managed')?></span><?php else:?><span class="miss">absent</span><?php endif;?></td>
             <td><?php if($u['dark']):?><?=$u['dark_eol']>0?'<span class="pill fail"><span class="d"></span>'.(int)$u['dark_eol'].' EoL SW</span>':'<span class="pill ok"><span class="d"></span>Clean</span>'?><?php else:?><span class="miss">absent</span><?php endif;?></td>
           </tr>
