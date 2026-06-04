@@ -1116,6 +1116,8 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
 .srcdots i{width:9px;height:9px;border-radius:50%;background:#dde5f1;display:inline-block}
 .srcdots i.on.me{background:var(--dark)}.srcdots i.on.ad{background:var(--primary)}.srcdots i.on.it{background:var(--teal)}.srcdots i.on.dk{background:var(--violet)}
 .miss{font-size:11px;color:#aebccf;font-style:italic}
+.adchip{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:6px}
+.adchip.dis{background:#fdeae0;color:var(--orange);border:1px solid #f7c9b6}
 .srcset{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap}
 .schip{font-size:9.5px;font-weight:800;letter-spacing:.03em;padding:3px 6px;border-radius:6px;background:#eef2f8;color:#aab6c8;border:1px solid #e2e8f2;line-height:1}
 .schip.on{background:var(--sc);color:#fff;border-color:transparent;box-shadow:0 4px 10px -4px var(--sc)}
@@ -1585,7 +1587,7 @@ svg.ic{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:no
               <span class="srccount <?=$cnt>=3?'good':($cnt==1?'low':'')?>"><?=$cnt?>/4</span>
             </div></td>
             <td><?=$yn($u['me'], $u['me']&&$u['eol']?'<span class="tag" style="color:var(--orange);font-weight:700">EoL</span>':'')?></td>
-            <td><?=$yn($u['ad'], $u['ad']?trim(($u['ad_site']?'<span class="tag">'.e($u['ad_site']).'</span> ':'').($u['ad_status']&&!ad_enabled($u['ad_status'])?'<span class="tag" style="color:var(--orange)">'.e($u['ad_status']).'</span>':'')):'')?></td>
+            <td><?=$yn($u['ad'], $u['ad']?trim(($u['ad_site']?'<span class="tag">'.e($u['ad_site']).'</span> ':'').($u['ad_status']&&!ad_enabled($u['ad_status'])?'<span class="adchip dis" title="AD account status: '.e($u['ad_status']).'">Disabled</span>':'')):'')?></td>
             <td><?=$yn($u['intune'], $u['intune']&&$u['compliance']&&$u['compliance']!=='Compliant'?'<span class="tag" style="color:var(--orange)">'.e($u['compliance']).'</span>':'')?></td>
             <td><?=$yn($u['dark'], $u['dark']&&$u['dark_eol']>0?'<span class="tag" style="color:var(--orange);font-weight:700">'.(int)$u['dark_eol'].' EoL SW</span>':'')?></td>
           </tr>
