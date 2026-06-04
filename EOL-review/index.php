@@ -887,6 +887,8 @@ if($loggedIn&&$conn){
             $dsEolTotal=(int)(dash_row($conn,"SELECT SUM(eol) s FROM eol_darksight")['s']??0);
             $dash['darksight']=['total'=>$dsTot,'eolHosts'=>$dsEolHosts,'eolTotal'=>$dsEolTotal];
             $dash['src']=['ManageEngine'=>$stats['total'],'Intune'=>$intuneTot,'Active Directory'=>$adTot,'Darksight'=>$dsTot];
+            // Headline "Total assets" = unique devices across all sources (same number as the Unified Asset View).
+            [$dlist,$ucov]=unified_rows($conn); unset($dlist);
         }
         if($screen==='inventory'){
             $w=[];$p=[];$t='';
@@ -1161,6 +1163,10 @@ svg.ic{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:no
 #invTable .dept{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
 #invTable .stat-row{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
 @media(max-width:900px){#invTable td.cUser,#invTable th.hUser,#invTable td.cStat,#invTable th.hStat{display:none}#invTable td.cAsset{width:auto}}
+/* keep the filter bar on one line while it fits; wrap only when the viewport is too narrow */
+.filters input,.filters select{flex:1 1 120px;min-width:0;max-width:260px}
+.filters input[name=q]{flex:2 1 180px}
+.filters button{flex:0 0 auto}
 
 /* login modern */
 .login-shell{border-radius:26px}
@@ -1267,7 +1273,7 @@ svg.ic{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:no
     ?>
       <!-- KPI grid (12 measures) -->
       <section class="kgrid">
-        <div class="kpi"><div class="kh"><span>Total assets</span><span class="ic"><?=icon('box')?></span></div><b class="count" data-to="<?=(int)$stats['total']?>">0</b></div>
+        <div class="kpi"><div class="kh"><span>Total assets</span><span class="ic"><?=icon('box')?></span></div><b class="count" data-to="<?=(int)$ucov['unique']?>">0</b><em>unique devices · all sources</em></div>
         <div class="kpi ok"><div class="kh"><span>Active</span><span class="ic"><?=icon('check-circle')?></span></div><b class="count" data-to="<?=(int)$stats['active']?>">0</b></div>
         <div class="kpi eol"><div class="kh"><span>Flagged EoL</span><span class="ic"><?=icon('alert')?></span></div><b class="count" data-to="<?=(int)$stats['eol']?>">0</b></div>
         <div class="kpi warn"><div class="kh"><span>Over 4 years</span><span class="ic"><?=icon('clock')?></span></div><b class="count" data-to="<?=(int)$stats['over4']?>">0</b></div>
@@ -1297,7 +1303,7 @@ svg.ic{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:no
     <?php elseif($role==='admin'&&$screen==='inventory'):?>
       <div class="sync-info">Assets sync <b>directly from ManageEngine</b> (AMER / <?=e($_ENV['AMER_DB_Name']??'SDPnew')?>). Click "Sync from ManageEngine" to pull the latest. EoL flags and head decisions are preserved across syncs.</div>
       <form method="get" class="filters"><input type="hidden" name="screen" value="inventory">
-        <input name="q" placeholder="Search asset, user, login, tag, IP…" value="<?=e($_GET['q']??'')?>" style="max-width:280px">
+        <input name="q" placeholder="Search asset, user, login, tag, IP…" value="<?=e($_GET['q']??'')?>">
         <select name="dept"><option value="">All segments</option><?php foreach($segments as $s):?><option <?=($_GET['dept']??'')===$s?'selected':''?>><?=e($s)?></option><?php endforeach;?></select>
         <select name="scan"><option value="">Any scan</option><option <?=($_GET['scan']??'')==='SUCCESS'?'selected':''?>>SUCCESS</option><option <?=($_GET['scan']??'')==='FAILED'?'selected':''?>>FAILED</option></select>
         <select name="eol"><option value="">Any state</option><option <?=($_GET['eol']??'')==='EoL'?'selected':''?>>EoL</option><option <?=($_GET['eol']??'')==='Active'?'selected':''?>>Active</option></select>
