@@ -276,6 +276,20 @@ function resolve_role($conn,$prn){
 /* ---------- SSO (shared launcher at /SSO/sso_login.php) ---------- */
 function sso_available(){ return true; /* shared SSO is always available */ }
 function sso_url(){ return '/SSO/sso_login.php?app=eol&return=/EOL/index.php'; }
+/* Decode the OAuth "state" robustly: tolerates base64url, URL-encoding,
+   missing padding, or a state that is already plain JSON. Returns array|null. */
+function sso_decode_state($raw){
+    $raw=trim((string)$raw); if($raw==='') return null;
+    foreach([$raw, urldecode($raw)] as $s){
+        foreach([$s, strtr($s,'-_','+/')] as $b){
+            $pad=strlen($b)%4; if($pad) $b.=str_repeat('=',4-$pad);
+            $dec=base64_decode($b,true);
+            if($dec!==false){ $j=json_decode($dec,true); if(is_array($j)) return $j; }
+        }
+        $j=json_decode($s,true); if(is_array($j)) return $j;   // already plain JSON
+    }
+    return null;
+}
 
 /* ---------- ManageEngine sync ---------- */
 function sync_from_amer($conn,&$error,&$summary){
@@ -366,11 +380,14 @@ if(!$loggedIn && isset($_GET['sso'])){
             require_once $sso_autoload;
 
             // Validate CSRF state
-            $statePayload=@json_decode(@base64_decode($sso_state),true);
-            if(!is_array($statePayload)||empty($statePayload['csrf'])) throw new \RuntimeException('Bad SSO state.');
+            $statePayload=sso_decode_state($sso_state);
+            if(!is_array($statePayload)||empty($statePayload['csrf'])) throw new \RuntimeException('Bad SSO state (could not decode the state token).');
+            // CSRF token may live in this PHP session OR in a cookie set by the shared launcher.
+            $expectCsrf=(string)$statePayload['csrf'];
             $sessCsrf=$_SESSION['sso_csrf']??''; $cookieCsrf=$_COOKIE['sso_csrf']??'';
             if($sessCsrf===''&&$cookieCsrf!==''){$_SESSION['sso_csrf']=$cookieCsrf;$sessCsrf=$cookieCsrf;}
-            if(!hash_equals($sessCsrf,(string)$statePayload['csrf'])) throw new \RuntimeException('CSRF mismatch. Try again.');
+            $csrfOk = ($sessCsrf!==''&&hash_equals($sessCsrf,$expectCsrf)) || ($cookieCsrf!==''&&hash_equals($cookieCsrf,$expectCsrf));
+            if(!$csrfOk){ error_log('EOL SSO CSRF: sess='.($sessCsrf?'set':'empty').' cookie='.($cookieCsrf?'set':'empty').' state_csrf='.($expectCsrf?'set':'empty')); throw new \RuntimeException('Session expired during sign-in (CSRF). Please click “Continue with Microsoft SSO” again.'); }
 
             // Exchange code for token
             $provider=new \TheNetworg\OAuth2\Client\Provider\Azure([
@@ -762,13 +779,20 @@ if($loggedIn&&$conn){
             foreach(dash_all($conn,"SELECT computer_name,account_status,site FROM eol_ad LIMIT 8000") as $r){ $k=norm_host($r['computer_name']); $touch($k,$r['computer_name']); if($k){ $U[$k]['ad']=1;$U[$k]['ad_status']=$r['account_status']??'';$U[$k]['ad_site']=$r['site']??''; } }
             foreach(dash_all($conn,"SELECT device_name,compliance FROM eol_intune LIMIT 8000") as $r){ $k=norm_host($r['device_name']); $touch($k,$r['device_name']); if($k){ $U[$k]['intune']=1;$U[$k]['compliance']=$r['compliance']??''; } }
             foreach(dash_all($conn,"SELECT hostname,eol FROM eol_darksight LIMIT 8000") as $r){ $k=norm_host($r['hostname']); $touch($k,$r['hostname']); if($k){ $U[$k]['dark']=1;$U[$k]['dark_eol']=(int)($r['eol']??0); } }
-            $ucov=['unique'=>count($U),'core3'=>0,'me'=>0,'ad'=>0,'intune'=>0,'dark'=>0,'me_only'=>0,'unmanaged'=>0,'missing_ad'=>0];
+            $ucov=['unique'=>count($U),'core3'=>0,'me'=>0,'ad'=>0,'intune'=>0,'dark'=>0,
+                   'me_only'=>0,'ad_only'=>0,'intune_only'=>0,'dark_only'=>0,
+                   'unmanaged'=>0,'missing_ad'=>0,'not_in_me'=>0];
             foreach($U as $u){
                 $ucov['me']+=$u['me'];$ucov['ad']+=$u['ad'];$ucov['intune']+=$u['intune'];$ucov['dark']+=$u['dark'];
+                $only=($u['me']+$u['ad']+$u['intune']+$u['dark'])===1;
                 if($u['me']&&$u['ad']&&$u['intune'])$ucov['core3']++;
-                if($u['me']&&!$u['ad']&&!$u['intune']&&!$u['dark'])$ucov['me_only']++;
+                if($only&&$u['me'])$ucov['me_only']++;
+                if($only&&$u['ad'])$ucov['ad_only']++;
+                if($only&&$u['intune'])$ucov['intune_only']++;
+                if($only&&$u['dark'])$ucov['dark_only']++;
                 if(!$u['intune'])$ucov['unmanaged']++;
                 if($u['me']&&!$u['ad'])$ucov['missing_ad']++;
+                if(!$u['me']&&($u['ad']||$u['intune']||$u['dark']))$ucov['not_in_me']++;
             }
             $unified=array_values($U);
             usort($unified,function($a,$b){ $sa=$a['me']+$a['ad']+$a['intune']+$a['dark']; $sb=$b['me']+$b['ad']+$b['intune']+$b['dark']; return $sa!==$sb?$sa-$sb:strcmp($a['name'],$b['name']); });
@@ -879,7 +903,7 @@ tr.eol{background:linear-gradient(90deg,#fdeee7,transparent 55%)}.tag{font-famil
 .brow{display:flex;align-items:center;gap:10px;font-size:12px}
 .brow .bl{width:128px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
 .brow .bt{flex:1;height:11px;background:#eef4fb;border-radius:6px;overflow:hidden}.brow .bt i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--primary),var(--light))}
-.brow b{width:36px;text-align:right;font-family:ui-monospace,Menlo,monospace;color:var(--dark)}
+.brow b{min-width:36px;text-align:right;white-space:nowrap;font-family:ui-monospace,Menlo,monospace;color:var(--dark)}
 .dwrap{display:flex;align-items:center;gap:22px;justify-content:center;flex-wrap:wrap;height:100%}
 .dring{width:148px;height:148px;border-radius:50%;position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .dring::after{content:'';position:absolute;inset:23px;border-radius:50%;background:#fff;border:1px solid var(--border)}
@@ -958,6 +982,19 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
 .srcdots i{width:9px;height:9px;border-radius:50%;background:#dde5f1;display:inline-block}
 .srcdots i.on.me{background:var(--dark)}.srcdots i.on.ad{background:var(--primary)}.srcdots i.on.it{background:var(--teal)}.srcdots i.on.dk{background:var(--violet)}
 .miss{font-size:11px;color:#aebccf;font-style:italic}
+.srcset{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap}
+.schip{font-size:9.5px;font-weight:800;letter-spacing:.03em;padding:3px 6px;border-radius:6px;background:#eef2f8;color:#aab6c8;border:1px solid #e2e8f2;line-height:1}
+.schip.on{background:var(--sc);color:#fff;border-color:transparent;box-shadow:0 4px 10px -4px var(--sc)}
+.srccount{font-size:10px;font-weight:800;font-family:ui-monospace,Menlo,monospace;color:var(--muted);background:#eef2f8;border-radius:20px;padding:2px 8px;margin-left:2px}
+.srccount.good{background:#dcfce9;color:var(--ok)}.srccount.low{background:#fde7eb;color:var(--danger)}
+.srclegend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 12px;font-size:12px;color:var(--muted)}
+.srclegend .lg-title{font-weight:700;color:var(--dark)}
+.srclegend span{display:inline-flex;align-items:center;gap:6px}
+.srclegend i{width:11px;height:11px;border-radius:50%;display:inline-block}
+.srclegend i.me{background:var(--dark)}.srclegend i.ad{background:var(--primary)}.srclegend i.it{background:var(--teal)}.srclegend i.dk{background:var(--violet)}
+.srclegend .muted{color:#9aa8bd}
+.covbar{display:inline-block;width:96px;height:9px;border-radius:5px;background:#eef4fb;overflow:hidden;vertical-align:middle}
+.covbar i{display:block;height:100%;border-radius:5px}
 
 /* login modern */
 .login-shell{border-radius:26px}
@@ -1249,7 +1286,44 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
       <section class="bento" style="margin-bottom:16px">
         <div class="panel span-2"><h3><?=icon('layers')?>Source Coverage</h3><div class="cbox" id="uxCov" style="height:auto"></div></div>
         <div class="panel span-2"><h3><?=icon('shield')?>Correlation Overview</h3><div class="cbox" id="uxMix" style="height:auto"></div></div>
+        <?php
+          $U4=max(1,(int)$ucov['unique']);
+          $srcMeta=[
+            ['me','ManageEngine','var(--dark)',$ucov['me'],$ucov['me_only']],
+            ['ad','Active Directory','var(--primary)',$ucov['ad'],$ucov['ad_only']],
+            ['it','Intune','var(--teal)',$ucov['intune'],$ucov['intune_only']],
+            ['dk','Darksight','var(--violet)',$ucov['dark'],$ucov['dark_only']],
+          ];
+        ?>
+        <div class="panel span-4"><h3><?=icon('layers')?>Source Presence Detail</h3>
+          <div class="table-wrap" style="box-shadow:none;border-radius:12px">
+            <table style="min-width:auto">
+              <thead><tr><th>Source</th><th>Devices</th><th>Coverage</th><th>Exclusive (only here)</th><th>Gap vs fleet</th></tr></thead>
+              <tbody>
+              <?php foreach($srcMeta as [$k,$label,$col,$cnt,$excl]): $p=round($cnt/$U4*100); ?>
+                <tr>
+                  <td><span class="schip <?=$k?> on" style="--sc:<?=$col?>"><?=strtoupper($k)?></span> <b><?=e($label)?></b></td>
+                  <td class="tag"><?=number_format($cnt)?></td>
+                  <td style="min-width:160px"><span class="covbar"><i style="width:<?=$p?>%;background:<?=$col?>"></i></span> <span class="tag"><?=$p?>%</span></td>
+                  <td class="tag"><?=number_format($excl)?></td>
+                  <td class="tag" style="color:var(--orange);font-weight:700"><?=number_format($U4-$cnt)?></td>
+                </tr>
+              <?php endforeach; ?>
+                <tr style="background:#f7faff">
+                  <td><b>Discovered outside ManageEngine</b></td>
+                  <td class="tag" colspan="4">In AD / Intune / Darksight but <b>not</b> in ManageEngine: <b style="color:var(--orange)"><?=number_format((int)$ucov['not_in_me'])?></b> devices to onboard</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
+
+      <div class="srclegend">
+        <span class="lg-title">Sources in each row:</span>
+        <span><i class="me"></i>ManageEngine</span><span><i class="ad"></i>Active Directory</span><span><i class="it"></i>Intune</span><span><i class="dk"></i>Darksight</span>
+        <span class="muted">— a chip is solid when the device exists in that system, faded when absent.</span>
+      </div>
       <form method="get" class="filters"><input type="hidden" name="screen" value="unified">
         <input name="uq" placeholder="Search device or segment…" value="<?=$uqv?>" style="max-width:280px">
         <select name="uf" onchange="this.form.submit()">
@@ -1268,9 +1342,13 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
           <tr class="<?=$u['eol']?'eol':''?>">
             <td class="tag" style="font-weight:700;color:var(--ink)"><?=e($u['name'])?></td>
             <td><?=$u['segment']?'<span class="dept">'.e($u['segment']).'</span>':'<span style="color:var(--muted)">—</span>'?></td>
-            <td><span class="srcdots" title="<?=$cnt?> of 4 sources">
-              <i class="<?=$u['me']?'on me':''?>"></i><i class="<?=$u['ad']?'on ad':''?>"></i><i class="<?=$u['intune']?'on it':''?>"></i><i class="<?=$u['dark']?'on dk':''?>"></i>
-            </span></td>
+            <td><div class="srcset">
+              <span class="schip me <?=$u['me']?'on':''?>" style="--sc:var(--dark)" title="ManageEngine: <?=$u['me']?'present':'absent'?>">ME</span>
+              <span class="schip ad <?=$u['ad']?'on':''?>" style="--sc:var(--primary)" title="Active Directory: <?=$u['ad']?'present':'absent'?>">AD</span>
+              <span class="schip it <?=$u['intune']?'on':''?>" style="--sc:var(--teal)" title="Intune: <?=$u['intune']?'present':'absent'?>">IN</span>
+              <span class="schip dk <?=$u['dark']?'on':''?>" style="--sc:var(--violet)" title="Darksight: <?=$u['dark']?'present':'absent'?>">DK</span>
+              <span class="srccount <?=$cnt>=3?'good':($cnt==1?'low':'')?>"><?=$cnt?>/4</span>
+            </div></td>
             <td><?php if($u['me']):?><span class="pill <?=$u['eol']?'fail':'ok'?>"><span class="d"></span><?=$u['eol']?'EoL':'Active'?></span><?php else:?><span class="miss">absent</span><?php endif;?></td>
             <td><?php if($u['ad']):?><span class="pill <?=ad_enabled($u['ad_status'])?'ok':'fail'?>"><span class="d"></span><?=e($u['ad_status']?:'AD')?></span> <?=$u['ad_site']?'<span class="tag">'.e($u['ad_site']).'</span>':''?><?php else:?><span class="miss">absent</span><?php endif;?></td>
             <td><?php if($u['intune']):?><span class="pill <?=($u['compliance']==='Compliant')?'ok':'fail'?>"><span class="d"></span><?=e($u['compliance']?:'Managed')?></span><?php else:?><span class="miss">absent</span><?php endif;?></td>
@@ -1390,7 +1468,7 @@ const ucov=<?php echo json_encode($ucov);?>;
   (function(){var el=document.getElementById('uxCov');if(!el)return;
     var items=[['ManageEngine',ucov.me,'#003F53'],['Active Directory',ucov.ad,'#5A92DB'],['Intune',ucov.intune,'#0E9F8E'],['Darksight',ucov.dark,'#7c5cff']];
     var mx=Math.max(1,ucov.unique);
-    el.innerHTML='<div class="barlist">'+items.map(function(x){return '<div class="brow"><span class="bl">'+x[0]+'</span><span class="bt"><i style="width:'+Math.max(3,Math.round(x[1]/mx*100))+'%;background:'+x[2]+'"></i></span><b>'+fmt(x[1])+'</b></div>';}).join('')+'</div>';
+    el.innerHTML='<div class="barlist">'+items.map(function(x){var p=Math.round(x[1]/mx*100);return '<div class="brow"><span class="bl">'+x[0]+'</span><span class="bt"><i style="width:'+Math.max(3,p)+'%;background:'+x[2]+'"></i></span><b>'+fmt(x[1])+' · '+p+'%</b></div>';}).join('')+'</div>';
   })();
   // correlation overview donut (core-3 vs unmanaged vs me-only)
   (function(){var el=document.getElementById('uxMix');if(!el)return;
