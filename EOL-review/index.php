@@ -977,6 +977,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary)
 .nav a{display:block;padding:12px 13px;border-radius:11px;font-weight:500;color:rgba(255,255,255,.9);font-size:13.5px}
 .nav a.on,.nav a:hover{background:rgba(255,255,255,.12)}.nav a.on{background:#fff;color:var(--dark);font-weight:700}
 .navsec{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:rgba(255,255,255,.4);margin:16px 0 6px 11px}
+.brand-title{font-size:15px;font-weight:800;letter-spacing:.01em;color:#fff;padding:0 4px 12px;margin-bottom:10px;border-bottom:1px solid rgba(255,255,255,.12)}
 .sidebar form{margin-top:auto}
 .content{display:flex;flex-direction:column;min-height:100vh}.main{flex:1;padding:26px 30px}
 .topbar{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:22px}.topbar h1{margin:0;font-size:26px}.topbar .meta{color:var(--muted);font-size:13px;margin-top:4px}
@@ -1236,6 +1237,7 @@ svg.ic{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:no
   <aside class="sidebar" id="sidebar">
     <div class="brand"><img src="<?=$LOGO?>" alt="CATRION" onerror="this.style.display='none'"></div>
     <nav class="nav">
+      <div class="brand-title">CATRION Asset Lifecycle</div>
       <?php if($role==='admin'):?>
         <div class="navsec">Administration</div>
         <a class="<?=$screen==='dashboard'?'on':''?>" href="?screen=dashboard">IT Asset Lifecycle</a>
@@ -1563,7 +1565,15 @@ svg.ic{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:no
       <div class="table-wrap"><table>
         <thead><tr><th><?=$sortLink('device','Device')?></th><th><?=$sortLink('segment','Segment')?></th><th><?=$sortLink('sources','Sources')?></th><th><?=$sortLink('me','ManageEngine')?></th><th><?=$sortLink('ad','Active Directory')?></th><th><?=$sortLink('intune','Intune')?></th><th><?=$sortLink('dark','Darksight')?></th></tr></thead>
         <tbody>
-        <?php foreach($unified as $u): $cnt=$u['me']+$u['ad']+$u['intune']+$u['dark']; ?>
+        <?php
+          // Each source = Yes (green) when the device is present in that system, No (red) when absent.
+          // AD counts as "Yes" whether the company/site is CATRION or SaudiaCatering.
+          $yn=function($present,$detail=''){
+            return $present
+              ? '<span class="pill ok"><span class="d"></span>Yes</span>'.($detail?' '.$detail:'')
+              : '<span class="pill fail"><span class="d"></span>No</span>';
+          };
+          foreach($unified as $u): $cnt=$u['me']+$u['ad']+$u['intune']+$u['dark']; ?>
           <tr class="<?=$u['eol']?'eol':''?>">
             <td class="tag" style="font-weight:700;color:var(--ink)"><?=e($u['name'])?></td>
             <td><?=$u['segment']?'<span class="dept">'.e($u['segment']).'</span>':'<span style="color:var(--muted)">—</span>'?></td>
@@ -1574,10 +1584,10 @@ svg.ic{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:no
               <span class="schip dk <?=$u['dark']?'on':''?>" style="--sc:var(--violet)" title="Darksight: <?=$u['dark']?'present':'absent'?>">DK</span>
               <span class="srccount <?=$cnt>=3?'good':($cnt==1?'low':'')?>"><?=$cnt?>/4</span>
             </div></td>
-            <td><?php if($u['me']):?><span class="pill <?=$u['eol']?'fail':'ok'?>"><span class="d"></span><?=$u['eol']?'EoL':'Active'?></span><?php else:?><span class="miss">absent</span><?php endif;?></td>
-            <td><?php if($u['ad']):?><span class="pill <?=ad_enabled($u['ad_status'])?'ok':'fail'?>"><span class="d"></span><?=e($u['ad_status']?:'AD')?></span> <?=$u['ad_site']?'<span class="tag">'.e($u['ad_site']).'</span>':''?><?php else:?><span class="miss">absent</span><?php endif;?></td>
-            <td><?php if($u['intune']):?><span class="pill <?=($u['compliance']==='Compliant')?'ok':'fail'?>"><span class="d"></span><?=e($u['compliance']?:'Managed')?></span><?php else:?><span class="miss">absent</span><?php endif;?></td>
-            <td><?php if($u['dark']):?><?=$u['dark_eol']>0?'<span class="pill fail"><span class="d"></span>'.(int)$u['dark_eol'].' EoL SW</span>':'<span class="pill ok"><span class="d"></span>Clean</span>'?><?php else:?><span class="miss">absent</span><?php endif;?></td>
+            <td><?=$yn($u['me'], $u['me']&&$u['eol']?'<span class="tag" style="color:var(--orange);font-weight:700">EoL</span>':'')?></td>
+            <td><?=$yn($u['ad'], $u['ad']?trim(($u['ad_site']?'<span class="tag">'.e($u['ad_site']).'</span> ':'').($u['ad_status']&&!ad_enabled($u['ad_status'])?'<span class="tag" style="color:var(--orange)">'.e($u['ad_status']).'</span>':'')):'')?></td>
+            <td><?=$yn($u['intune'], $u['intune']&&$u['compliance']&&$u['compliance']!=='Compliant'?'<span class="tag" style="color:var(--orange)">'.e($u['compliance']).'</span>':'')?></td>
+            <td><?=$yn($u['dark'], $u['dark']&&$u['dark_eol']>0?'<span class="tag" style="color:var(--orange);font-weight:700">'.(int)$u['dark_eol'].' EoL SW</span>':'')?></td>
           </tr>
         <?php endforeach; if(!$unified):?><tr><td colspan="7" class="empty">No correlated devices yet. Upload sources under <b>Data Sources</b>.</td></tr><?php endif;?>
         </tbody>
@@ -1641,7 +1651,7 @@ svg.ic{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:no
 <script>
 const seg=<?php $l=[];$v=[];$rs=$conn->query("SELECT department,SUM(is_eol) e FROM eol_assets GROUP BY department ORDER BY e DESC");if($rs)while($r=$rs->fetch_assoc()){$l[]=$r['department'];$v[]=(int)$r['e'];}echo json_encode(['labels'=>$l,'data'=>$v]);?>;
 const dec=<?php $rs=$conn->query("SELECT SUM(decision='Replace') r,SUM(decision='Extend') e,SUM(decision='Return') t,SUM(is_eol=1 AND decision IS NULL) p FROM eol_assets");$r=$rs?$rs->fetch_assoc():[];echo json_encode([(int)($r['r']??0),(int)($r['e']??0),(int)($r['t']??0),(int)($r['p']??0)]);?>;
-const stats=<?php echo json_encode(['total'=>(int)$stats['total'],'active'=>(int)$stats['active'],'eol'=>(int)$stats['eol'],'over4'=>(int)$stats['over4']]);?>;
+const stats=<?php echo json_encode(['total'=>(int)$stats['total'],'active'=>(int)$stats['active'],'eol'=>(int)$stats['eol'],'over4'=>(int)$stats['over4'],'unified'=>(int)($ucov['unique']??0)]);?>;
 const dash=<?php echo json_encode($dash);?>;
 (function(){
   const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1658,8 +1668,9 @@ const dash=<?php echo json_encode($dash);?>;
   (function(){var el=document.getElementById('fxPipe');if(!el)return;
     var arrow='<span class="pa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>';
     var decided=dec[0]+dec[1]+dec[2];
-    var stg=[['Total fleet',stats.total,'rgba(90,146,219,.22)'],['Active',stats.active,'rgba(166,209,120,.30)'],['Aging 4+ yrs',stats.over4,'rgba(190,134,23,.26)'],['Flagged EoL',stats.eol,'rgba(212,91,37,.26)'],['Decided',decided,'rgba(14,159,142,.26)']];
-    var mx=Math.max(1,stats.total);
+    var fleet=stats.unified||stats.total;
+    var stg=[['Total fleet',fleet,'rgba(90,146,219,.22)'],['Active',stats.active,'rgba(166,209,120,.30)'],['Aging 4+ yrs',stats.over4,'rgba(190,134,23,.26)'],['Flagged EoL',stats.eol,'rgba(212,91,37,.26)'],['Decided',decided,'rgba(14,159,142,.26)']];
+    var mx=Math.max(1,fleet);
     el.innerHTML=stg.map(function(s){return '<div class="pstage"><div class="pb" style="--pc:'+s[2]+'"><span class="pv">'+fmt(s[1])+'</span><span class="pn">'+s[0]+'</span><i></i></div>'+arrow+'</div>';}).join('');
     requestAnimationFrame(function(){el.querySelectorAll('.pstage').forEach(function(p,i){p.querySelector('.pb i').style.width=Math.max(6,Math.round((stg[i][1]||0)/mx*100))+'%';});});
   })();
