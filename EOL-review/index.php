@@ -43,6 +43,36 @@ function norm_host($s){ $s=strtoupper(trim((string)$s)); if($s==='')return ''; $
 /* AD "account status" varies by export: Enabled / Yes / True / Active / 1 all mean enabled */
 function ad_enabled($v){ $v=strtolower(trim((string)$v)); return in_array($v,['enabled','yes','true','active','1','y','enable'],true); }
 
+/* ---------- Unified Employees Master List column auto-detection ---------- */
+function ml_col($conn,$cands){
+    static $cols=null;
+    if($cols===null){ $cols=[];
+        foreach(dash_all($conn,"SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='Unified_Employees_MasterList'") as $r){ $cols[strtolower($r['COLUMN_NAME'])]=$r['COLUMN_NAME']; }
+    }
+    foreach($cands as $c){ if(isset($cols[strtolower($c)])) return $cols[strtolower($c)]; }
+    return null;
+}
+function ml_grade_col($conn){ return ml_col($conn,['grade','emp_grade','employee_grade','job_grade','grade_code','grade_level','jobgrade','band','job_band']); }
+function ml_segment_col($conn){ return ml_col($conn,['segment','department','dept','section','division','business_unit','businessunit','unit','segment_name','dept_name','sector']); }
+/* A master-list grade counts as a Segment Head when it is E1 or E2 (separators ignored). */
+function grade_is_head($g){ $g=strtoupper(preg_replace('/[^A-Za-z0-9]/','',(string)$g)); return in_array($g,['E1','E2'],true); }
+/* Distinct segments available in the master list (to delegate to a user). */
+function master_segments($conn){
+    $col=ml_segment_col($conn); if(!$col) return [];
+    $out=[]; foreach(dash_all($conn,"SELECT DISTINCT `$col` s FROM Unified_Employees_MasterList WHERE `$col` IS NOT NULL AND `$col`<>'' ORDER BY `$col`") as $r){ $out[]=$r['s']; }
+    return $out;
+}
+/* Segment Heads derived dynamically: master-list grade E1/E2 -> head of own segment. */
+function auto_segment_heads($conn){
+    $g=ml_grade_col($conn); $s=ml_segment_col($conn); if(!$g||!$s) return [];
+    $out=[];
+    foreach(dash_all($conn,"SELECT PRN,FULL_NAME,`$g` grade,`$s` segment FROM Unified_Employees_MasterList WHERE `$s` IS NOT NULL AND `$s`<>'' AND `$g` IS NOT NULL AND `$g`<>''") as $r){
+        if(grade_is_head($r['grade'])) $out[]=$r;
+    }
+    usort($out,fn($a,$b)=>strcasecmp($a['segment'],$b['segment'])?:strcasecmp($a['FULL_NAME']??'',$b['FULL_NAME']??''));
+    return $out;
+}
+
 const UNIFIED_PAGE=200;
 
 /* Build the full cross-source correlation: returns [list, coverage]. */
@@ -333,10 +363,34 @@ function audit($conn,$action,$entityType,$entityId,$tag,$detail,$meta=null){
 function resolve_role($conn,$prn){
     $out=['role'=>'none','scope'=>'','departments'=>[]];
     if(!$conn||$prn==='') return $out;
+
+    // 1) Explicit grant from eol_admins: IT Admin (full) or Delegated User (scoped to segments)
     if($st=$conn->prepare("SELECT role,scope FROM eol_admins WHERE prn=? AND is_active=1 LIMIT 1")){
         $st->bind_param('s',$prn); $st->execute();
-        if($row=$st->get_result()->fetch_assoc()){ $st->close(); $out['role']='admin'; $out['scope']=$row['scope']; return $out; }
-        $st->close(); }
+        if($row=$st->get_result()->fetch_assoc()){ $st->close();
+            $r=trim((string)$row['role']);
+            if(stripos($r,'Delegated')!==false){
+                $segs=array_values(array_filter(array_map('trim',preg_split('/\s*[,;|]\s*/',(string)$row['scope']))));
+                return ['role'=>'head','scope'=>(string)$row['scope'],'departments'=>$segs];
+            }
+            return ['role'=>'admin','scope'=>(string)$row['scope'],'departments'=>[]]; // IT Admin / legacy
+        }
+        $st->close();
+    }
+
+    // 2) Dynamic Segment Head from the master list: grade E1/E2 -> head of own segment
+    $gc=ml_grade_col($conn); $sc=ml_segment_col($conn);
+    if($gc&&$sc&&($st=$conn->prepare("SELECT `$gc` grade,`$sc` segment FROM Unified_Employees_MasterList WHERE PRN=? LIMIT 1"))){
+        $st->bind_param('s',$prn); $st->execute();
+        if($row=$st->get_result()->fetch_assoc()){
+            $st->close();
+            if(grade_is_head($row['grade']??'') && trim((string)($row['segment']??''))!==''){
+                return ['role'=>'head','scope'=>'Segment Head (E1/E2)','departments'=>[trim($row['segment'])]];
+            }
+        } else { $st->close(); }
+    }
+
+    // 3) Fallback: legacy manual segment-head mappings (kept so existing heads keep working)
     if($st=$conn->prepare("SELECT department FROM eol_segment_heads WHERE head_prn=? AND is_active=1")){
         $st->bind_param('s',$prn); $st->execute(); $r=$st->get_result();
         while($row=$r->fetch_assoc()) $out['departments'][]=$row['department']; $st->close(); }
@@ -621,14 +675,19 @@ if($loggedIn && $role==='admin' && $_SERVER['REQUEST_METHOD']==='POST'){
     }
     if(isset($_POST['save_admin'])){
         $ap=preg_replace('/\D+/','',trim($_POST['admin_prn']??''));
-        [$arole,$ascope]=array_pad(explode(' · ',$_POST['admin_role']??'IT Admin · All segments'),2,'All segments');
+        $arole=(($_POST['perm_role']??'')==='Delegated User')?'Delegated User':'IT Admin';
+        if($arole==='Delegated User'){
+            $segs=array_values(array_filter(array_map('trim',(array)($_POST['segments']??[])),fn($s)=>$s!==''));
+            $ascope=implode(', ',$segs);
+        } else { $ascope='All segments'; }
         $chk=$conn->prepare("SELECT 1 FROM Unified_Employees_MasterList WHERE PRN=? LIMIT 1");
         $chk->bind_param('s',$ap); $chk->execute(); $exists=$chk->get_result()->fetch_assoc(); $chk->close();
         if(!preg_match('/^140\d{5}$/',$ap)) $error='Invalid PRN.';
         elseif(!$exists) $error='PRN not in master list.';
+        elseif($arole==='Delegated User' && $ascope==='') $error='Select at least one segment for a Delegated User.';
         else { $st=$conn->prepare("INSERT INTO eol_admins (prn,role,scope,is_active) VALUES (?,?,?,1) ON DUPLICATE KEY UPDATE role=VALUES(role),scope=VALUES(scope),is_active=1");
             $st->bind_param('sss',$ap,$arole,$ascope); $st->execute(); $st->close();
-            audit($conn,'ADMIN_ADD','admin',null,null,"Admin $ap ($arole)"); $success='Admin saved.'; }
+            audit($conn,'ADMIN_ADD','admin',null,null,"$arole $ap".($ascope&&$arole==='Delegated User'?" [$ascope]":'')); $success=$arole.' saved.'; }
     }
     if(isset($_POST['admin_action'])){
         $ap=preg_replace('/\D+/','',trim($_POST['admin_prn']??'')); $act=$_POST['admin_action'];
@@ -783,6 +842,7 @@ if($loggedIn && $role==='admin' && isset($_GET['export']) && $_GET['export']==='
 /* ============ DATA ============ */
 $screen=$_GET['screen']??($role==='head'?'queue':'dashboard');
 $assets=[]; $stats=['total'=>0,'active'=>0,'eol'=>0,'over4'=>0]; $admins=[]; $heads=[]; $segments=[];
+$masterSegments=[]; $autoHeads=[]; $mlGradeCol=null; $mlSegCol=null;
 $auditRows=[]; $loginRows=[]; $appRows=[]; $syncRows=[]; $logtab=$_GET['logtab']??'audit';
 $dash=['kpi'=>[],'segTotals'=>[],'decByDay'=>[],'scan'=>[],'warranty'=>[],'intune'=>[],'adOs'=>[],'src'=>[]];
 $unified=[]; $ucov=['unique'=>0,'core3'=>0,'me'=>0,'ad'=>0,'intune'=>0,'dark'=>0,'me_only'=>0,'ad_only'=>0,'intune_only'=>0,'dark_only'=>0,'unmanaged'=>0,'missing_ad'=>0,'not_in_me'=>0]; $unifiedTotal=0; $upage=1; $upages=1; $usort='sources'; $udir='asc';
@@ -841,8 +901,8 @@ if($loggedIn&&$conn){
             $rs=$conn->query("SELECT DISTINCT department FROM eol_assets WHERE department<>'' AND department IS NOT NULL ORDER BY department");
             while($row=$rs->fetch_assoc())$segments[]=$row['department'];
         }
-        if($screen==='admins'){ $rs=$conn->query("SELECT a.*,m.FULL_NAME FROM eol_admins a LEFT JOIN Unified_Employees_MasterList m ON m.PRN=a.prn ORDER BY a.id"); while($row=$rs->fetch_assoc())$admins[]=$row; }
-        if($screen==='segments'){ $rs=$conn->query("SELECT h.*,m.FULL_NAME FROM eol_segment_heads h LEFT JOIN Unified_Employees_MasterList m ON m.PRN=h.head_prn ORDER BY h.department"); while($row=$rs->fetch_assoc())$heads[]=$row; }
+        if($screen==='admins'){ $rs=$conn->query("SELECT a.*,m.FULL_NAME FROM eol_admins a LEFT JOIN Unified_Employees_MasterList m ON m.PRN=a.prn ORDER BY a.id"); while($row=$rs->fetch_assoc())$admins[]=$row; $masterSegments=master_segments($conn); }
+        if($screen==='segments'){ $autoHeads=auto_segment_heads($conn); $mlGradeCol=ml_grade_col($conn); $mlSegCol=ml_segment_col($conn); }
         if($screen==='sources'){
             $srcTab=$_GET['src']??'darksight';
             $srcRows=[];$srcCount=['darksight'=>0,'intune'=>0,'ad'=>0];
@@ -1232,34 +1292,57 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
       </table></div>
 
     <?php elseif($role==='admin'&&$screen==='admins'):?>
+      <p class="screen-intro">Three permission levels: <b>IT Admin</b> (full access) · <b>Delegated User</b> (scoped to chosen segments from the master list) · <b>Segment Head</b> (derived automatically — see the <a href="?screen=segments" style="color:var(--primary);font-weight:700">Segment Heads</a> tab).</p>
       <section class="grid2">
-        <div class="panel"><h3>Add / update admin</h3>
-          <form method="post" class="form-grid"><input type="hidden" name="save_admin" value="1">
-            <div class="full"><label>PRN (master list)</label><input name="admin_prn" inputmode="numeric" maxlength="8" placeholder="140xxxxx" required></div>
-            <div class="full"><label>Role · scope</label><select name="admin_role"><option>IT Admin · All segments</option><option>IT Admin · JED sites only</option><option>Super Admin · All segments</option><option>Read-only · Reports</option></select></div>
-            <div class="full"><button class="btn" type="submit">Save admin</button></div></form></div>
-        <div class="panel"><h3>Administrators</h3>
+        <div class="panel"><h3>Grant access (IT Admin / Delegated User)</h3>
+          <form method="post" class="form-grid" id="permForm"><input type="hidden" name="save_admin" value="1">
+            <div class="full"><label>PRN (must exist in master list)</label><input name="admin_prn" inputmode="numeric" maxlength="8" placeholder="140xxxxx" required></div>
+            <div class="full"><label>Permission</label>
+              <select name="perm_role" id="permRole" onchange="document.getElementById('segWrap').style.display=this.value==='Delegated User'?'block':'none'">
+                <option value="IT Admin">IT Admin — full access, all segments</option>
+                <option value="Delegated User">Delegated User — selected segments only</option>
+              </select></div>
+            <div class="full" id="segWrap" style="display:none">
+              <label>Delegated segments <span style="color:var(--muted);font-weight:400">(from master list — hold Ctrl/⌘ to pick several)</span></label>
+              <?php if($masterSegments): ?>
+              <select name="segments[]" multiple size="7" style="min-height:auto;padding:8px 10px">
+                <?php foreach($masterSegments as $s):?><option value="<?=e($s)?>"><?=e($s)?></option><?php endforeach;?>
+              </select>
+              <?php else: ?><div class="miss">No segment column detected in the master list — Delegated Users cannot be scoped until that exists.</div><?php endif; ?>
+            </div>
+            <div class="full"><button class="btn" type="submit">Save permission</button></div></form></div>
+        <div class="panel"><h3>IT Admins &amp; Delegated Users</h3>
           <div class="table-wrap"><table style="min-width:auto">
-            <thead><tr><th>PRN</th><th>Name</th><th>Role</th><th>Scope</th><th>Last Login</th><th>Status</th><th></th></tr></thead>
-            <tbody><?php foreach($admins as $a):?><tr>
-              <td class="tag"><?=e($a['prn'])?></td><td><?=e($a['FULL_NAME']??'—')?></td><td><?=e($a['role'])?></td><td><span class="dept"><?=e($a['scope'])?></span></td>
+            <thead><tr><th>PRN</th><th>Name</th><th>Permission</th><th>Segments / Scope</th><th>Last Login</th><th>Status</th><th></th></tr></thead>
+            <tbody><?php foreach($admins as $a): $isDel=stripos((string)$a['role'],'Delegated')!==false; ?><tr>
+              <td class="tag"><?=e($a['prn'])?></td><td><?=e($a['FULL_NAME']??'—')?></td>
+              <td><span class="schip <?=$isDel?'ad':'me'?> on" style="--sc:<?=$isDel?'var(--primary)':'var(--dark)'?>"><?=$isDel?'DELEGATED':'IT ADMIN'?></span></td>
+              <td><span class="dept"><?=e($a['scope'])?></span></td>
               <td class="tag"><?=e($a['last_login']??'—')?></td><td><span class="pill <?=(int)$a['is_active']?'ok':'fail'?>"><span class="d"></span><?=(int)$a['is_active']?'Active':'Suspended'?></span></td>
               <td style="white-space:nowrap"><form method="post" style="display:inline;margin:0"><input type="hidden" name="admin_prn" value="<?=e($a['prn'])?>"><button class="linkbtn" name="admin_action" value="<?=(int)$a['is_active']?'suspend':'activate'?>"><?=(int)$a['is_active']?'Suspend':'Activate'?></button></form>
                 <form method="post" style="display:inline;margin:0"><input type="hidden" name="admin_prn" value="<?=e($a['prn'])?>"><button class="linkbtn" style="color:var(--danger)" name="admin_action" value="remove" onclick="return confirm('Remove?')">Remove</button></form></td>
-            </tr><?php endforeach;?></tbody></table></div></div>
+            </tr><?php endforeach; if(!$admins):?><tr><td colspan="7" style="color:var(--muted)">No IT Admins or Delegated Users yet.</td></tr><?php endif;?></tbody></table></div></div>
       </section>
 
     <?php elseif($role==='admin'&&$screen==='segments'):?>
-      <section class="grid2">
-        <div class="panel"><h3>Map segment to head</h3>
-          <form method="post" class="form-grid"><input type="hidden" name="save_head" value="1">
-            <div class="full"><label>Department / segment</label><input name="department" placeholder="e.g. Airports Lounges - JED" required></div>
-            <div class="full"><label>Head PRN</label><input name="head_prn" inputmode="numeric" maxlength="8" placeholder="140xxxxx" required></div>
-            <div class="full"><button class="btn" type="submit">Save mapping</button></div></form></div>
-        <div class="panel"><h3>Segment heads</h3>
-          <div class="table-wrap"><table style="min-width:auto"><thead><tr><th>Segment</th><th>Head PRN</th><th>Name</th><th>Status</th></tr></thead>
-            <tbody><?php foreach($heads as $h):?><tr><td><span class="dept"><?=e($h['department'])?></span></td><td class="tag"><?=e($h['head_prn'])?></td><td><?=e($h['FULL_NAME']??'—')?></td><td><span class="pill <?=(int)$h['is_active']?'ok':'fail'?>"><span class="d"></span><?=(int)$h['is_active']?'Active':'Inactive'?></span></td></tr><?php endforeach; if(!$heads):?><tr><td colspan="4" style="color:var(--muted)">No mappings yet.</td></tr><?php endif;?></tbody></table></div></div>
-      </section>
+      <p class="screen-intro">Segment Heads are determined <b>automatically</b> from the Unified Employees Master List: every employee at grade <b>E1</b> or <b>E2</b> is the head of their own segment. No manual mapping needed — this list updates whenever the master list changes.</p>
+      <?php if(!$mlGradeCol||!$mlSegCol): ?>
+        <div class="notice error" style="margin:0 0 14px">⚠️ Could not detect the required master-list columns
+          (<b>grade</b>: <?=$mlGradeCol?e($mlGradeCol):'<i>not found</i>'?> · <b>segment</b>: <?=$mlSegCol?e($mlSegCol):'<i>not found</i>'?>).
+          Add a grade and a segment/department column to <code>Unified_Employees_MasterList</code>.</div>
+      <?php endif; ?>
+      <div class="filters" style="margin-bottom:12px">
+        <span class="srccount good"><?=count($autoHeads)?> heads</span>
+        <span class="tag" style="color:var(--muted)">Grade column: <b><?=e($mlGradeCol?:'—')?></b> · Segment column: <b><?=e($mlSegCol?:'—')?></b></span>
+      </div>
+      <div class="table-wrap"><table style="min-width:auto"><thead><tr><th>Segment</th><th>Head (PRN)</th><th>Name</th><th>Grade</th><th>Source</th></tr></thead>
+        <tbody><?php foreach($autoHeads as $h):?><tr>
+          <td><span class="dept"><?=e($h['segment'])?></span></td>
+          <td class="tag"><?=e($h['PRN'])?></td>
+          <td><?=e($h['FULL_NAME']??'—')?></td>
+          <td><span class="schip ad on" style="--sc:var(--primary)"><?=e(strtoupper($h['grade']))?></span></td>
+          <td><span class="pill ok"><span class="d"></span>Auto · Master List</span></td>
+        </tr><?php endforeach; if(!$autoHeads):?><tr><td colspan="5" class="empty">No E1/E2 employees found in the master list yet.</td></tr><?php endif;?></tbody></table></div>
 
     <?php elseif($role==='admin'&&$screen==='reports'):?>
       <div class="filters"><a class="btn sm" href="?export=assets&kind=all">⬇ Full inventory CSV</a>
