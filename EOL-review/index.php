@@ -1135,6 +1135,17 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
 .pgbtn.disabled{opacity:.45;pointer-events:none}
 .pgdots{color:var(--muted);padding:0 2px}
 .pginfo{margin-inline-start:auto;color:var(--muted);font-size:12px}
+/* --- fixes: default icon size, search icon, content not overflowing --- */
+svg.ic{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:none}
+.search-wrap{position:relative;flex:1 1 220px;min-width:200px;max-width:320px}
+.search-wrap svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--muted);pointer-events:none}
+.search-wrap input{padding-left:36px;width:100%}
+.content{min-width:0}
+.main{min-width:0}
+.table-wrap{max-width:100%}
+.qhead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.qbadge{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:4px 9px;border-radius:20px;background:#fdeae0;color:var(--orange);white-space:nowrap;border:1px solid #f7c9b6}
+.qbadge.ok{background:#dcfce9;color:var(--ok);border-color:#a7e0bf}
 
 /* login modern */
 .login-shell{border-radius:26px}
@@ -1553,17 +1564,28 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
       <?php endif; ?>
 
     <?php elseif($role==='head'&&$screen==='queue'):?>
-      <?php if(!$assets):?><div class="panel empty"><h3 style="color:var(--ink)">Nothing to action</h3><p>No devices in your segment(s) are flagged End-of-Life.</p></div>
+      <?php $qTotal=count($assets); $qDone=0; foreach($assets as $aa){ if(!empty($aa['decision']))$qDone++; } $qPend=$qTotal-$qDone; ?>
+      <p class="screen-intro">Devices in your segment(s) flagged End-of-Life by IT. Review the note from IT, then <b>acknowledge</b> each device with a decision — <b>Replace</b>, <b>Extend</b>, or <b>Return</b>. Your scope: <?php foreach(($myDepts?:['—']) as $d): ?><span class="dept" style="margin-inline-end:5px"><?=e($d)?></span><?php endforeach; ?></p>
+      <section class="kgrid" style="grid-template-columns:repeat(3,minmax(0,1fr));max-width:640px">
+        <div class="kpi"><div class="kh"><span>Flagged to me</span><span class="ic"><?=icon('layers')?></span></div><b><?=$qTotal?></b></div>
+        <div class="kpi warn"><div class="kh"><span>Pending</span><span class="ic"><?=icon('queue')?></span></div><b><?=$qPend?></b></div>
+        <div class="kpi ok"><div class="kh"><span>Acknowledged</span><span class="ic"><?=icon('check')?></span></div><b><?=$qDone?></b></div>
+      </section>
+      <?php if(!$assets):?><div class="panel empty"><h3 style="color:var(--ink)">Nothing to action</h3><p>No devices in your segment(s) are flagged End-of-Life right now.</p></div>
       <?php else:?><div class="queue"><?php foreach($assets as $a): $done=!empty($a['decision']);?>
         <div class="qcard <?=$done?'done':''?>">
-          <div><h4><?=e($a['asset_name'])?></h4><div class="qs"><?=e(trim($a['manufacturer'].' '.$a['model']))?> · <?=e($a['asset_user'])?></div></div>
-          <dl><dt>Service tag</dt><dd><?=e($a['service_tag'])?></dd><dt>Last login</dt><dd><?=e($a['last_login_user'])?></dd><dt>Warranty</dt><dd><?=e($a['warranty_expiry']?:'—')?></dd><dt>Over 4 yrs</dt><dd><?=(int)$a['over_four_years']?'Yes':'No'?></dd></dl>
+          <div class="qhead">
+            <div><h4><?=e($a['asset_name'])?></h4><div class="qs"><?=e(trim($a['manufacturer'].' '.$a['model']))?> · <?=e($a['asset_user'])?></div></div>
+            <span class="qbadge <?=$done?'ok':''?>"><?=$done?'Acknowledged':'Action needed'?></span>
+          </div>
+          <div style="margin:8px 0 2px"><span class="dept"><?=e($a['department'])?></span> <?php if((int)$a['over_four_years']):?><span class="qbadge" style="background:#fdeecb;color:#c9881a;border-color:#f2d79a">4+ yrs</span><?php endif;?></div>
+          <dl><dt>Service tag</dt><dd><?=e($a['service_tag'])?></dd><dt>Last login</dt><dd><?=e($a['last_login_user'])?></dd><dt>Warranty</dt><dd><?=e($a['warranty_expiry']?:'—')?></dd><dt>Scan</dt><dd><?=e($a['last_scan_status']?:'—')?></dd></dl>
           <div class="qnote"><span>Note from IT</span><?=e($a['eol_note'])?></div>
-          <?php if($done):?><div class="decided"><div class="h">✓ Decision recorded <span class="dec <?=e($a['decision'])?>"><?=e($a['decision'])?></span></div><?=$a['decision_note']?e($a['decision_note']).'<br>':''?><span style="color:var(--muted);font-size:11px">by <?=e($a['decided_by_name'])?> · <?=e($a['decided_at'])?></span></div>
+          <?php if($done):?><div class="decided"><div class="h">✓ Acknowledged <span class="dec <?=e($a['decision'])?>"><?=e($a['decision'])?></span></div><?=$a['decision_note']?e($a['decision_note']).'<br>':''?><span style="color:var(--muted);font-size:11px">by <?=e($a['decided_by_name'])?> · <?=e($a['decided_at'])?></span></div>
           <?php else:?><form method="post"><input type="hidden" name="submit_decision" value="1"><input type="hidden" name="asset_id" value="<?=(int)$a['id']?>">
-            <div class="field" style="margin-bottom:10px"><select name="decision" required><option value="">Select action…</option><option>Replace</option><option>Extend</option><option>Return</option></select></div>
-            <textarea name="decision_note" placeholder="Notes (optional)…"></textarea>
-            <button class="btn" type="submit" style="width:100%;margin-top:10px">Submit decision</button></form><?php endif;?>
+            <div class="field" style="margin-bottom:10px"><label class="sr-only">Decision</label><select name="decision" required><option value="">Select action…</option><option>Replace</option><option>Extend</option><option>Return</option></select></div>
+            <textarea name="decision_note" placeholder="Acknowledgement notes (optional)…"></textarea>
+            <button class="btn" type="submit" style="width:100%;margin-top:10px"><?=icon('check')?>Submit acknowledgement</button></form><?php endif;?>
         </div><?php endforeach;?></div><?php endif;?>
     <?php endif;?>
   </main>
