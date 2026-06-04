@@ -1146,6 +1146,21 @@ svg.ic{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:no
 .qhead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
 .qbadge{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:4px 9px;border-radius:20px;background:#fdeae0;color:var(--orange);white-space:nowrap;border:1px solid #f7c9b6}
 .qbadge.ok{background:#dcfce9;color:var(--ok);border-color:#a7e0bf}
+/* compact inventory — collapse columns so the table fits without horizontal scroll */
+#invTable{min-width:0;width:100%;table-layout:fixed}
+#invTable th,#invTable td{padding:9px 10px}
+#invTable .c-main{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#invTable .c-sub{font-size:10.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px}
+#invTable .c-sub.tag{font-family:ui-monospace,Menlo,monospace}
+#invTable td.cAsset{width:30%}
+#invTable td.cUser{width:18%}
+#invTable td.cSeg{width:16%}
+#invTable td.cStat{width:18%}
+#invTable td.cWar{width:120px}
+#invTable td.cEol{width:60px;text-align:center}
+#invTable .dept{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
+#invTable .stat-row{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+@media(max-width:900px){#invTable td.cUser,#invTable th.hUser,#invTable td.cStat,#invTable th.hStat{display:none}#invTable td.cAsset{width:auto}}
 
 /* login modern */
 .login-shell{border-radius:26px}
@@ -1287,18 +1302,30 @@ svg.ic{width:18px;height:18px;display:inline-block;vertical-align:middle;flex:no
         <select name="scan"><option value="">Any scan</option><option <?=($_GET['scan']??'')==='SUCCESS'?'selected':''?>>SUCCESS</option><option <?=($_GET['scan']??'')==='FAILED'?'selected':''?>>FAILED</option></select>
         <select name="eol"><option value="">Any state</option><option <?=($_GET['eol']??'')==='EoL'?'selected':''?>>EoL</option><option <?=($_GET['eol']??'')==='Active'?'selected':''?>>Active</option></select>
         <button class="btn sm" type="submit">Filter</button></form>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Asset / Model</th><th>User</th><th>Last Login</th><th>Segment</th><th>Scan</th><th>Service Tag</th><th>IP</th><th>Warranty</th><th>4+ yrs</th><th>EoL</th></tr></thead>
-        <tbody><?php if(!$assets):?><tr><td colspan="10" style="text-align:center;padding:30px;color:var(--muted)">No assets yet. Click "Sync from ManageEngine" to pull.</td></tr><?php endif; foreach($assets as $a):?>
+      <div class="table-wrap"><table id="invTable">
+        <thead><tr><th class="cAsset">Asset</th><th class="hUser">User</th><th class="cSeg">Segment</th><th class="hStat">Status</th><th class="cWar">Warranty</th><th class="cEol">EoL</th></tr></thead>
+        <tbody><?php if(!$assets):?><tr><td colspan="6" style="text-align:center;padding:30px;color:var(--muted)">No assets yet. Click "Sync from ManageEngine" to pull.</td></tr><?php endif; foreach($assets as $a):
+            $tag=trim((string)$a['service_tag']); $ip=trim((string)strtok($a['ip_addresses']??'',',')); $mm=trim($a['manufacturer'].' '.$a['model']); $ll=trim((string)$a['last_login_user']); ?>
           <tr class="<?=(int)$a['is_eol']?'eol':''?>">
-            <td><div class="tag" style="font-weight:700"><?=e($a['asset_name'])?></div><div style="font-size:11px;color:var(--muted)"><?=e(trim($a['manufacturer'].' '.$a['model']))?></div></td>
-            <td><?=e($a['asset_user'])?></td><td class="tag"><?=e($a['last_login_user'])?></td>
-            <td><span class="dept"><?=e($a['department'])?></span></td>
-            <td><span class="pill <?=$a['last_scan_status']==='SUCCESS'?'ok':'fail'?>"><span class="d"></span><?=e($a['last_scan_status'])?></span></td>
-            <td class="tag"><?=e($a['service_tag'])?></td><td class="tag"><?=e(strtok($a['ip_addresses']??'',','))?></td>
-            <td><form method="post" style="margin:0"><input type="hidden" name="save_warranty" value="1"><input type="hidden" name="asset_id" value="<?=(int)$a['id']?>"><input type="date" name="warranty_expiry" class="dateedit" value="<?=e($a['warranty_expiry'])?>" onchange="this.form.submit()"></form></td>
-            <td><span class="dec <?=(int)$a['over_four_years']?'Replace':''?>" style="<?=(int)$a['over_four_years']?'':'color:var(--muted)'?>"><?=(int)$a['over_four_years']?'YES':'no'?></span></td>
-            <td><form method="post" style="margin:0"><input type="hidden" name="toggle_eol" value="1"><input type="hidden" name="asset_id" value="<?=(int)$a['id']?>"><button type="submit" class="switch <?=(int)$a['is_eol']?'on':''?>" title="Toggle EoL"></button></form></td>
+            <td class="cAsset">
+              <div class="c-main" title="<?=e($a['asset_name'])?>"><?=e($a['asset_name'])?></div>
+              <?php if($mm):?><div class="c-sub"><?=e($mm)?></div><?php endif;?>
+              <?php if($tag):?><div class="c-sub tag" title="Service tag: <?=e($tag)?>"># <?=e($tag)?></div><?php endif;?>
+            </td>
+            <td class="cUser">
+              <div class="c-main" title="<?=e($a['asset_user'])?>"><?=$a['asset_user']!==''?e($a['asset_user']):'<span style="color:var(--muted)">—</span>'?></div>
+              <?php if($ll):?><div class="c-sub" title="Last login: <?=e($ll)?>">↪ <?=e($ll)?></div><?php endif;?>
+            </td>
+            <td class="cSeg"><span class="dept" title="<?=e($a['department'])?>"><?=e($a['department'])?></span></td>
+            <td class="cStat">
+              <div class="stat-row">
+                <span class="pill <?=$a['last_scan_status']==='SUCCESS'?'ok':'fail'?>"><span class="d"></span><?=e($a['last_scan_status'])?></span>
+                <?php if((int)$a['over_four_years']):?><span class="qbadge" title="In service 4+ years">4+ yrs</span><?php endif;?>
+              </div>
+              <?php if($ip):?><div class="c-sub tag" title="IP: <?=e($a['ip_addresses'])?>"><?=e($ip)?></div><?php endif;?>
+            </td>
+            <td class="cWar"><form method="post" style="margin:0"><input type="hidden" name="save_warranty" value="1"><input type="hidden" name="asset_id" value="<?=(int)$a['id']?>"><input type="date" name="warranty_expiry" class="dateedit" value="<?=e($a['warranty_expiry'])?>" onchange="this.form.submit()" style="max-width:100%"></form></td>
+            <td class="cEol"><form method="post" style="margin:0"><input type="hidden" name="toggle_eol" value="1"><input type="hidden" name="asset_id" value="<?=(int)$a['id']?>"><button type="submit" class="switch <?=(int)$a['is_eol']?'on':''?>" title="Toggle EoL"></button></form></td>
           </tr><?php endforeach;?></tbody>
       </table></div>
 
