@@ -43,6 +43,77 @@ function norm_host($s){ $s=strtoupper(trim((string)$s)); if($s==='')return ''; $
 /* AD "account status" varies by export: Enabled / Yes / True / Active / 1 all mean enabled */
 function ad_enabled($v){ $v=strtolower(trim((string)$v)); return in_array($v,['enabled','yes','true','active','1','y','enable'],true); }
 
+const UNIFIED_PAGE=200;
+
+/* Build the full cross-source correlation: returns [list, coverage]. */
+function unified_rows($conn){
+    $U=[];
+    $touch=function($k,$disp)use(&$U){ if($k==='')return; if(!isset($U[$k]))$U[$k]=['name'=>$disp,'me'=>0,'ad'=>0,'intune'=>0,'dark'=>0,'segment'=>'','eol'=>0,'decision'=>'','ad_status'=>'','ad_site'=>'','compliance'=>'','dark_eol'=>0]; };
+    foreach(dash_all($conn,"SELECT asset_name,department,is_eol,decision FROM eol_assets LIMIT 20000") as $r){ $k=norm_host($r['asset_name']); $touch($k,$r['asset_name']); if($k){ $U[$k]['me']=1;$U[$k]['segment']=$r['department']??'';$U[$k]['eol']=(int)$r['is_eol'];$U[$k]['decision']=$r['decision']??''; } }
+    foreach(dash_all($conn,"SELECT computer_name,account_status,site FROM eol_ad LIMIT 20000") as $r){ $k=norm_host($r['computer_name']); $touch($k,$r['computer_name']); if($k){ $U[$k]['ad']=1;$U[$k]['ad_status']=$r['account_status']??'';$U[$k]['ad_site']=$r['site']??''; } }
+    foreach(dash_all($conn,"SELECT device_name,compliance FROM eol_intune LIMIT 20000") as $r){ $k=norm_host($r['device_name']); $touch($k,$r['device_name']); if($k){ $U[$k]['intune']=1;$U[$k]['compliance']=$r['compliance']??''; } }
+    foreach(dash_all($conn,"SELECT hostname,eol FROM eol_darksight LIMIT 20000") as $r){ $k=norm_host($r['hostname']); $touch($k,$r['hostname']); if($k){ $U[$k]['dark']=1;$U[$k]['dark_eol']=(int)($r['eol']??0); } }
+    $cov=['unique'=>count($U),'core3'=>0,'me'=>0,'ad'=>0,'intune'=>0,'dark'=>0,'me_only'=>0,'ad_only'=>0,'intune_only'=>0,'dark_only'=>0,'unmanaged'=>0,'missing_ad'=>0,'not_in_me'=>0];
+    foreach($U as $u){
+        $cov['me']+=$u['me'];$cov['ad']+=$u['ad'];$cov['intune']+=$u['intune'];$cov['dark']+=$u['dark'];
+        $only=($u['me']+$u['ad']+$u['intune']+$u['dark'])===1;
+        if($u['me']&&$u['ad']&&$u['intune'])$cov['core3']++;
+        if($only&&$u['me'])$cov['me_only']++; if($only&&$u['ad'])$cov['ad_only']++;
+        if($only&&$u['intune'])$cov['intune_only']++; if($only&&$u['dark'])$cov['dark_only']++;
+        if(!$u['intune'])$cov['unmanaged']++;
+        if($u['me']&&!$u['ad'])$cov['missing_ad']++;
+        if(!$u['me']&&($u['ad']||$u['intune']||$u['dark']))$cov['not_in_me']++;
+    }
+    return [array_values($U),$cov];
+}
+/* Apply search + filter + sort to the correlation list. */
+function unified_apply($list,$uq,$uf,$usort,$udir){
+    $cnt=fn($u)=>$u['me']+$u['ad']+$u['intune']+$u['dark'];
+    if($uq!=='') $list=array_filter($list,fn($u)=>stripos($u['name'],$uq)!==false||stripos($u['segment'],$uq)!==false||stripos($u['ad_site'],$uq)!==false);
+    if($uf==='gaps') $list=array_filter($list,fn($u)=>$cnt($u)<3);
+    elseif($uf==='unmanaged') $list=array_filter($list,fn($u)=>!$u['intune']);
+    elseif($uf==='eol') $list=array_filter($list,fn($u)=>$u['eol']);
+    elseif($uf==='missing_ad') $list=array_filter($list,fn($u)=>$u['me']&&!$u['ad']);
+    elseif($uf==='not_in_me') $list=array_filter($list,fn($u)=>!$u['me']&&$cnt($u)>0);
+    $list=array_values($list);
+    $dir=$udir==='desc'?-1:1;
+    $keys=['device','segment','sources','me','ad','intune','dark'];
+    $k=in_array($usort,$keys,true)?$usort:'sources';
+    usort($list,function($a,$b)use($k,$dir,$cnt){
+        if($k==='device') $r=strcasecmp($a['name'],$b['name']);
+        elseif($k==='segment') $r=strcasecmp($a['segment'],$b['segment'])?:strcasecmp($a['name'],$b['name']);
+        elseif($k==='sources') $r=($cnt($a)<=>$cnt($b))?:strcasecmp($a['name'],$b['name']);
+        else { $r=($a[$k]<=>$b[$k])?:strcasecmp($a['name'],$b['name']); }
+        return $r*$dir;
+    });
+    return $list;
+}
+/* Minimal dependency-free XLSX writer (inline strings). Streams a download then exits. */
+function xlsx_download($filename,$headers,$rows){
+    if(!class_exists('ZipArchive')){ // graceful CSV fallback
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename='.preg_replace('/\.xlsx$/','.csv',$filename));
+        $o=fopen('php://output','w'); fputcsv($o,$headers); foreach($rows as $r) fputcsv($o,$r); fclose($o); exit;
+    }
+    $colRef=function($i){ $s=''; $i++; while($i>0){ $m=($i-1)%26; $s=chr(65+$m).$s; $i=intdiv($i-1,26); } return $s; };
+    $cell=function($ci,$ri,$v)use($colRef){ $v=htmlspecialchars((string)$v,ENT_XML1|ENT_QUOTES,'UTF-8'); return '<c r="'.$colRef($ci).$ri.'" t="inlineStr"><is><t xml:space="preserve">'.$v.'</t></is></c>'; };
+    $sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>';
+    $ri=1; $line='<row r="1">'; foreach($headers as $ci=>$h) $line.=$cell($ci,1,$h); $line.='</row>'; $sheet.=$line;
+    foreach($rows as $r){ $ri++; $line='<row r="'.$ri.'">'; $ci=0; foreach($r as $v){ $line.=$cell($ci,$ri,$v); $ci++; } $line.='</row>'; $sheet.=$line; }
+    $sheet.='</sheetData></worksheet>';
+    $tmp=tempnam(sys_get_temp_dir(),'xlsx'); $z=new ZipArchive(); $z->open($tmp,ZipArchive::OVERWRITE);
+    $z->addFromString('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>');
+    $z->addFromString('_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+    $z->addFromString('xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Unified" sheetId="1" r:id="rId1"/></sheets></workbook>');
+    $z->addFromString('xl/_rels/workbook.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>');
+    $z->addFromString('xl/worksheets/sheet1.xml',$sheet);
+    $z->close();
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename='.$filename);
+    header('Content-Length: '.filesize($tmp));
+    readfile($tmp); @unlink($tmp); exit;
+}
+
 /**
  * Minimal dependency-free XLSX reader (first worksheet).
  * Returns [headerRow(array of strings), dataRows(array of numeric arrays)] or [null,null].
@@ -691,12 +762,30 @@ if($loggedIn && $role==='admin' && isset($_GET['export']) && $_GET['export']==='
     fclose($out); exit;
 }
 
+/* Unified cross-source XLSX export (respects search/filter/sort, not pagination) */
+if($loggedIn && $role==='admin' && isset($_GET['export']) && $_GET['export']==='unified'){
+    $uq=trim($_GET['uq']??''); $ufilter=$_GET['uf']??'';
+    $usort=$_GET['usort']??'sources'; $udir=(($_GET['udir']??'asc')==='desc')?'desc':'asc';
+    [$ulist,$ucov]=unified_rows($conn);
+    $rowsF=unified_apply($ulist,$uq,$ufilter,$usort,$udir);
+    audit($conn,'EXPORT','report',null,null,'Export unified ('.count($rowsF).' rows)');
+    $yn=fn($b)=>$b?'Yes':'No';
+    $headers=['Device','Segment','Sources (n/4)','In ManageEngine','EoL Flagged','Decision','In Active Directory','AD Status','AD Site/Company','In Intune','Intune Compliance','In Darksight','Darksight EoL Software'];
+    $out=[];
+    foreach($rowsF as $u){
+        $cnt=$u['me']+$u['ad']+$u['intune']+$u['dark'];
+        $out[]=[$u['name'],$u['segment'],$cnt.'/4',$yn($u['me']),$u['me']?$yn($u['eol']):'',$u['decision'],
+            $yn($u['ad']),$u['ad_status'],$u['ad_site'],$yn($u['intune']),$u['compliance'],$yn($u['dark']),$u['dark']?(int)$u['dark_eol']:''];
+    }
+    xlsx_download('catrion_unified_'.date('Ymd_His').'.xlsx',$headers,$out);
+}
+
 /* ============ DATA ============ */
 $screen=$_GET['screen']??($role==='head'?'queue':'dashboard');
 $assets=[]; $stats=['total'=>0,'active'=>0,'eol'=>0,'over4'=>0]; $admins=[]; $heads=[]; $segments=[];
 $auditRows=[]; $loginRows=[]; $appRows=[]; $syncRows=[]; $logtab=$_GET['logtab']??'audit';
 $dash=['kpi'=>[],'segTotals'=>[],'decByDay'=>[],'scan'=>[],'warranty'=>[],'intune'=>[],'adOs'=>[],'src'=>[]];
-$unified=[]; $ucov=['unique'=>0,'core3'=>0,'me'=>0,'ad'=>0,'intune'=>0,'dark'=>0,'me_only'=>0,'unmanaged'=>0,'missing_ad'=>0]; $unifiedTotal=0;
+$unified=[]; $ucov=['unique'=>0,'core3'=>0,'me'=>0,'ad'=>0,'intune'=>0,'dark'=>0,'me_only'=>0,'ad_only'=>0,'intune_only'=>0,'dark_only'=>0,'unmanaged'=>0,'missing_ad'=>0,'not_in_me'=>0]; $unifiedTotal=0; $upage=1; $upages=1; $usort='sources'; $udir='asc';
 if($loggedIn&&$conn){
     if($role==='admin'){
         if($r=$conn->query("SELECT COUNT(*) t,SUM(is_eol) ee,SUM(over_four_years) o FROM eol_assets")->fetch_assoc()){
@@ -771,36 +860,14 @@ if($loggedIn&&$conn){
             elseif($logtab==='app'){ $rs=$conn->query("SELECT * FROM eol_app_log ORDER BY id DESC LIMIT 200"); while($row=$rs->fetch_assoc())$appRows[]=$row; }
         }
         if($screen==='unified'){
-            // Correlate every source on a normalised hostname key -> one row per device.
             $uq=trim($_GET['uq']??''); $ufilter=$_GET['uf']??'';
-            $U=[];
-            $touch=function($k,$disp)use(&$U){ if($k==='')return; if(!isset($U[$k]))$U[$k]=['name'=>$disp,'me'=>0,'ad'=>0,'intune'=>0,'dark'=>0,'segment'=>'','eol'=>0,'decision'=>'','ad_status'=>'','ad_site'=>'','compliance'=>'','dark_eol'=>0]; };
-            foreach(dash_all($conn,"SELECT asset_name,department,is_eol,decision FROM eol_assets LIMIT 8000") as $r){ $k=norm_host($r['asset_name']); $touch($k,$r['asset_name']); if($k){ $U[$k]['me']=1;$U[$k]['segment']=$r['department']??'';$U[$k]['eol']=(int)$r['is_eol'];$U[$k]['decision']=$r['decision']??''; } }
-            foreach(dash_all($conn,"SELECT computer_name,account_status,site FROM eol_ad LIMIT 8000") as $r){ $k=norm_host($r['computer_name']); $touch($k,$r['computer_name']); if($k){ $U[$k]['ad']=1;$U[$k]['ad_status']=$r['account_status']??'';$U[$k]['ad_site']=$r['site']??''; } }
-            foreach(dash_all($conn,"SELECT device_name,compliance FROM eol_intune LIMIT 8000") as $r){ $k=norm_host($r['device_name']); $touch($k,$r['device_name']); if($k){ $U[$k]['intune']=1;$U[$k]['compliance']=$r['compliance']??''; } }
-            foreach(dash_all($conn,"SELECT hostname,eol FROM eol_darksight LIMIT 8000") as $r){ $k=norm_host($r['hostname']); $touch($k,$r['hostname']); if($k){ $U[$k]['dark']=1;$U[$k]['dark_eol']=(int)($r['eol']??0); } }
-            $ucov=['unique'=>count($U),'core3'=>0,'me'=>0,'ad'=>0,'intune'=>0,'dark'=>0,
-                   'me_only'=>0,'ad_only'=>0,'intune_only'=>0,'dark_only'=>0,
-                   'unmanaged'=>0,'missing_ad'=>0,'not_in_me'=>0];
-            foreach($U as $u){
-                $ucov['me']+=$u['me'];$ucov['ad']+=$u['ad'];$ucov['intune']+=$u['intune'];$ucov['dark']+=$u['dark'];
-                $only=($u['me']+$u['ad']+$u['intune']+$u['dark'])===1;
-                if($u['me']&&$u['ad']&&$u['intune'])$ucov['core3']++;
-                if($only&&$u['me'])$ucov['me_only']++;
-                if($only&&$u['ad'])$ucov['ad_only']++;
-                if($only&&$u['intune'])$ucov['intune_only']++;
-                if($only&&$u['dark'])$ucov['dark_only']++;
-                if(!$u['intune'])$ucov['unmanaged']++;
-                if($u['me']&&!$u['ad'])$ucov['missing_ad']++;
-                if(!$u['me']&&($u['ad']||$u['intune']||$u['dark']))$ucov['not_in_me']++;
-            }
-            $unified=array_values($U);
-            usort($unified,function($a,$b){ $sa=$a['me']+$a['ad']+$a['intune']+$a['dark']; $sb=$b['me']+$b['ad']+$b['intune']+$b['dark']; return $sa!==$sb?$sa-$sb:strcmp($a['name'],$b['name']); });
-            if($uq!=='') $unified=array_values(array_filter($unified,fn($u)=>stripos($u['name'],$uq)!==false||stripos($u['segment'],$uq)!==false));
-            if($ufilter==='gaps') $unified=array_values(array_filter($unified,fn($u)=>($u['me']+$u['ad']+$u['intune']+$u['dark'])<3));
-            elseif($ufilter==='unmanaged') $unified=array_values(array_filter($unified,fn($u)=>!$u['intune']));
-            elseif($ufilter==='eol') $unified=array_values(array_filter($unified,fn($u)=>$u['eol']));
-            $unifiedTotal=count($unified); $unified=array_slice($unified,0,300);
+            $usort=$_GET['usort']??'sources'; $udir=(($_GET['udir']??'asc')==='desc')?'desc':'asc';
+            [$ulist,$ucov]=unified_rows($conn);
+            $filtered=unified_apply($ulist,$uq,$ufilter,$usort,$udir);
+            $unifiedTotal=count($filtered);
+            $upages=max(1,(int)ceil($unifiedTotal/UNIFIED_PAGE));
+            $upage=max(1,min($upages,(int)($_GET['upage']??1)));
+            $unified=array_slice($filtered,($upage-1)*UNIFIED_PAGE,UNIFIED_PAGE);
         }
     } elseif($role==='head'&&$myDepts){
         $ph=rtrim(str_repeat('?,',count($myDepts)),','); $t=str_repeat('s',count($myDepts));
@@ -995,6 +1062,15 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
 .srclegend .muted{color:#9aa8bd}
 .covbar{display:inline-block;width:96px;height:9px;border-radius:5px;background:#eef4fb;overflow:hidden;vertical-align:middle}
 .covbar i{display:block;height:100%;border-radius:5px}
+.sorth{display:inline-flex;align-items:center;gap:3px;color:var(--dark);cursor:pointer;white-space:nowrap}
+.sorth:hover{color:var(--primary)}
+.pager{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:14px}
+.pgbtn{min-width:34px;height:34px;padding:0 10px;display:inline-flex;align-items:center;justify-content:center;border:1px solid var(--border);border-radius:9px;background:#fff;color:var(--dark);font-size:13px;font-weight:700;box-shadow:0 6px 16px -12px rgba(31,52,120,.4)}
+.pgbtn:hover{border-color:var(--primary);color:var(--primary)}
+.pgbtn.on{background:var(--grad);color:#fff;border-color:transparent;box-shadow:0 8px 18px -8px rgba(79,124,255,.7)}
+.pgbtn.disabled{opacity:.45;pointer-events:none}
+.pgdots{color:var(--muted);padding:0 2px}
+.pginfo{margin-inline-start:auto;color:var(--muted);font-size:12px}
 
 /* login modern */
 .login-shell{border-radius:26px}
@@ -1275,6 +1351,16 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
     <?php elseif($role==='admin'&&$screen==='unified'):
         $pc=fn($n)=>number_format((int)$n);
         $uqv=e($_GET['uq']??''); $ufv=$_GET['uf']??'';
+        // Sortable-header + pager link builders (preserve search/filter/sort)
+        $qbase=['screen'=>'unified']; if($uq!=='')$qbase['uq']=$uq; if($ufilter!=='')$qbase['uf']=$ufilter;
+        $sortLink=function($key,$label)use($qbase,$usort,$udir){
+            $dir=($usort===$key&&$udir==='asc')?'desc':'asc';
+            $arrow=$usort===$key?($udir==='asc'?' ▲':' ▼'):'';
+            $qs=http_build_query($qbase+['usort'=>$key,'udir'=>$dir]);
+            return '<a class="sorth" href="?'.e($qs).'">'.$label.$arrow.'</a>';
+        };
+        $pageLink=function($n)use($qbase,$usort,$udir){ return '?'.e(http_build_query($qbase+['usort'=>$usort,'udir'=>$udir,'upage'=>$n])); };
+        $exportQS=http_build_query($qbase+['export'=>'unified','usort'=>$usort,'udir'=>$udir]);
     ?>
       <p class="screen-intro">One row per device, correlated across <b>ManageEngine</b>, <b>Active Directory</b>, <b>Intune</b> and <b>Darksight</b> by hostname — so coverage gaps and blind spots surface immediately.</p>
       <section class="kgrid">
@@ -1325,18 +1411,23 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
         <span class="muted">— a chip is solid when the device exists in that system, faded when absent.</span>
       </div>
       <form method="get" class="filters"><input type="hidden" name="screen" value="unified">
-        <input name="uq" placeholder="Search device or segment…" value="<?=$uqv?>" style="max-width:280px">
+        <input type="hidden" name="usort" value="<?=e($usort)?>"><input type="hidden" name="udir" value="<?=e($udir)?>">
+        <div class="search-wrap"><?=icon('search')?><label class="sr-only" for="uqf">Search</label>
+          <input id="uqf" name="uq" placeholder="Search device, segment, site…" value="<?=$uqv?>"></div>
         <select name="uf" onchange="this.form.submit()">
           <option value="">All devices</option>
           <option value="gaps" <?=$ufv==='gaps'?'selected':''?>>Coverage gaps (&lt;3 sources)</option>
           <option value="unmanaged" <?=$ufv==='unmanaged'?'selected':''?>>Unmanaged (no Intune)</option>
+          <option value="missing_ad" <?=$ufv==='missing_ad'?'selected':''?>>Missing from AD</option>
+          <option value="not_in_me" <?=$ufv==='not_in_me'?'selected':''?>>Not in ManageEngine</option>
           <option value="eol" <?=$ufv==='eol'?'selected':''?>>Flagged EoL</option>
         </select>
-        <button class="btn sm" type="submit">Filter</button>
-        <span style="color:var(--muted);font-size:12px;margin-inline-start:auto"><?=$pc($unifiedTotal)?> match · showing <?=count($unified)?></span>
+        <button class="btn sm" type="submit"><?=icon('search')?>Apply</button>
+        <a class="btn sm light" href="?<?=e($exportQS)?>"><?=icon('download')?>Export XLSX</a>
+        <span style="color:var(--muted);font-size:12px;margin-inline-start:auto"><?=$pc($unifiedTotal)?> devices · page <?=$upage?>/<?=$upages?></span>
       </form>
       <div class="table-wrap"><table>
-        <thead><tr><th>Device</th><th>Segment</th><th>Sources</th><th>ManageEngine</th><th>Active Directory</th><th>Intune</th><th>Darksight</th></tr></thead>
+        <thead><tr><th><?=$sortLink('device','Device')?></th><th><?=$sortLink('segment','Segment')?></th><th><?=$sortLink('sources','Sources')?></th><th><?=$sortLink('me','ManageEngine')?></th><th><?=$sortLink('ad','Active Directory')?></th><th><?=$sortLink('intune','Intune')?></th><th><?=$sortLink('dark','Darksight')?></th></tr></thead>
         <tbody>
         <?php foreach($unified as $u): $cnt=$u['me']+$u['ad']+$u['intune']+$u['dark']; ?>
           <tr class="<?=$u['eol']?'eol':''?>">
@@ -1357,6 +1448,19 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
         <?php endforeach; if(!$unified):?><tr><td colspan="7" class="empty">No correlated devices yet. Upload sources under <b>Data Sources</b>.</td></tr><?php endif;?>
         </tbody>
       </table></div>
+      <?php if($upages>1): ?>
+      <nav class="pager" aria-label="Pagination">
+        <a class="pgbtn <?=$upage<=1?'disabled':''?>" href="<?=$upage>1?$pageLink($upage-1):'#'?>">‹ Prev</a>
+        <?php
+          $win=2; $start=max(1,$upage-$win); $end=min($upages,$upage+$win);
+          if($start>1){ echo '<a class="pgbtn" href="'.$pageLink(1).'">1</a>'; if($start>2) echo '<span class="pgdots">…</span>'; }
+          for($i=$start;$i<=$end;$i++) echo '<a class="pgbtn '.($i===$upage?'on':'').'" href="'.$pageLink($i).'">'.$i.'</a>';
+          if($end<$upages){ if($end<$upages-1) echo '<span class="pgdots">…</span>'; echo '<a class="pgbtn" href="'.$pageLink($upages).'">'.$upages.'</a>'; }
+        ?>
+        <a class="pgbtn <?=$upage>=$upages?'disabled':''?>" href="<?=$upage<$upages?$pageLink($upage+1):'#'?>">Next ›</a>
+        <span class="pginfo"><?=UNIFIED_PAGE?>/page · <?=$pc($unifiedTotal)?> total</span>
+      </nav>
+      <?php endif; ?>
 
     <?php elseif($role==='head'&&$screen==='queue'):?>
       <?php if(!$assets):?><div class="panel empty"><h3 style="color:var(--ink)">Nothing to action</h3><p>No devices in your segment(s) are flagged End-of-Life.</p></div>
