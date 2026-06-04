@@ -9,7 +9,7 @@
  * Logs:  eol_login_log, eol_audit_log, eol_app_log, eol_sync_runs.
  * Config: ALL credentials loaded from /var/secrets/.env — nothing hardcoded.
  *
- * NOTE: This revision extends the Command Center dashboard with additional
+ * NOTE: This revision extends the IT Asset Lifecycle dashboard with additional
  *       KPIs/measures and visualizations (including cross-source metrics from
  *       eol_intune / eol_ad / eol_darksight). All authentication, database,
  *       sync, upload and business logic is UNCHANGED; the new dashboard
@@ -876,6 +876,7 @@ if($loggedIn&&$conn){
     }
 }
 $LOGO='https://e-services.catrion.com/EOL/image/catrion-logo-white.png';
+$LOGO_EN='image/Catrion-Logo-English.png';   // English logo shown top-left in the content header
 $POLICY='<div class="policy"><a href="https://www.catrion.com/terms-and-conditions" target="_blank" rel="noopener noreferrer">Terms &amp; Conditions</a><span>•</span><a href="https://www.catrion.com/privacy-policy" target="_blank" rel="noopener noreferrer">Privacy Policy</a><span>•</span><a href="https://www.catrion.com/cookie-policy" target="_blank" rel="noopener noreferrer">Cookie Policy</a></div>';
 ?>
 <!doctype html><html lang="en"><head><meta charset="utf-8"><title>CATRION · Asset Lifecycle</title>
@@ -943,7 +944,7 @@ tr.eol{background:linear-gradient(90deg,#fdeee7,transparent 55%)}.tag{font-famil
 .appfoot{padding:20px 30px;border-top:1px solid var(--border);text-align:center;color:var(--muted);font-size:12px;font-weight:500;background:rgba(255,255,255,.5)}.appfoot .policy{margin-top:8px}
 .sync-info{background:var(--bg);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px;color:var(--muted);line-height:1.6;font-size:13px}.sync-info b{color:var(--dark)}
 
-/* ===== Command Center: KPIs + visuals ===== */
+/* ===== IT Asset Lifecycle: KPIs + visuals ===== */
 .kgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
 .kpi{position:relative;background:#fff;border:1px solid var(--border);border-radius:16px;padding:15px 17px;box-shadow:0 12px 30px rgba(0,57,122,.07);overflow:hidden;transition:transform .15s,box-shadow .15s}
 .kpi:hover{transform:translateY(-2px);box-shadow:0 18px 40px rgba(0,57,122,.12)}
@@ -1020,6 +1021,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--primary);box-shadow:v
 
 /* topbar gradient title */
 .topbar h1{background:var(--grad2);-webkit-background-clip:text;background-clip:text;color:transparent}
+.tb-left{display:flex;align-items:center;gap:16px}
+.tb-logo{height:46px;width:auto;max-width:200px;flex-shrink:0}
+@media(max-width:620px){.tb-left{gap:10px}.tb-logo{height:34px}}
 
 /* cards / panels — bigger radius, gradient hairline, lift */
 .card,.panel,.kpi,.qcard,.rcard,.table-wrap,.sync-info{border-radius:18px;border:1px solid var(--border);box-shadow:var(--shadow)}
@@ -1142,7 +1146,7 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
     <nav class="nav">
       <?php if($role==='admin'):?>
         <div class="navsec">Administration</div>
-        <a class="<?=$screen==='dashboard'?'on':''?>" href="?screen=dashboard">Dashboard</a>
+        <a class="<?=$screen==='dashboard'?'on':''?>" href="?screen=dashboard">IT Asset Lifecycle</a>
         <a class="<?=$screen==='inventory'?'on':''?>" href="?screen=inventory">Asset Inventory</a>
         <a class="<?=$screen==='admins'?'on':''?>" href="?screen=admins">Admin Users</a>
         <a class="<?=$screen==='segments'?'on':''?>" href="?screen=segments">Segment Heads</a>
@@ -1158,9 +1162,12 @@ tr.eol{background:linear-gradient(90deg,#fff1ec,transparent 55%)}
     <form method="post"><button class="btn light" name="logout" style="width:100%">Logout</button></form>
   </aside>
   <div class="content"><main class="main">
-    <div class="topbar"><div>
-      <h1><?=['dashboard'=>'Command Center','inventory'=>'Asset Inventory','admins'=>'Admin Users','segments'=>'Segment Heads','reports'=>'Reports','sources'=>'Data Sources','unified'=>'Unified Asset View','audit'=>'Audit Log','queue'=>'Replacement Queue'][$screen]??'Asset Lifecycle'?></h1>
+    <div class="topbar"><div class="tb-left">
+      <img class="tb-logo" src="<?=$LOGO_EN?>" alt="CATRION" onerror="this.style.display='none'">
+      <div>
+      <h1><?=['dashboard'=>'IT Asset Lifecycle','inventory'=>'Asset Inventory','admins'=>'Admin Users','segments'=>'Segment Heads','reports'=>'Reports','sources'=>'Data Sources','unified'=>'Unified Asset View','audit'=>'Audit Log','queue'=>'Replacement Queue'][$screen]??'Asset Lifecycle'?></h1>
       <div class="meta">Signed in as <?=e($fullName)?> • <?=e($prn)?> • <?=$role==='admin'?'IT Administrator':'Segment Head'?></div>
+      </div>
     </div>
     <?php if($role==='admin'&&$screen==='inventory'):?>
       <form method="post" style="margin:0"><button class="btn sm" name="sync_amer">⟳ Sync from ManageEngine</button></form>
