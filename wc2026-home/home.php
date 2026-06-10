@@ -1,0 +1,5581 @@
+<?php
+// /WC2026/home.php
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_name('WC2026SESSID');
+    session_start();
+}
+
+require_once __DIR__ . '/connections/config.php';
+require_once __DIR__ . '/connections/functions.php';
+
+require_login();
+
+if (empty($_SESSION['csrf'])) {
+    $_SESSION['csrf'] = bin2hex(random_bytes(32));
+}
+
+$csrf = $_SESSION['csrf'];
+
+$userId = (int)($_SESSION['USER_ID'] ?? 0);
+$name   = $_SESSION['FULL_NAME'] ?? 'Participant';
+$type   = $_SESSION['USER_TYPE'] ?? 'User';
+$mobile = $_SESSION['MOBILE'] ?? '';
+
+$logoPath = "/WC2026/partials/CATRION%20logo.png";
+$iconPath = "/WC2026/partials/CATRION%20Icon.png";
+
+function wc_scalar(mysqli $conn, string $sql, string $types = '', array $params = []) {
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) return 0;
+    if ($types && $params) $stmt->bind_param($types, ...$params);
+    if (!$stmt->execute()) return 0;
+    $res = $stmt->get_result();
+    $row = $res ? $res->fetch_row() : null;
+    return $row[0] ?? 0;
+}
+
+function wc_rows(mysqli $conn, string $sql, string $types = '', array $params = []): array {
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) return [];
+    if ($types && $params) $stmt->bind_param($types, ...$params);
+    if (!$stmt->execute()) return [];
+    $res = $stmt->get_result();
+    return $res ? ($res->fetch_all(MYSQLI_ASSOC) ?: []) : [];
+}
+
+function wc_has_column(mysqli $conn, string $table, string $column): bool {
+    $sql = "SHOW COLUMNS FROM `" . $conn->real_escape_string($table) . "` LIKE ?";
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) return false;
+    $stmt->bind_param("s", $column);
+    if (!$stmt->execute()) return false;
+    $res = $stmt->get_result();
+    return $res && $res->num_rows > 0;
+}
+
+function wc_stage_key(?string $roundName): string {
+    $r = strtoupper((string)$roundName);
+
+    if (str_contains($r, 'FINAL') && !str_contains($r, 'SEMI') && !str_contains($r, 'THIRD')) return 'Final';
+    if (str_contains($r, 'THIRD') || str_contains($r, 'PLAY-OFF')) return 'Third Place';
+    if (str_contains($r, 'SEMI')) return 'Semi Finals';
+    if (str_contains($r, 'QUARTER')) return 'Quarter Finals';
+    if (str_contains($r, '16') || str_contains($r, 'LAST_16') || str_contains($r, 'ROUND OF 16')) return 'Round of 16';
+    if (str_contains($r, '32') || str_contains($r, 'LAST_32') || str_contains($r, 'ROUND OF 32')) return 'Round of 32';
+
+    return 'Knockout';
+}
+
+function wc_match_status_label(array $m): string {
+    if ((int)($m['is_live'] ?? 0) === 1) return 'Live';
+    if ((int)($m['is_finished'] ?? 0) === 1) return 'Finished';
+
+    $short = strtoupper((string)($m['status_short'] ?? ''));
+    if (in_array($short, ['LIVE','1H','2H','HT'], true)) return 'Live';
+    if (in_array($short, ['FT','AET','PEN'], true)) return 'Finished';
+
+    return 'Upcoming';
+}
+
+function wc_safe_team($team): string {
+    $team = trim((string)$team);
+    return $team !== '' ? $team : 'TBA';
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'logout') {
+    if (hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) {
+        $_SESSION = [];
+        session_destroy();
+    }
+    header("Location: /WC2026/");
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'start_daily_game') {
+    header('Content-Type: application/json; charset=utf-8');
+
+    if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) {
+        echo json_encode(['ok' => false, 'message' => 'Invalid request.']);
+        exit;
+    }
+
+    $todaySession = wc_rows(
+        $conn,
+        "SELECT id, status, started_at, completed_at
+         FROM WC2026_Game_Sessions
+         WHERE user_id=? AND play_date=CURDATE()
+         LIMIT 1",
+        "i",
+        [$userId]
+    );
+
+    if (!empty($todaySession) && ($todaySession[0]['status'] ?? '') === 'Completed') {
+        echo json_encode(['ok' => false, 'message' => 'You already played today. Come back tomorrow!']);
+        exit;
+    }
+
+    /*
+     * If the user opened the game then refreshed/closed the browser before finishing,
+     * the row remains Started. Because the table has UNIQUE(user_id, play_date),
+     * we safely reset the Started row and allow the game to start again.
+     * Completed sessions are never reset.
+     */
+    $stmt = $conn->prepare("
+        INSERT INTO WC2026_Game_Sessions
+            (
+                user_id,
+                play_date,
+                goals,
+                goal_points,
+                target_points,
+                golden_goals,
+                golden_points,
+                combo_bonus,
+                mystery_bonus,
+                bonus_question_id,
+                bonus_answer,
+                bonus_correct,
+                bonus_points,
+                total_points,
+                duration_seconds,
+                status,
+                started_at,
+                completed_at,
+                played_at
+            )
+        VALUES
+            (
+                ?,
+                CURDATE(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                NULL,
+                NULL,
+                0,
+                0,
+                0,
+                30,
+                'Started',
+                NOW(),
+                NULL,
+                NOW()
+            )
+        ON DUPLICATE KEY UPDATE
+            goals = 0,
+            goal_points = 0,
+            target_points = 0,
+            golden_goals = 0,
+            golden_points = 0,
+            combo_bonus = 0,
+            mystery_bonus = 0,
+            bonus_question_id = NULL,
+            bonus_answer = NULL,
+            bonus_correct = 0,
+            bonus_points = 0,
+            total_points = 0,
+            duration_seconds = 30,
+            status = 'Started',
+            started_at = NOW(),
+            completed_at = NULL,
+            played_at = NOW()
+    ");
+
+    if (!$stmt) {
+        echo json_encode(['ok' => false, 'message' => 'Unable to start the game.']);
+        exit;
+    }
+
+    $stmt->bind_param("i", $userId);
+
+    if (!$stmt->execute()) {
+        echo json_encode(['ok' => false, 'message' => 'Unable to start the game. Please try again.']);
+        exit;
+    }
+
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'finish_daily_game') {
+    header('Content-Type: application/json; charset=utf-8');
+
+    try {
+        if (!hash_equals($_SESSION['csrf'] ?? '', $_POST['csrf'] ?? '')) {
+            echo json_encode(['ok' => false, 'message' => 'Invalid request.']);
+            exit;
+        }
+
+        $startedToday = (int)wc_scalar(
+            $conn,
+            "SELECT COUNT(*) FROM WC2026_Game_Sessions WHERE user_id=? AND play_date=CURDATE() AND status='Started'",
+            "i",
+            [$userId]
+        );
+
+        if ($startedToday <= 0) {
+            echo json_encode(['ok' => false, 'message' => 'This game is already completed or not started. Please refresh.']);
+            exit;
+        }
+
+        $goals = max(0, min(120, (int)($_POST['goals'] ?? 0)));
+        $duration = max(1, min(30, (int)($_POST['duration_seconds'] ?? 30)));
+        $questionId = max(0, (int)($_POST['bonus_question_id'] ?? 0));
+        $answerRaw = strtoupper(trim((string)($_POST['bonus_answer'] ?? '')));
+        $answer = in_array($answerRaw, ['A','B','C','D'], true) ? $answerRaw : '';
+
+        $targetPoints = max(0, min(3000, (int)($_POST['target_points'] ?? 0)));
+        $goldenGoals  = max(0, min(30, (int)($_POST['golden_goals'] ?? 0)));
+        $goldenPoints = max(0, min(1500, (int)($_POST['golden_points'] ?? 0)));
+        $comboBonus   = max(0, min(1500, (int)($_POST['combo_bonus'] ?? 0)));
+        $mysteryBonus = max(0, min(100, (int)($_POST['mystery_bonus'] ?? 0)));
+
+        $goalPoints = $targetPoints + $goldenPoints + $comboBonus + $mysteryBonus;
+        $bonusCorrect = 0;
+        $bonusPoints = 0;
+
+        if ($questionId > 0 && $answer !== '') {
+            $q = wc_rows(
+                $conn,
+                "SELECT correct_option, points FROM WC2026_Game_Questions WHERE id=? AND status='Active' LIMIT 1",
+                "i",
+                [$questionId]
+            );
+
+            if (!empty($q) && strtoupper((string)$q[0]['correct_option']) === $answer) {
+                $bonusCorrect = 1;
+                $bonusPoints = (int)$q[0]['points'];
+            }
+        }
+
+        $totalPoints = $goalPoints + $bonusPoints;
+
+        $stmt = $conn->prepare("
+            UPDATE WC2026_Game_Sessions
+            SET
+                goals = ?,
+                goal_points = ?,
+                target_points = ?,
+                golden_goals = ?,
+                golden_points = ?,
+                combo_bonus = ?,
+                mystery_bonus = ?,
+                bonus_question_id = ?,
+                bonus_answer = ?,
+                bonus_correct = ?,
+                bonus_points = ?,
+                total_points = ?,
+                duration_seconds = ?,
+                status = 'Completed',
+                completed_at = NOW()
+            WHERE user_id = ?
+              AND play_date = CURDATE()
+              AND status = 'Started'
+        ");
+
+        if (!$stmt) {
+            echo json_encode(['ok' => false, 'message' => 'Prepare failed: ' . $conn->error]);
+            exit;
+        }
+
+        $stmt->bind_param(
+            "iiiiiiiisiiiii",
+            $goals,
+            $goalPoints,
+            $targetPoints,
+            $goldenGoals,
+            $goldenPoints,
+            $comboBonus,
+            $mysteryBonus,
+            $questionId,
+            $answer,
+            $bonusCorrect,
+            $bonusPoints,
+            $totalPoints,
+            $duration,
+            $userId
+        );
+
+        if (!$stmt->execute()) {
+            error_log('WC2026 GAME SAVE ERROR: ' . $stmt->error);
+            echo json_encode(['ok' => false, 'message' => 'Execute failed: ' . $stmt->error]);
+            exit;
+        }
+
+        if ($stmt->affected_rows < 1) {
+            error_log('WC2026 GAME SAVE WARNING: No started row updated for user_id=' . $userId);
+            echo json_encode(['ok' => false, 'message' => 'No active started game found to update. Please refresh.']);
+            exit;
+        }
+
+        echo json_encode([
+            'ok' => true,
+            'goals' => $goals,
+            'goal_points' => $goalPoints,
+            'target_points' => $targetPoints,
+            'golden_goals' => $goldenGoals,
+            'golden_points' => $goldenPoints,
+            'combo_bonus' => $comboBonus,
+            'mystery_bonus' => $mysteryBonus,
+            'bonus_correct' => $bonusCorrect,
+            'bonus_points' => $bonusPoints,
+            'total_points' => $totalPoints
+        ]);
+        exit;
+    } catch (Throwable $e) {
+        error_log('WC2026 GAME SAVE FATAL: ' . $e->getMessage());
+        echo json_encode(['ok' => false, 'message' => 'Server error: ' . $e->getMessage()]);
+        exit;
+    }
+}
+
+$todayPlayed = (int)wc_scalar(
+    $conn,
+    "SELECT COUNT(*) FROM WC2026_Game_Sessions WHERE user_id=? AND play_date=CURDATE() AND status='Completed'",
+    "i",
+    [$userId]
+);
+
+$todayGame = wc_rows(
+    $conn,
+    "SELECT goals, goal_points, bonus_correct, bonus_points, total_points, status, started_at, completed_at, played_at
+     FROM WC2026_Game_Sessions
+     WHERE user_id=? AND play_date=CURDATE()
+     ORDER BY id DESC
+     LIMIT 1",
+    "i",
+    [$userId]
+);
+
+$participantsCount = (int)wc_scalar($conn, "SELECT COUNT(*) FROM WC2026_Users WHERE status='Active'");
+$gamesToday        = (int)wc_scalar($conn, "SELECT COUNT(*) FROM WC2026_Game_Sessions WHERE play_date=CURDATE()");
+$myGamePoints      = (int)wc_scalar($conn, "SELECT COALESCE(SUM(total_points),0) FROM WC2026_Game_Sessions WHERE user_id=?", "i", [$userId]);
+$myBestScore       = (int)wc_scalar($conn, "SELECT COALESCE(MAX(total_points),0) FROM WC2026_Game_Sessions WHERE user_id=?", "i", [$userId]);
+$playedDays        = (int)wc_scalar(
+    $conn,
+    "SELECT COUNT(*) FROM WC2026_Game_Sessions WHERE user_id=? AND status='Completed'",
+    "i",
+    [$userId]
+);
+
+
+$WC_FIXTURES_SUBQUERY = "
+        SELECT
+            fixture_id AS id,
+            fixture_id AS api_fixture_id,
+            `round` AS round_name,
+            home_id AS home_team_id,
+            COALESCE(home_name, 'TBA') AS home_team,
+            NULL AS home_logo,
+            away_id AS away_team_id,
+            COALESCE(away_name, 'TBA') AS away_team,
+            NULL AS away_logo,
+            DATE_ADD(kickoff_utc, INTERVAL 3 HOUR) AS match_datetime,
+            'Asia/Riyadh' AS timezone,
+            venue_name AS stadium,
+            venue_city AS city,
+            status_short,
+            status_long,
+            elapsed,
+            COALESCE(goals_home, ft_home) AS home_score,
+            COALESCE(goals_away, ft_away) AS away_score,
+            ht_home AS home_halftime_score,
+            ht_away AS away_halftime_score,
+            NULL AS winner_team_id,
+            CASE WHEN status_short IN ('LIVE','1H','HT','2H','ET','BT','P','SUSP','INT') THEN 1 ELSE 0 END AS is_live,
+            CASE WHEN status_short IN ('FT','AET','PEN') THEN 1 ELSE 0 END AS is_finished,
+            updated_at AS last_api_sync
+        FROM wc_fixtures
+    ";
+
+$matchesCount = (int)wc_scalar($conn, "SELECT COUNT(*) FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches");
+$liveMatchesCount = (int)wc_scalar($conn, "SELECT COUNT(*) FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches WHERE is_live=1 OR status_short IN ('LIVE','1H','2H','HT')");
+$finishedMatchesCount = (int)wc_scalar($conn, "SELECT COUNT(*) FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches WHERE is_finished=1 OR status_short IN ('FT','AET','PEN')");
+$upcomingMatchesCount = (int)wc_scalar($conn, "SELECT COUNT(*) FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches WHERE (is_finished=0 OR is_finished IS NULL) AND match_datetime >= NOW()");
+$lastApiSync = wc_scalar($conn, "SELECT MAX(last_api_sync) FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches");
+
+$liveMatches = wc_rows($conn, "
+    SELECT id, home_team, away_team, home_logo, away_logo, match_datetime, stadium, city,
+           status_short, status_long, elapsed, home_score, away_score, is_live, is_finished
+    FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches
+    WHERE is_live=1 OR status_short IN ('LIVE','1H','2H','HT')
+    ORDER BY match_datetime ASC
+    LIMIT 3
+");
+
+$nextMatch = wc_rows($conn, "
+    SELECT id, home_team, away_team, home_logo, away_logo, match_datetime, stadium, city,
+           status_short, status_long, elapsed, home_score, away_score, is_live, is_finished
+    FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches
+    WHERE (is_finished=0 OR is_finished IS NULL)
+      AND match_datetime >= NOW()
+    ORDER BY match_datetime ASC
+    LIMIT 1
+");
+
+$upcomingMatches = wc_rows($conn, "
+    SELECT id, home_team, away_team, home_logo, away_logo, match_datetime, stadium, city,
+           status_short, status_long, elapsed, home_score, away_score, is_live, is_finished
+    FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches
+    WHERE (is_finished=0 OR is_finished IS NULL)
+      AND match_datetime >= NOW()
+    ORDER BY match_datetime ASC
+    LIMIT 4
+");
+
+$latestResults = wc_rows($conn, "
+    SELECT id, home_team, away_team, home_logo, away_logo, match_datetime, stadium, city,
+           status_short, status_long, elapsed, home_score, away_score, is_live, is_finished
+    FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches
+    WHERE is_finished=1 OR status_short IN ('FT','AET','PEN')
+    ORDER BY match_datetime DESC
+    LIMIT 3
+");
+
+$newsMatches = wc_rows($conn, "
+    SELECT id, home_team, away_team, home_logo, away_logo, match_datetime, stadium, city,
+           round_name, status_short, status_long, elapsed, home_score, away_score, is_live, is_finished
+    FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches
+    ORDER BY
+        CASE
+            WHEN is_live = 1 OR status_short IN ('LIVE','1H','2H','HT') THEN 0
+            WHEN is_finished = 0 AND match_datetime >= NOW() THEN 1
+            ELSE 2
+        END,
+        match_datetime ASC
+    LIMIT 6
+");
+
+$mapMatches = wc_rows($conn, "
+    SELECT id, home_team, away_team, home_logo, away_logo, match_datetime, stadium, city,
+           round_name, status_short, status_long, elapsed, home_score, away_score, is_live, is_finished
+    FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches
+    ORDER BY
+        CASE
+            WHEN is_live = 1 OR status_short IN ('LIVE','1H','2H','HT') THEN 0
+            WHEN is_finished = 0 AND match_datetime >= NOW() THEN 1
+            ELSE 2
+        END,
+        match_datetime ASC
+    LIMIT 5
+");
+
+$standingsRows = wc_rows($conn, "
+    SELECT
+        grp AS group_name,
+        rank_pos AS position,
+        team_id,
+        team_name,
+        NULL AS team_logo,
+        played,
+        points,
+        gd AS goal_difference,
+        gf AS goals_for
+    FROM wc_standings
+    WHERE league_id = 1
+      AND season = 2026
+    ORDER BY grp ASC, rank_pos ASC
+");
+
+function wc_group_letter_from_name(?string $groupName): string {
+    $g = strtoupper(trim((string)$groupName));
+
+    if (preg_match('/GROUP\s+([A-Z])/', $g, $m)) return $m[1];
+    if (preg_match('/\b([A-L])\b/', $g, $m)) return $m[1];
+
+    return '';
+}
+
+foreach ($standingsRows as &$standingRow) {
+    $standingRow['group_letter'] = wc_group_letter_from_name($standingRow['group_name'] ?? '');
+}
+unset($standingRow);
+
+function wc_projected_team_by_position(array $standingsRows, string $groupLetter, int $position): array {
+    foreach ($standingsRows as $row) {
+        if (($row['group_letter'] ?? '') === $groupLetter && (int)($row['position'] ?? 0) === $position) {
+            return [
+                'team_id' => $row['team_id'] ?? null,
+                'team_name' => $row['team_name'] ?? ($position . $groupLetter),
+                'team_logo' => $row['team_logo'] ?? null,
+            ];
+        }
+    }
+
+    return [
+        'team_id' => null,
+        'team_name' => $position . $groupLetter,
+        'team_logo' => null,
+    ];
+}
+
+function wc_projected_best_thirds(array $standingsRows): array {
+    $thirds = [];
+
+    foreach ($standingsRows as $row) {
+        if ((int)($row['position'] ?? 0) === 3) {
+            $thirds[] = $row;
+        }
+    }
+
+    usort($thirds, function($a, $b) {
+        return
+            ((int)($b['points'] ?? 0) <=> (int)($a['points'] ?? 0)) ?:
+            ((int)($b['goal_difference'] ?? 0) <=> (int)($a['goal_difference'] ?? 0)) ?:
+            ((int)($b['goals_for'] ?? 0) <=> (int)($a['goals_for'] ?? 0)) ?:
+            strcmp((string)($a['team_name'] ?? ''), (string)($b['team_name'] ?? ''));
+    });
+
+    return array_slice($thirds, 0, 8);
+}
+
+function wc_projected_placeholder(string $label): array {
+    return [
+        'team_id' => null,
+        'team_name' => $label,
+        'team_logo' => null,
+    ];
+}
+
+$bestThirds = wc_projected_best_thirds($standingsRows);
+
+$projectedR32Slots = [
+    ['R32-01', 'Round of 32', ['A', 1], ['B', 2], '1A vs 2B', '2026-06-28 22:00:00'],
+    ['R32-02', 'Round of 32', ['C', 1], ['D', 2], '1C vs 2D', '2026-06-29 02:00:00'],
+    ['R32-03', 'Round of 32', ['E', 1], ['F', 2], '1E vs 2F', '2026-06-29 22:00:00'],
+    ['R32-04', 'Round of 32', ['G', 1], ['H', 2], '1G vs 2H', '2026-06-30 02:00:00'],
+    ['R32-05', 'Round of 32', ['I', 1], ['J', 2], '1I vs 2J', '2026-06-30 22:00:00'],
+    ['R32-06', 'Round of 32', ['K', 1], ['L', 2], '1K vs 2L', '2026-07-01 02:00:00'],
+    ['R32-07', 'Round of 32', ['B', 1], ['A', 2], '1B vs 2A', '2026-07-01 22:00:00'],
+    ['R32-08', 'Round of 32', ['D', 1], ['C', 2], '1D vs 2C', '2026-07-02 02:00:00'],
+    ['R32-09', 'Round of 32', ['F', 1], ['E', 2], '1F vs 2E', '2026-07-02 22:00:00'],
+    ['R32-10', 'Round of 32', ['H', 1], ['G', 2], '1H vs 2G', '2026-07-03 02:00:00'],
+    ['R32-11', 'Round of 32', ['J', 1], ['I', 2], '1J vs 2I', '2026-07-03 22:00:00'],
+    ['R32-12', 'Round of 32', ['L', 1], ['K', 2], '1L vs 2K', '2026-07-04 02:00:00'],
+    ['R32-13', 'Round of 32', ['A', 1], ['3RD', 1], '1A vs Best 3rd #1', '2026-07-04 22:00:00'],
+    ['R32-14', 'Round of 32', ['C', 1], ['3RD', 2], '1C vs Best 3rd #2', '2026-07-05 02:00:00'],
+    ['R32-15', 'Round of 32', ['E', 1], ['3RD', 3], '1E vs Best 3rd #3', '2026-07-05 22:00:00'],
+    ['R32-16', 'Round of 32', ['G', 1], ['3RD', 4], '1G vs Best 3rd #4', '2026-07-06 02:00:00'],
+];
+
+$projectedNextSlots = [
+    ['Round of 16', 'Winner R32-01', 'Winner R32-02', 'W R32-01 vs W R32-02', '2026-07-07 02:00:00'],
+    ['Round of 16', 'Winner R32-03', 'Winner R32-04', 'W R32-03 vs W R32-04', '2026-07-07 22:00:00'],
+    ['Round of 16', 'Winner R32-05', 'Winner R32-06', 'W R32-05 vs W R32-06', '2026-07-08 02:00:00'],
+    ['Round of 16', 'Winner R32-07', 'Winner R32-08', 'W R32-07 vs W R32-08', '2026-07-08 22:00:00'],
+    ['Quarter Finals', 'Winner R16-01', 'Winner R16-02', 'W R16-01 vs W R16-02', '2026-07-11 22:00:00'],
+    ['Quarter Finals', 'Winner R16-03', 'Winner R16-04', 'W R16-03 vs W R16-04', '2026-07-12 02:00:00'],
+    ['Semi Finals', 'Winner QF-01', 'Winner QF-02', 'W QF-01 vs W QF-02', '2026-07-15 02:00:00'],
+    ['Semi Finals', 'Winner QF-03', 'Winner QF-04', 'W QF-03 vs W QF-04', '2026-07-16 02:00:00'],
+    ['Final', 'Winner SF-01', 'Winner SF-02', 'W SF-01 vs W SF-02', '2026-07-19 22:00:00'],
+    ['Third Place', 'Loser SF-01', 'Loser SF-02', 'L SF-01 vs L SF-02', '2026-07-18 22:00:00'],
+];
+
+$knockoutMatches = [];
+
+foreach ($projectedR32Slots as $slot) {
+    [$slotId, $roundName, $homeRule, $awayRule, $sourceRule, $matchDatetime] = $slot;
+
+    $homeTeam = $homeRule[0] === '3RD'
+        ? ($bestThirds[$homeRule[1] - 1] ?? wc_projected_placeholder('Best 3rd #' . $homeRule[1]))
+        : wc_projected_team_by_position($standingsRows, $homeRule[0], $homeRule[1]);
+
+    $awayTeam = $awayRule[0] === '3RD'
+        ? ($bestThirds[$awayRule[1] - 1] ?? wc_projected_placeholder('Best 3rd #' . $awayRule[1]))
+        : wc_projected_team_by_position($standingsRows, $awayRule[0], $awayRule[1]);
+
+    $knockoutMatches[] = [
+        'id' => 0,
+        'home_team' => $homeTeam['team_name'] ?? $sourceRule,
+        'away_team' => $awayTeam['team_name'] ?? $sourceRule,
+        'home_logo' => $homeTeam['team_logo'] ?? null,
+        'away_logo' => $awayTeam['team_logo'] ?? null,
+        'match_datetime' => $matchDatetime,
+        'stadium' => 'Projected Path',
+        'city' => '',
+        'round_name' => $roundName,
+        'status_short' => 'NS',
+        'status_long' => 'Projected',
+        'elapsed' => null,
+        'home_score' => null,
+        'away_score' => null,
+        'is_live' => 0,
+        'is_finished' => 0,
+        'winner_team_id' => null,
+        'source_rule' => $sourceRule,
+    ];
+}
+
+$slotNo = 1;
+foreach ($projectedNextSlots as $slot) {
+    [$roundName, $homeName, $awayName, $sourceRule, $matchDatetime] = $slot;
+
+    $knockoutMatches[] = [
+        'id' => 0,
+        'home_team' => $homeName,
+        'away_team' => $awayName,
+        'home_logo' => null,
+        'away_logo' => null,
+        'match_datetime' => $matchDatetime,
+        'stadium' => 'Projected Path',
+        'city' => '',
+        'round_name' => $roundName,
+        'status_short' => 'NS',
+        'status_long' => 'Projected',
+        'elapsed' => null,
+        'home_score' => null,
+        'away_score' => null,
+        'is_live' => 0,
+        'is_finished' => 0,
+        'winner_team_id' => null,
+        'source_rule' => $sourceRule,
+    ];
+
+    $slotNo++;
+}
+
+$knockoutStages = [
+    'Round of 32' => [],
+    'Round of 16' => [],
+    'Quarter Finals' => [],
+    'Semi Finals' => [],
+    'Final' => [],
+    'Third Place' => [],
+    'Knockout' => []
+];
+
+foreach ($knockoutMatches as $km) {
+    $stageKey = wc_stage_key($km['round_name'] ?? '');
+    if (!isset($knockoutStages[$stageKey])) {
+        $knockoutStages[$stageKey] = [];
+    }
+    $knockoutStages[$stageKey][] = $km;
+}
+
+$knockoutTotal = count($knockoutMatches);
+$knockoutFinished = 0;
+
+$leaderboard = wc_rows($conn, "
+    SELECT 
+        u.full_name,
+        u.location,
+        COALESCE(SUM(g.total_points),0) AS total_points,
+        COALESCE(SUM(g.goals),0) AS goals
+    FROM WC2026_Users u
+    JOIN WC2026_Game_Sessions g ON g.user_id = u.id
+    WHERE u.status='Active'
+    GROUP BY u.id, u.full_name, u.location
+    ORDER BY total_points DESC, goals DESC, u.full_name ASC
+    LIMIT 5
+");
+
+$myRank = '--';
+$rankRow = wc_rows($conn, "
+    SELECT rank_no FROM (
+        SELECT 
+            user_id,
+            DENSE_RANK() OVER (ORDER BY COALESCE(SUM(total_points),0) DESC, COALESCE(SUM(goals),0) DESC) AS rank_no
+        FROM WC2026_Game_Sessions
+        GROUP BY user_id
+    ) r
+    WHERE user_id=?
+    LIMIT 1
+", "i", [$userId]);
+
+if ($rankRow) $myRank = '#' . (int)$rankRow[0]['rank_no'];
+
+$bonusQuestion = wc_rows($conn, "
+    SELECT id, question_text, option_a, option_b, option_c, option_d
+    FROM WC2026_Game_Questions
+    WHERE status='Active'
+    ORDER BY RAND()
+    LIMIT 1
+");
+
+$bonusQuestionJson = !empty($bonusQuestion)
+    ? json_encode($bonusQuestion[0], JSON_UNESCAPED_UNICODE)
+    : 'null';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CATRION FIFA World Cup 2026 Challenge</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<link rel="icon" type="image/png" href="<?= htmlspecialchars($iconPath, ENT_QUOTES, 'UTF-8') ?>">
+<link rel="apple-touch-icon" href="<?= htmlspecialchars($iconPath, ENT_QUOTES, 'UTF-8') ?>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<style>
+:root{
+    --navy:#071A35;
+    --deep:#0B2C55;
+    --blue:#0E63E6;
+    --sky:#55B7FF;
+    --cyan:#A8E7FF;
+    --gold:#F5C85B;
+    --gold2:#FFE19A;
+    --green:#11A36A;
+    --red:#E94747;
+    --bg:#EEF5FC;
+    --card:#FFFFFF;
+    --text:#102033;
+    --muted:#71839A;
+    --border:#DDE9F6;
+}
+
+*{box-sizing:border-box}
+
+body{
+    margin:0;
+    font-family:'Inter',sans-serif;
+    background:
+        radial-gradient(circle at 15% 8%, rgba(85,183,255,.22), transparent 28%),
+        radial-gradient(circle at 85% 0%, rgba(245,200,91,.16), transparent 24%),
+        linear-gradient(180deg,#EAF3FC 0%,#F7FAFE 48%,#EEF5FC 100%);
+    color:var(--text);
+}
+
+.hero{
+    min-height:420px;
+    color:#fff;
+    padding:26px 38px 130px;
+    position:relative;
+    overflow:hidden;
+    background:
+        radial-gradient(circle at 75% 18%, rgba(85,183,255,.35), transparent 28%),
+        radial-gradient(circle at 20% 20%, rgba(245,200,91,.18), transparent 25%),
+        linear-gradient(135deg,#071A35 0%,#0B2C55 48%,#0E63E6 100%);
+}
+
+.hero:before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:
+        repeating-linear-gradient(90deg,rgba(255,255,255,.04) 0 1px,transparent 1px 76px),
+        radial-gradient(circle at 50% 110%,rgba(255,255,255,.18),transparent 36%);
+    pointer-events:none;
+}
+
+.hero:after{
+    content:"\26BD";
+    position:absolute;
+    right:70px;
+    bottom:16px;
+    font-size:180px;
+    opacity:.10;
+}
+
+.nav{
+    position:relative;
+    z-index:2;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:18px;
+}
+
+.brand{
+    display:flex;
+    align-items:center;
+    gap:14px;
+}
+
+.logo-card{
+    background:#fff;
+    border-radius:18px;
+    height:58px;
+    width:150px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    box-shadow:0 14px 35px rgba(0,0,0,.20);
+}
+
+.logo-card img{
+    max-width:122px;
+    max-height:36px;
+}
+
+.brand-title{
+    font-size:18px;
+    font-weight:900;
+    letter-spacing:-.4px;
+}
+
+.brand-sub{
+    margin-top:3px;
+    font-size:12px;
+    color:rgba(255,255,255,.68);
+    font-weight:700;
+}
+
+.logout{
+    border:0;
+    color:#fff;
+    text-decoration:none;
+    font-weight:800;
+    font-size:13px;
+    padding:12px 18px;
+    border-radius:999px;
+    background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.22);
+    cursor:pointer;
+}
+
+.hero-content{
+    position:relative;
+    z-index:2;
+    max-width:1220px;
+    margin:70px auto 0;
+    display:grid;
+    grid-template-columns:1.1fr .9fr;
+    gap:28px;
+    align-items:end;
+}
+
+.badge{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:9px 14px;
+    border-radius:999px;
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.20);
+    font-size:12px;
+    font-weight:900;
+    margin-bottom:18px;
+}
+
+.badge i{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:var(--gold);
+    box-shadow:0 0 18px rgba(245,200,91,.9);
+}
+
+.hero h1{
+    margin:0;
+    font-size:54px;
+    line-height:1;
+    letter-spacing:-2px;
+    font-weight:900;
+}
+
+.hero h1 span{
+    color:#A8E7FF;
+}
+
+.hero p{
+    margin:18px 0 0;
+    max-width:650px;
+    color:rgba(255,255,255,.78);
+    line-height:1.8;
+    font-size:15px;
+}
+
+.daily-card{
+    background:rgba(255,255,255,.13);
+    border:1px solid rgba(255,255,255,.22);
+    backdrop-filter:blur(16px);
+    border-radius:28px;
+    padding:24px;
+}
+
+.daily-title{
+    font-size:12px;
+    color:rgba(255,255,255,.72);
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    font-weight:900;
+    margin-bottom:12px;
+}
+
+.daily-prize{
+    font-size:34px;
+    font-weight:900;
+    letter-spacing:-1px;
+}
+
+.daily-sub{
+    margin-top:8px;
+    color:rgba(255,255,255,.70);
+    font-size:13px;
+    line-height:1.6;
+}
+
+.container{
+    max-width:1220px;
+    margin:-82px auto 44px;
+    padding:0 24px;
+    position:relative;
+    z-index:5;
+}
+
+.stats{
+    display:grid;
+    grid-template-columns:repeat(5,1fr);
+    gap:16px;
+    margin-bottom:20px;
+}
+
+.stat{
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:26px;
+    padding:22px;
+    box-shadow:0 18px 38px rgba(7,42,85,.08);
+}
+
+.stat-label{
+    font-size:12px;
+    font-weight:900;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:.35px;
+}
+
+.stat-value{
+    margin-top:8px;
+    font-size:31px;
+    font-weight:900;
+    color:var(--deep);
+    letter-spacing:-1px;
+}
+
+.stat-note{
+    margin-top:5px;
+    color:#8A98AA;
+    font-size:12px;
+    font-weight:700;
+}
+
+.layout{
+    display:grid;
+    grid-template-columns:1.35fr .65fr;
+    gap:18px;
+}
+
+.card{
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:28px;
+    padding:24px;
+    box-shadow:0 18px 40px rgba(7,42,85,.07);
+}
+
+.card + .card{
+    margin-top:18px;
+}
+
+.card-title{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin:0 0 16px;
+    font-size:21px;
+    font-weight:900;
+    color:var(--deep);
+}
+
+.card-title small{
+    font-size:12px;
+    color:var(--muted);
+    font-weight:800;
+}
+
+
+.match-dashboard{
+    display:grid;
+    grid-template-columns:1.05fr .95fr;
+    gap:18px;
+    margin-bottom:18px;
+}
+
+.match-card-premium{
+    position:relative;
+    overflow:hidden;
+    min-height:255px;
+    color:#fff;
+    border:0;
+    background:
+        radial-gradient(circle at 82% 12%, rgba(245,200,91,.24), transparent 28%),
+        radial-gradient(circle at 20% 95%, rgba(85,183,255,.22), transparent 34%),
+        linear-gradient(135deg,#071A35,#0B2C55 55%,#0E63E6);
+}
+
+.match-card-premium:after{
+    content:"\26BD";
+    position:absolute;
+    right:22px;
+    bottom:-28px;
+    font-size:130px;
+    opacity:.10;
+}
+
+.match-kicker{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:8px 12px;
+    border-radius:999px;
+    background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.18);
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.5px;
+}
+
+.match-kicker i{
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:var(--gold);
+    box-shadow:0 0 18px rgba(245,200,91,.95);
+}
+
+.match-teams{
+    position:relative;
+    z-index:2;
+    display:grid;
+    grid-template-columns:1fr auto 1fr;
+    gap:16px;
+    align-items:center;
+    margin-top:22px;
+}
+
+.match-team{
+    text-align:center;
+}
+
+.team-logo{
+    width:58px;
+    height:58px;
+    display:grid;
+    place-items:center;
+    margin:0 auto 10px;
+    border-radius:18px;
+    background:rgba(255,255,255,.92);
+    box-shadow:0 16px 32px rgba(0,0,0,.22);
+    overflow:hidden;
+}
+
+.team-logo img{
+    width:42px;
+    height:42px;
+    object-fit:contain;
+}
+
+.team-logo span{
+    color:#0B2C55;
+    font-size:18px;
+    font-weight:900;
+}
+
+.match-team strong{
+    display:block;
+    color:#fff;
+    font-size:15px;
+    line-height:1.35;
+}
+
+.score-box{
+    min-width:92px;
+    text-align:center;
+    padding:13px 14px;
+    border-radius:20px;
+    background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.20);
+    box-shadow:0 18px 34px rgba(0,0,0,.16);
+}
+
+.score-box b{
+    display:block;
+    color:#fff;
+    font-size:28px;
+    font-weight:900;
+    letter-spacing:-1px;
+}
+
+.score-box span{
+    display:block;
+    margin-top:5px;
+    color:rgba(255,255,255,.72);
+    font-size:10px;
+    font-weight:900;
+    text-transform:uppercase;
+}
+
+.match-meta-premium{
+    position:relative;
+    z-index:2;
+    margin-top:18px;
+    padding:14px 16px;
+    border-radius:18px;
+    background:rgba(255,255,255,.10);
+    border:1px solid rgba(255,255,255,.14);
+    color:rgba(255,255,255,.78);
+    font-size:13px;
+    font-weight:800;
+    line-height:1.7;
+}
+
+.live-badge,
+.status-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    padding:7px 10px;
+    border-radius:999px;
+    font-size:11px;
+    font-weight:900;
+    text-transform:uppercase;
+}
+
+.live-badge{
+    color:#fff;
+    background:rgba(233,71,71,.95);
+    box-shadow:0 0 24px rgba(233,71,71,.35);
+}
+
+.status-badge{
+    color:#0B2C55;
+    background:#EAF4FF;
+}
+
+.live-badge:before{
+    content:"";
+    width:7px;
+    height:7px;
+    border-radius:50%;
+    background:#fff;
+    animation:livePulse 1.1s ease-in-out infinite;
+}
+
+.match-list-card{
+    min-height:255px;
+}
+
+.fixture-row{
+    display:grid;
+    grid-template-columns:1fr auto;
+    gap:14px;
+    align-items:center;
+    padding:13px 0;
+    border-bottom:1px solid #EDF2F7;
+}
+
+.fixture-row:last-child{
+    border-bottom:0;
+}
+
+.fixture-main{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    min-width:0;
+}
+
+.fixture-logos{
+    display:flex;
+    align-items:center;
+    flex-shrink:0;
+}
+
+.fixture-logos img,
+.fixture-logo-fallback{
+    width:26px;
+    height:26px;
+    border-radius:50%;
+    object-fit:contain;
+    background:#fff;
+    border:1px solid #E4ECF5;
+    display:grid;
+    place-items:center;
+    color:#0B2C55;
+    font-size:10px;
+    font-weight:900;
+}
+
+.fixture-logos img + img,
+.fixture-logo-fallback + .fixture-logo-fallback,
+.fixture-logos img + .fixture-logo-fallback,
+.fixture-logo-fallback + img{
+    margin-left:-8px;
+}
+
+.fixture-title{
+    color:var(--deep);
+    font-weight:900;
+    font-size:13px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.fixture-sub{
+    margin-top:3px;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:800;
+}
+
+.fixture-score{
+    min-width:70px;
+    text-align:center;
+    color:var(--deep);
+    font-size:15px;
+    font-weight:900;
+    padding:8px 10px;
+    border-radius:13px;
+    background:#F3F8FE;
+}
+
+.fixture-score.live{
+    color:#fff;
+    background:var(--red);
+}
+
+.match-links{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:16px;
+}
+
+.match-link{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:40px;
+    padding:10px 14px;
+    border-radius:14px;
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+}
+
+.match-link.primary{
+    color:#071A35;
+    background:linear-gradient(135deg,var(--gold),var(--gold2));
+}
+
+.match-link.soft{
+    color:#fff;
+    background:rgba(255,255,255,.13);
+    border:1px solid rgba(255,255,255,.18);
+}
+
+@keyframes livePulse{
+    0%,100%{opacity:.55;transform:scale(.88)}
+    50%{opacity:1;transform:scale(1.12)}
+}
+
+.game-panel{
+    border-radius:30px;
+    overflow:hidden;
+    background:#071A35;
+    border:1px solid rgba(7,42,85,.12);
+    position:relative;
+    min-height:520px;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.08);
+}
+
+.game-top{
+    position:absolute;
+    z-index:15;
+    top:18px;
+    left:110px;
+    right:110px;
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:0;
+    overflow:hidden;
+    border-radius:20px;
+    background:rgba(7,26,53,.78);
+    border:1px solid rgba(255,255,255,.18);
+    backdrop-filter:blur(14px);
+    box-shadow:0 18px 38px rgba(0,0,0,.25);
+}
+
+.game-pill{
+    color:#fff;
+    padding:16px 12px;
+    text-align:center;
+    border-right:1px solid rgba(255,255,255,.22);
+}
+
+.game-pill:last-child{
+    border-right:0;
+}
+
+.game-pill span{
+    display:block;
+    color:rgba(255,255,255,.76);
+    font-size:10px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.7px;
+}
+
+.game-pill b{
+    display:inline-block;
+    margin-top:4px;
+    font-size:34px;
+    line-height:1;
+    font-weight:900;
+    letter-spacing:-1px;
+}
+
+.game-pill:first-child b:after{
+    content:" SEC";
+    font-size:13px;
+    margin-left:5px;
+    color:rgba(255,255,255,.78);
+    letter-spacing:0;
+}
+
+.field{
+    position:absolute;
+    inset:0;
+    overflow:hidden;
+    background:
+        radial-gradient(circle at 15% 15%, rgba(255,255,255,.34), transparent 8%),
+        radial-gradient(circle at 85% 15%, rgba(255,255,255,.34), transparent 8%),
+        linear-gradient(180deg,#081B36 0%,#0C2445 26%,#163B39 44%,#187A36 68%,#0B5F2C 100%);
+}
+
+.field:before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,.04), transparent 32%),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 2px, transparent 2px 72px);
+    opacity:.75;
+}
+
+.stadium{
+    position:absolute;
+    left:0;
+    right:0;
+    top:0;
+    height:250px;
+    overflow:hidden;
+    background:
+        radial-gradient(circle at 15% 14%, rgba(255,255,255,.9), transparent 5%),
+        radial-gradient(circle at 85% 14%, rgba(255,255,255,.9), transparent 5%),
+        linear-gradient(180deg,#071A35 0%,#112A46 70%,transparent 100%);
+}
+
+.stadium:before{
+    content:"";
+    position:absolute;
+    left:-8%;
+    right:-8%;
+    bottom:4px;
+    height:150px;
+    border-radius:50% 50% 0 0;
+    background:
+        repeating-linear-gradient(90deg, rgba(255,255,255,.18) 0 3px, transparent 3px 14px),
+        linear-gradient(180deg, rgba(255,255,255,.12), rgba(0,0,0,.28));
+    opacity:.72;
+}
+
+.stadium:after{
+    content:"CATRION        CATRION        CATRION";
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:0;
+    height:34px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(7,26,53,.75);
+    color:rgba(255,255,255,.88);
+    font-weight:900;
+    letter-spacing:9px;
+    font-size:13px;
+}
+
+.light-beam{
+    position:absolute;
+    top:-120px;
+    width:360px;
+    height:460px;
+    background:linear-gradient(180deg,rgba(255,255,255,.32),transparent 74%);
+    filter:blur(14px);
+    opacity:.8;
+    pointer-events:none;
+}
+
+.light-beam.left{
+    left:30px;
+    transform:rotate(22deg);
+    transform-origin:top center;
+}
+
+.light-beam.right{
+    right:30px;
+    transform:rotate(-22deg);
+    transform-origin:top center;
+}
+
+.pitch-lines{
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:0;
+    height:310px;
+    background:
+        linear-gradient(90deg, transparent 49.7%, rgba(255,255,255,.18) 49.7% 50.3%, transparent 50.3%),
+        radial-gradient(ellipse at 50% 30%, transparent 0 90px, rgba(255,255,255,.22) 92px 95px, transparent 97px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.055) 0 55px, rgba(255,255,255,.025) 55px 110px);
+}
+
+.goal{
+    position:absolute;
+    z-index:3;
+    left:50%;
+    top:160px;
+    transform:translateX(-50%);
+    width:430px;
+    height:170px;
+    border:10px solid rgba(255,255,255,.96);
+    border-bottom:0;
+    border-radius:8px 8px 0 0;
+    background:
+        repeating-linear-gradient(90deg,rgba(255,255,255,.24) 0 2px,transparent 2px 22px),
+        repeating-linear-gradient(0deg,rgba(255,255,255,.22) 0 2px,transparent 2px 22px),
+        rgba(255,255,255,.06);
+    box-shadow:0 12px 30px rgba(0,0,0,.26);
+}
+
+.goal:after{
+    content:"";
+    position:absolute;
+    left:50%;
+    bottom:-50px;
+    width:110%;
+    height:5px;
+    transform:translateX(-50%);
+    background:rgba(255,255,255,.9);
+    border-radius:999px;
+}
+
+.keeper{
+    position:absolute;
+    z-index:5;
+    top:242px;
+    width:92px;
+    height:116px;
+    transform:translateX(-50%);
+    filter:drop-shadow(0 13px 16px rgba(0,0,0,.30));
+}
+
+.keeper:before{
+    content:"";
+    position:absolute;
+    left:50%;
+    top:0;
+    transform:translateX(-50%);
+    width:30px;
+    height:30px;
+    border-radius:50%;
+    background:#F2C49B;
+    box-shadow:0 0 0 4px #173019;
+}
+
+.keeper:after{
+    content:"";
+    position:absolute;
+    left:50%;
+    top:32px;
+    transform:translateX(-50%);
+    width:58px;
+    height:58px;
+    border-radius:16px 16px 20px 20px;
+    background:linear-gradient(180deg,#0D8E52,#07683B);
+    box-shadow:
+        -46px 13px 0 -17px #0D8E52,
+        46px 13px 0 -17px #0D8E52,
+        -18px 72px 0 -13px #102033,
+        18px 72px 0 -13px #102033;
+}
+
+.ball{
+    position:absolute;
+    z-index:10;
+    left:50%;
+    bottom:78px;
+    transform:translateX(-50%);
+    width:78px;
+    height:78px;
+    border:0;
+    background:transparent;
+    border-radius:50%;
+    display:grid;
+    place-items:center;
+    font-size:70px;
+    line-height:1;
+    padding:0;
+    filter:drop-shadow(0 16px 18px rgba(0,0,0,.35));
+    transition:.36s cubic-bezier(.2,.85,.2,1.05);
+    cursor:pointer;
+    user-select:none;
+    -webkit-tap-highlight-color:transparent;
+    animation:ballPulse 1.45s ease-in-out infinite;
+}
+
+.ball::before{
+    content:"\26BD";
+}
+
+.ball.disabled{
+    cursor:not-allowed;
+    opacity:.72;
+    animation:none;
+}
+
+.ball.shooting{
+    transform:translateX(-50%) scale(.82);
+}
+
+.tap-hint{
+    position:absolute;
+    z-index:12;
+    left:32px;
+    right:32px;
+    bottom:18px;
+    min-height:54px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:12px;
+    border-radius:18px;
+    background:rgba(7,26,53,.72);
+    color:#fff;
+    font-size:17px;
+    font-weight:900;
+    box-shadow:0 14px 30px rgba(0,0,0,.25);
+    backdrop-filter:blur(10px);
+}
+
+.tap-hint small{
+    display:block;
+    color:rgba(255,255,255,.72);
+    font-size:11px;
+    font-weight:800;
+    margin-top:2px;
+}
+
+.aim{
+    position:absolute;
+    z-index:9;
+    left:50%;
+    bottom:166px;
+    transform:translateX(-50%);
+    width:62%;
+    height:8px;
+    border-radius:999px;
+    background:rgba(255,255,255,.26);
+    overflow:visible;
+}
+
+.aim:before{
+    content:"Target line";
+    position:absolute;
+    left:50%;
+    bottom:15px;
+    transform:translateX(-50%);
+    color:rgba(255,255,255,.68);
+    font-size:10px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.6px;
+}
+
+.aim-dot{
+    position:absolute;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:24px;
+    height:24px;
+    border-radius:50%;
+    background:var(--gold);
+    box-shadow:0 0 20px rgba(245,200,91,.9);
+}
+
+.goal-flash{
+    position:absolute;
+    inset:0;
+    z-index:18;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    font-size:72px;
+    font-weight:900;
+    color:#fff;
+    text-shadow:0 12px 30px rgba(0,0,0,.45);
+    background:rgba(17,163,106,.24);
+    animation:goalPop .75s ease;
+}
+
+.goal-flash.active{
+    display:flex;
+}
+
+.miss-flash{
+    position:absolute;
+    inset:0;
+    z-index:18;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    font-size:52px;
+    font-weight:900;
+    color:#fff;
+    text-shadow:0 12px 30px rgba(0,0,0,.45);
+    background:rgba(233,71,71,.18);
+    animation:goalPop .55s ease;
+}
+
+.miss-flash.active{
+    display:flex;
+}
+
+.countdown-overlay{
+    position:absolute;
+    inset:0;
+    z-index:19;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    background:rgba(7,26,53,.48);
+    color:#fff;
+    font-size:94px;
+    font-weight:900;
+    text-shadow:0 18px 40px rgba(0,0,0,.45);
+}
+
+.countdown-overlay.active{
+    display:flex;
+}
+
+@keyframes goalPop{
+    0%{transform:scale(.85);opacity:0}
+    35%{transform:scale(1.06);opacity:1}
+    100%{transform:scale(1);opacity:0}
+}
+
+@keyframes ballPulse{
+    0%,100%{transform:translateX(-50%) scale(1)}
+    50%{transform:translateX(-50%) scale(1.08)}
+}
+
+.game-actions{
+    display:flex;
+    gap:12px;
+    margin-top:18px;
+    align-items:center;
+    flex-wrap:wrap;
+}
+
+.primary-btn,
+.secondary-btn{
+    border:0;
+    min-height:48px;
+    border-radius:16px;
+    padding:12px 18px;
+    font-size:14px;
+    font-weight:900;
+    cursor:pointer;
+}
+
+.primary-btn{
+    background:linear-gradient(135deg,var(--gold),var(--gold2));
+    color:#071A35;
+}
+
+.secondary-btn{
+    background:#EAF4FF;
+    color:var(--deep);
+}
+
+.hidden-shoot{
+    display:none;
+}
+
+.game-tip{
+    color:var(--muted);
+    font-size:13px;
+    font-weight:800;
+}
+
+.disabled-box{
+    padding:24px;
+    border-radius:22px;
+    background:#FFF8E4;
+    border:1px solid #F3DFA2;
+    color:#755B14;
+    line-height:1.7;
+    font-size:14px;
+}
+
+.leader-row,
+.profile-line{
+    border-bottom:1px solid #EDF2F7;
+}
+
+.leader-row{
+    display:grid;
+    grid-template-columns:34px 1fr auto;
+    gap:11px;
+    align-items:center;
+    padding:13px 0;
+}
+
+.leader-row:last-child,
+.profile-line:last-child{
+    border-bottom:0;
+}
+
+.rank{
+    width:30px;
+    height:30px;
+    display:grid;
+    place-items:center;
+    border-radius:11px;
+    background:#EAF4FF;
+    color:var(--deep);
+    font-weight:900;
+    font-size:12px;
+}
+
+.leader-name{
+    font-size:13px;
+    font-weight:900;
+    color:var(--deep);
+}
+
+.leader-loc{
+    margin-top:3px;
+    color:var(--muted);
+    font-size:11px;
+}
+
+.points{
+    color:var(--green);
+    font-weight:900;
+}
+
+.profile-line{
+    display:flex;
+    justify-content:space-between;
+    gap:12px;
+    padding:13px 0;
+    font-size:14px;
+}
+
+.profile-line span:first-child{
+    color:var(--muted);
+    font-weight:700;
+}
+
+.profile-line span:last-child{
+    color:var(--deep);
+    font-weight:900;
+    text-align:right;
+}
+
+.modal{
+    position:fixed;
+    inset:0;
+    z-index:100;
+    background:rgba(7,26,53,.72);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:22px;
+}
+
+.modal.active{
+    display:flex;
+}
+
+.modal-card{
+    width:100%;
+    max-width:520px;
+    background:#fff;
+    border-radius:28px;
+    padding:28px;
+    box-shadow:0 30px 80px rgba(0,0,0,.35);
+}
+
+.modal-kicker{
+    color:var(--blue);
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    margin-bottom:10px;
+}
+
+.modal-card h3{
+    margin:0 0 18px;
+    font-size:25px;
+    color:var(--deep);
+    letter-spacing:-.8px;
+}
+
+.answers{
+    display:grid;
+    gap:10px;
+}
+
+.answer-btn{
+    border:1px solid var(--border);
+    background:#F7FAFE;
+    padding:14px;
+    border-radius:16px;
+    text-align:left;
+    cursor:pointer;
+    font-weight:800;
+    color:var(--deep);
+}
+
+.answer-btn:hover{
+    border-color:var(--blue);
+    background:#EAF4FF;
+}
+
+.result-box{
+    display:none;
+    margin-top:14px;
+    padding:14px;
+    border-radius:16px;
+    font-weight:900;
+}
+
+.result-box.ok{
+    display:block;
+    color:var(--green);
+    background:#EFFFF7;
+}
+
+.result-box.bad{
+    display:block;
+    color:var(--red);
+    background:#FFF1F0;
+}
+
+
+.target-zone{
+    position:absolute;
+    z-index:4;
+    display:grid;
+    place-items:center;
+    border-radius:999px;
+    color:#071A35;
+    font-size:11px;
+    font-weight:900;
+    background:rgba(255,225,154,.92);
+    border:2px solid rgba(255,255,255,.94);
+    box-shadow:0 0 24px rgba(245,200,91,.65);
+    pointer-events:none;
+}
+
+.target-zone.high{width:48px;height:48px;top:180px}
+.target-zone.mid{width:42px;height:42px;top:238px;background:rgba(168,231,255,.90)}
+.target-zone.center{width:54px;height:54px;top:223px;background:rgba(255,255,255,.86)}
+
+.target-zone.left{left:calc(50% - 190px)}
+.target-zone.right{left:calc(50% + 142px)}
+.target-zone.center{left:calc(50% - 27px)}
+
+.golden-banner,
+.combo-banner{
+    position:absolute;
+    z-index:16;
+    left:50%;
+    transform:translateX(-50%);
+    padding:10px 16px;
+    border-radius:999px;
+    font-size:13px;
+    font-weight:900;
+    letter-spacing:.4px;
+    display:none;
+    box-shadow:0 16px 34px rgba(0,0,0,.22);
+}
+
+.golden-banner{
+    bottom:128px;
+    color:#071A35;
+    background:linear-gradient(135deg,#F5C85B,#FFE19A);
+}
+
+.combo-banner{
+    top:96px;
+    color:#fff;
+    background:rgba(14,99,230,.82);
+    border:1px solid rgba(255,255,255,.28);
+}
+
+.golden-banner.active,
+.combo-banner.active{
+    display:block;
+}
+
+.ball.golden::before{
+    content:"\1F7E1";
+}
+
+.ball.golden{
+    box-shadow:0 0 0 8px rgba(245,200,91,.18), 0 0 44px rgba(245,200,91,.95);
+    animation:goldenPulse .75s ease-in-out infinite;
+}
+
+.mystery-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:14px;
+    margin-top:18px;
+}
+
+.food-roll-machine{
+    padding:18px;
+    border-radius:26px;
+    background:
+        radial-gradient(circle at 20% 0%, rgba(245,200,91,.28), transparent 30%),
+        linear-gradient(135deg,#071A35,#0B2C55);
+    border:1px solid rgba(255,255,255,.14);
+    box-shadow:0 22px 50px rgba(7,42,85,.25);
+}
+
+.food-slot{
+    height:112px;
+    border-radius:24px;
+    display:grid;
+    place-items:center;
+    font-size:56px;
+    background:#fff;
+    border:3px solid rgba(245,200,91,.75);
+    box-shadow:
+        inset 0 -10px 18px rgba(7,42,85,.08),
+        0 16px 26px rgba(0,0,0,.18);
+    overflow:hidden;
+    user-select:none;
+}
+
+.food-slot.rolling{
+    animation:slotShake .16s linear infinite;
+}
+
+.food-roll-btn{
+    width:100%;
+    min-height:52px;
+    margin-top:16px;
+    border:0;
+    border-radius:18px;
+    cursor:pointer;
+    color:#071A35;
+    font-size:15px;
+    font-weight:900;
+    background:linear-gradient(135deg,#F5C85B,#FFE19A);
+    box-shadow:0 16px 30px rgba(7,42,85,.18);
+}
+
+.food-roll-btn:disabled{
+    opacity:.65;
+    cursor:not-allowed;
+}
+
+.food-roll-result{
+    display:none;
+    margin-top:16px;
+    padding:14px 16px;
+    border-radius:18px;
+    text-align:center;
+    color:#071A35;
+    font-weight:900;
+    background:#EFFFF7;
+    border:1px solid rgba(17,163,106,.25);
+    animation:rollResultPop .45s ease;
+}
+
+.food-roll-result.active{
+    display:block;
+}
+
+.food-roll-result strong{
+    display:block;
+    margin-top:5px;
+    font-size:30px;
+    color:var(--green);
+}
+
+.mystery-note{
+    color:var(--muted);
+    font-weight:800;
+    line-height:1.6;
+}
+
+@keyframes slotShake{
+    0%{transform:translateY(0) scale(1)}
+    50%{transform:translateY(-4px) scale(1.04)}
+    100%{transform:translateY(0) scale(1)}
+}
+
+@keyframes rollResultPop{
+    0%{opacity:0;transform:scale(.86) translateY(8px)}
+    100%{opacity:1;transform:scale(1) translateY(0)}
+}
+
+@keyframes goldenPulse{
+    0%,100%{transform:translateX(-50%) scale(1)}
+    50%{transform:translateX(-50%) scale(1.14)}
+}
+
+
+@media(max-width:1050px){
+    .hero-content,
+    .layout,
+    .match-dashboard{
+        grid-template-columns:1fr;
+    }
+
+    .stats{
+        grid-template-columns:repeat(2,1fr);
+    }
+}
+
+@media(max-width:640px){
+    .hero{
+        padding:22px 18px 120px;
+    }
+
+    .nav{
+        align-items:flex-start;
+        flex-direction:column;
+    }
+
+    .hero-content{
+        margin-top:46px;
+    }
+
+    .hero h1{
+        font-size:38px;
+    }
+
+    .stats{
+        grid-template-columns:1fr;
+    }
+
+    .game-top{
+        grid-template-columns:1fr 1fr 1fr;
+    }
+
+    .goal{
+        width:280px;
+        top:170px;
+    }
+
+    .game-top{
+        left:14px;
+        right:14px;
+    }
+
+    .game-pill b{
+        font-size:24px;
+    }
+
+    .keeper{
+        top:252px;
+    }
+
+    .ball{
+        width:82px;
+        height:82px;
+        font-size:62px;
+    }
+
+    .tap-hint{
+        left:18px;
+        right:18px;
+        font-size:14px;
+    }
+
+    .game-actions{
+        flex-direction:column;
+    }
+}
+
+
+/* ==========================================================
+   Premium WC2026 polish - keeps the same layout, improves scale/icons/motion
+   ========================================================== */
+body{
+    min-height:100vh;
+    background-attachment:fixed;
+}
+.hero{
+    min-height:455px;
+    padding-bottom:145px;
+}
+.hero:before{
+    background:
+        repeating-linear-gradient(90deg,rgba(255,255,255,.045) 0 1px,transparent 1px 76px),
+        radial-gradient(circle at 50% 110%,rgba(255,255,255,.18),transparent 36%),
+        linear-gradient(135deg,rgba(255,255,255,.08),transparent 45%);
+}
+.nav{
+    max-width:1220px;
+    margin:0 auto;
+}
+.top-actions{
+    position:relative;
+    z-index:3;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    flex-wrap:wrap;
+}
+.top-link{
+    color:#fff;
+    text-decoration:none;
+    font-weight:900;
+    font-size:13px;
+    padding:12px 16px;
+    border-radius:999px;
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.20);
+    transition:.22s ease;
+}
+.top-link:hover,
+.top-link.active{
+    background:#fff;
+    color:var(--deep);
+    transform:translateY(-1px);
+}
+.logout{
+    min-height:43px;
+    transition:.22s ease;
+}
+.logout:hover{
+    background:rgba(255,255,255,.22);
+    transform:translateY(-1px);
+}
+.logo-card{
+    width:164px;
+    height:62px;
+    border-radius:20px;
+}
+.logo-card img{
+    max-width:134px;
+    max-height:40px;
+}
+.brand-title{
+    font-size:19px;
+}
+.brand-sub{
+    color:rgba(255,255,255,.78);
+}
+.hero-content{
+    grid-template-columns:1.05fr .95fr;
+    align-items:center;
+}
+.hero h1{
+    font-size:58px;
+    line-height:.98;
+}
+.daily-card{
+    position:relative;
+    overflow:hidden;
+    padding:28px;
+    box-shadow:0 28px 70px rgba(0,0,0,.20);
+}
+.daily-card:before{
+    content:"\1F3C6";
+    position:absolute;
+    right:24px;
+    top:16px;
+    font-size:76px;
+    opacity:.12;
+}
+.hero-mini-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:10px;
+    margin-top:18px;
+}
+.hero-mini-grid div{
+    padding:12px 10px;
+    border-radius:18px;
+    background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.16);
+    text-align:center;
+}
+.hero-mini-grid b{
+    display:block;
+    font-size:20px;
+    color:#fff;
+    font-weight:900;
+}
+.hero-mini-grid span{
+    display:block;
+    margin-top:3px;
+    font-size:10px;
+    font-weight:900;
+    color:rgba(255,255,255,.66);
+    text-transform:uppercase;
+}
+.stats{
+    gap:18px;
+}
+.stat{
+    position:relative;
+    overflow:hidden;
+    min-height:140px;
+    padding:24px 22px 22px;
+    transition:.24s ease;
+}
+.stat:hover,
+.card:hover{
+    transform:translateY(-2px);
+    box-shadow:0 22px 48px rgba(7,42,85,.10);
+}
+.stat:before{
+    position:absolute;
+    right:18px;
+    top:15px;
+    width:42px;
+    height:42px;
+    display:grid;
+    place-items:center;
+    border-radius:16px;
+    background:#EAF4FF;
+    font-size:21px;
+    box-shadow:inset 0 -8px 14px rgba(7,42,85,.04);
+}
+.stat:nth-child(1):before{content:"\2B50";}
+.stat:nth-child(2):before{content:"\1F3C5";}
+.stat:nth-child(3):before{content:"\1F525";}
+.stat:nth-child(4):before{content:"\1F30D";}
+.stat:nth-child(5):before{content:"\1F3C6";background:#FFF4CF;}
+.stat-value{
+    font-size:34px;
+}
+.card{
+    transition:.24s ease;
+}
+.match-dashboard{
+    align-items:stretch;
+}
+.match-card-premium{
+    border-radius:30px;
+    min-height:290px;
+    padding:28px;
+}
+.match-list-card{
+    min-height:290px;
+}
+.match-teams{
+    gap:20px;
+}
+.team-logo{
+    width:66px;
+    height:66px;
+    border-radius:22px;
+}
+.team-logo img{
+    width:48px;
+    height:48px;
+}
+.score-box{
+    min-width:102px;
+    padding:15px 16px;
+}
+.fixture-row{
+    padding:14px 0;
+}
+.fixture-title{
+    max-width:245px;
+}
+.game-panel{
+    min-height:555px;
+    border-radius:32px;
+}
+.game-top{
+    left:88px;
+    right:88px;
+}
+.goal{
+    top:168px;
+    width:450px;
+    height:178px;
+}
+.keeper{
+    top:254px;
+}
+.ball{
+    bottom:70px;
+    width:86px;
+    height:86px;
+    font-size:76px;
+}
+.aim{
+    bottom:174px;
+}
+.tap-hint{
+    bottom:20px;
+    min-height:60px;
+}
+.leader-row{
+    padding:15px 0;
+}
+.rank{
+    width:34px;
+    height:34px;
+    border-radius:13px;
+}
+.points{
+    padding:6px 10px;
+    border-radius:999px;
+    background:#EFFFF7;
+}
+.profile-line{
+    padding:15px 0;
+}
+.food-roll-machine{
+    border-radius:28px;
+}
+.food-slot{
+    height:120px;
+    font-size:60px;
+}
+@media(max-width:1050px){
+    .hero-content{
+        align-items:start;
+    }
+    .hero h1{
+        font-size:48px;
+    }
+}
+@media(max-width:640px){
+    .top-actions{
+        width:100%;
+    }
+    .top-link,.logout{
+        padding:10px 13px;
+        font-size:12px;
+    }
+    .logo-card{
+        width:150px;
+        height:58px;
+    }
+    .hero-mini-grid{
+        grid-template-columns:1fr;
+    }
+    .stat{
+        min-height:118px;
+    }
+    .match-card-premium{
+        padding:22px;
+    }
+    .match-teams{
+        grid-template-columns:1fr;
+    }
+    .score-box{
+        margin:0 auto;
+    }
+    .fixture-row{
+        grid-template-columns:1fr;
+    }
+    .fixture-score{
+        width:max-content;
+    }
+    .game-panel{
+        min-height:520px;
+    }
+    .food-slot{
+        height:92px;
+        font-size:46px;
+    }
+}
+
+
+/* ================= MOBILE FIXES ================= */
+@media (max-width:768px){
+
+.hero{
+    padding:18px 14px 100px !important;
+    min-height:auto !important;
+}
+
+.hero-content,
+.layout,
+.match-dashboard{
+    grid-template-columns:1fr !important;
+    gap:14px !important;
+}
+
+.hero h1{
+    font-size:34px !important;
+    line-height:1.05 !important;
+}
+
+.container{
+    padding:0 12px !important;
+    margin-top:-55px !important;
+}
+
+.stats{
+    grid-template-columns:1fr !important;
+    gap:10px !important;
+}
+
+.stat{
+    min-height:auto !important;
+    padding:16px !important;
+}
+
+.logo-card{
+    width:120px !important;
+    height:50px !important;
+}
+
+.logo-card img{
+    max-width:95px !important;
+}
+
+.match-card-premium,
+.match-list-card{
+    min-height:auto !important;
+}
+
+.match-teams{
+    grid-template-columns:1fr auto 1fr !important;
+    gap:8px !important;
+}
+
+.team-logo{
+    width:48px !important;
+    height:48px !important;
+}
+
+.team-logo img{
+    width:34px !important;
+    height:34px !important;
+}
+
+.score-box{
+    min-width:70px !important;
+    padding:10px !important;
+}
+
+.score-box b{
+    font-size:20px !important;
+}
+
+.game-panel{
+    min-height:430px !important;
+}
+
+.game-top{
+    left:10px !important;
+    right:10px !important;
+    top:10px !important;
+}
+
+.game-pill{
+    padding:10px 6px !important;
+}
+
+.game-pill b{
+    font-size:20px !important;
+}
+
+.goal{
+    width:250px !important;
+    height:120px !important;
+    top:145px !important;
+}
+
+.keeper{
+    top:215px !important;
+    width:70px !important;
+}
+
+.ball{
+    width:66px !important;
+    height:66px !important;
+    font-size:58px !important;
+    bottom:60px !important;
+}
+
+.aim{
+    width:75% !important;
+    bottom:130px !important;
+}
+
+.tap-hint{
+    left:10px !important;
+    right:10px !important;
+    font-size:12px !important;
+    min-height:44px !important;
+}
+
+.food-slot{
+    height:80px !important;
+    font-size:42px !important;
+}
+
+.modal{
+    padding:10px !important;
+}
+
+.modal-card{
+    max-width:100% !important;
+    border-radius:22px !important;
+    padding:18px !important;
+}
+}
+
+/* ================= DAILY GOAL RUSH STABILITY FIXES ================= */
+.game-panel{
+    isolation:isolate;
+}
+
+.game-panel .field{
+    border-radius:32px;
+}
+
+.game-panel .goal,
+.game-panel .target-zone,
+.game-panel .keeper,
+.game-panel .ball,
+.game-panel .aim,
+.game-panel .tap-hint,
+.game-panel .goal-flash,
+.game-panel .miss-flash,
+.game-panel .countdown-overlay{
+    will-change:transform;
+}
+
+.food-roll-machine,
+.food-slot,
+.food-roll-result{
+    backface-visibility:hidden;
+}
+
+.food-slot{
+    line-height:1;
+}
+
+@media(max-width:768px){
+    .target-zone.high{
+        width:38px !important;
+        height:38px !important;
+        top:152px !important;
+    }
+
+    .target-zone.mid{
+        width:34px !important;
+        height:34px !important;
+        top:196px !important;
+    }
+
+    .target-zone.center{
+        width:42px !important;
+        height:42px !important;
+        top:188px !important;
+        left:calc(50% - 21px) !important;
+    }
+
+    .target-zone.left{
+        left:calc(50% - 112px) !important;
+    }
+
+    .target-zone.right{
+        left:calc(50% + 74px) !important;
+    }
+
+    .golden-banner{
+        bottom:108px !important;
+        font-size:11px !important;
+    }
+
+    .combo-banner{
+        top:76px !important;
+        font-size:11px !important;
+    }
+
+    .mystery-grid{
+        gap:8px !important;
+    }
+
+    .food-roll-machine{
+        padding:12px !important;
+    }
+}
+/* ================= END DAILY GOAL RUSH STABILITY FIXES ================= */
+
+/* ================= END MOBILE FIXES ================= */
+
+
+/* ================= 30 SEC PROFILE MOBILE SAFETY ================= */
+@media (max-width:768px){
+    .profile-line{
+        align-items:flex-start !important;
+    }
+}
+/* ================= END 30 SEC PROFILE MOBILE SAFETY ================= */
+
+
+/* ================= LIVE MAP + NEWS + BRACKET ================= */
+.news-ticker{
+    max-width:1220px;
+    margin:-28px auto 18px;
+    padding:0 24px;
+    position:relative;
+    z-index:6;
+}
+.news-ticker-inner{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    min-height:48px;
+    overflow:hidden;
+    border-radius:18px;
+    background:linear-gradient(135deg,#071A35,#0B2C55);
+    color:#fff;
+    border:1px solid rgba(255,255,255,.14);
+    box-shadow:0 18px 38px rgba(7,42,85,.16);
+}
+.news-label{
+    flex:0 0 auto;
+    align-self:stretch;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:0 18px;
+    background:#E94747;
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    letter-spacing:.3px;
+}
+.news-track{min-width:0;white-space:nowrap;overflow:hidden;flex:1;}
+.news-track span{
+    display:inline-block;
+    padding-right:34px;
+    color:rgba(255,255,255,.92);
+    font-size:13px;
+    font-weight:800;
+    animation:newsMove 42s linear infinite;
+}
+.news-view{
+    flex:0 0 auto;
+    color:#fff;
+    text-decoration:none;
+    font-size:12px;
+    font-weight:900;
+    padding:0 16px;
+}
+@keyframes newsMove{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.live-map-card,.knockout-card{
+    border:0;
+    color:#fff;
+    background:
+        radial-gradient(circle at 80% 18%, rgba(85,183,255,.26), transparent 30%),
+        radial-gradient(circle at 20% 82%, rgba(17,163,106,.18), transparent 30%),
+        linear-gradient(135deg,#071A35,#0B2C55 58%,#0E63E6);
+    overflow:hidden;
+    position:relative;
+    margin-bottom:18px;
+}
+.live-map-card:before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background:
+        radial-gradient(circle at 12% 42%, rgba(255,255,255,.18) 0 2px, transparent 3px),
+        radial-gradient(circle at 28% 55%, rgba(85,183,255,.60) 0 3px, transparent 5px),
+        radial-gradient(circle at 45% 34%, rgba(17,163,106,.70) 0 4px, transparent 7px),
+        radial-gradient(circle at 62% 46%, rgba(14,99,230,.70) 0 3px, transparent 6px),
+        radial-gradient(circle at 78% 38%, rgba(245,200,91,.75) 0 3px, transparent 6px),
+        repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 1px,transparent 1px 64px),
+        repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 58px);
+    pointer-events:none;
+}
+.live-map-bg{
+    position:absolute;
+    inset:58px 24px 24px;
+    border-radius:26px;
+    opacity:.34;
+    background:
+        radial-gradient(ellipse at 18% 35%, rgba(168,231,255,.55) 0 10%, transparent 12%),
+        radial-gradient(ellipse at 43% 42%, rgba(168,231,255,.50) 0 13%, transparent 16%),
+        radial-gradient(ellipse at 68% 38%, rgba(168,231,255,.48) 0 18%, transparent 21%),
+        radial-gradient(ellipse at 52% 68%, rgba(168,231,255,.42) 0 10%, transparent 13%),
+        linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.02));
+}
+.world-lines{
+    position:absolute;
+    inset:90px 95px 55px;
+    border-radius:50%;
+    border:1px dashed rgba(255,255,255,.28);
+    opacity:.65;
+    transform:rotate(-8deg);
+}
+.map-head,.bracket-head{
+    position:relative;
+    z-index:2;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:18px;
+}
+.map-title,.bracket-title{
+    display:flex;
+    align-items:center;
+    gap:9px;
+    color:#fff;
+    font-size:19px;
+    font-weight:900;
+    letter-spacing:-.4px;
+}
+.map-dot{
+    width:9px;height:9px;border-radius:50%;
+    background:#22C55E;
+    box-shadow:0 0 18px rgba(34,197,94,.9);
+}
+.map-legend{
+    display:flex;
+    gap:14px;
+    flex-wrap:wrap;
+    color:rgba(255,255,255,.82);
+    font-size:12px;
+    font-weight:800;
+}
+.legend-item{display:inline-flex;align-items:center;gap:6px;}
+.legend-bullet{width:10px;height:10px;border-radius:50%;}
+.legend-bullet.live{background:#22C55E}
+.legend-bullet.upcoming{background:#7C3AED}
+.legend-bullet.finished{background:#64748B}
+.map-stage{
+    position:relative;
+    z-index:2;
+    min-height:320px;
+    display:grid;
+    grid-template-columns:1fr 260px;
+    gap:18px;
+}
+.map-pins{position:relative;min-height:320px;}
+.map-pin-card{
+    position:absolute;
+    width:210px;
+    min-height:82px;
+    padding:12px;
+    border-radius:18px;
+    background:rgba(7,26,53,.68);
+    border:1px solid rgba(255,255,255,.16);
+    box-shadow:0 22px 42px rgba(0,0,0,.24);
+    backdrop-filter:blur(12px);
+}
+.map-pin-card:nth-child(1){left:4%;top:16%}
+.map-pin-card:nth-child(2){left:32%;top:2%}
+.map-pin-card:nth-child(3){left:46%;top:46%}
+.map-pin-card:nth-child(4){right:9%;top:28%}
+.map-pin-card:nth-child(5){left:14%;bottom:8%}
+.map-pin-status{
+    display:inline-flex;
+    align-items:center;
+    padding:5px 8px;
+    border-radius:999px;
+    color:#fff;
+    font-size:10px;
+    font-weight:900;
+    text-transform:uppercase;
+    background:rgba(124,58,237,.9);
+}
+.map-pin-status.Live{background:#11A36A}
+.map-pin-status.Finished{background:#64748B}
+.map-pin-teams{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    margin-top:9px;
+    color:#fff;
+    font-size:13px;
+    font-weight:900;
+}
+.map-team-mini{display:flex;align-items:center;gap:6px;min-width:0;}
+.map-team-mini img,.map-team-fallback{
+    width:25px;height:25px;border-radius:50%;
+    background:#fff;object-fit:contain;
+    display:grid;place-items:center;
+    color:#071A35;font-size:10px;flex:0 0 auto;
+}
+.map-score-mini{flex:0 0 auto;font-size:18px;color:#fff;font-weight:900;}
+.map-pin-time{
+    margin-top:7px;
+    color:rgba(255,255,255,.66);
+    font-size:11px;
+    font-weight:800;
+    text-align:center;
+}
+.tournament-progress{
+    position:relative;
+    z-index:2;
+    padding:18px;
+    border-radius:22px;
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.14);
+    backdrop-filter:blur(12px);
+}
+.progress-title{
+    color:#fff;
+    font-size:13px;
+    font-weight:900;
+    text-transform:uppercase;
+    margin-bottom:14px;
+}
+.progress-line{
+    display:flex;
+    gap:10px;
+    padding:11px 0;
+    border-bottom:1px solid rgba(255,255,255,.10);
+}
+.progress-line:last-child{border-bottom:0;}
+.progress-node{
+    width:14px;height:14px;margin-top:2px;border-radius:50%;
+    background:#22C55E;
+    box-shadow:0 0 0 5px rgba(34,197,94,.12);
+    flex:0 0 auto;
+}
+.progress-line.pending .progress-node{
+    background:transparent;
+    border:2px solid rgba(255,255,255,.55);
+    box-shadow:none;
+}
+.progress-copy b{display:block;color:#fff;font-size:12px;font-weight:900;}
+.progress-copy span{display:block;margin-top:3px;color:rgba(255,255,255,.62);font-size:11px;font-weight:800;}
+.bracket-shell{position:relative;z-index:2;overflow-x:auto;padding-bottom:8px;}
+.bracket-grid{
+    min-width:1120px;
+    display:grid;
+    grid-template-columns:repeat(6, 1fr);
+    gap:16px;
+    align-items:start;
+}
+.bracket-stage-title{
+    color:rgba(255,255,255,.86);
+    font-size:12px;
+    font-weight:900;
+    text-transform:uppercase;
+    margin-bottom:12px;
+    text-align:center;
+}
+.bracket-match{
+    position:relative;
+    padding:12px;
+    margin-bottom:13px;
+    min-height:96px;
+    border-radius:16px;
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.14);
+}
+.bracket-match:after{
+    content:"";
+    position:absolute;
+    right:-16px;
+    top:50%;
+    width:16px;
+    height:1px;
+    background:rgba(255,255,255,.20);
+}
+.bracket-col:last-child .bracket-match:after{display:none;}
+.bracket-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:5px 0;
+    color:#fff;
+    font-size:12px;
+    font-weight:900;
+}
+.bracket-team{display:flex;align-items:center;gap:7px;min-width:0;}
+.bracket-team img,.bracket-team-fallback{
+    width:20px;height:20px;border-radius:50%;
+    background:#fff;object-fit:contain;
+    display:grid;place-items:center;
+    color:#071A35;font-size:9px;flex:0 0 auto;
+}
+.bracket-team span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bracket-score{color:#fff;font-weight:900;flex:0 0 auto;}
+.bracket-status{
+    margin-top:8px;
+    color:#7EF4AE;
+    font-size:10px;
+    font-weight:900;
+    text-align:center;
+}
+.bracket-status.upcoming{color:rgba(255,255,255,.62);}
+.bracket-empty{
+    color:rgba(255,255,255,.72);
+    font-weight:800;
+    font-size:13px;
+    line-height:1.7;
+    padding:16px;
+    border-radius:18px;
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.12);
+}
+@media(max-width:768px){
+    .news-ticker{margin:-20px auto 14px;padding:0 12px;}
+    .news-ticker-inner{border-radius:14px;}
+    .news-label{padding:0 12px;font-size:10px;}
+    .news-view{display:none;}
+    .map-head,.bracket-head{align-items:flex-start;flex-direction:column;}
+    .map-stage{grid-template-columns:1fr;min-height:auto;}
+    .map-pins{min-height:auto;display:grid;gap:10px;}
+    .map-pin-card{
+        position:relative;
+        left:auto !important;right:auto !important;top:auto !important;bottom:auto !important;
+        width:100%;
+    }
+    .live-map-bg,.world-lines{display:none;}
+    .tournament-progress{padding:14px;}
+    .bracket-grid{min-width:980px;gap:12px;}
+    .bracket-match{padding:10px;}
+}
+/* ================= END LIVE MAP + NEWS + BRACKET ================= */
+
+
+/* ================= FINAL WC2026 DASHBOARD REFINEMENT ================= */
+:root{
+    --wc-dark-1:#05162F;
+    --wc-dark-2:#08234A;
+    --wc-dark-3:#0E63E6;
+    --wc-panel:rgba(7,31,66,.92);
+    --wc-panel-2:rgba(10,45,92,.82);
+    --wc-line:rgba(168,231,255,.16);
+    --wc-text:#FFFFFF;
+    --wc-soft:rgba(255,255,255,.68);
+}
+
+html{
+    background:#05162F !important;
+}
+
+body{
+    background:
+        radial-gradient(circle at 12% 7%, rgba(85,183,255,.16), transparent 28%),
+        radial-gradient(circle at 88% 4%, rgba(14,99,230,.26), transparent 32%),
+        radial-gradient(circle at 54% 84%, rgba(245,200,91,.07), transparent 28%),
+        linear-gradient(180deg,#05162F 0%,#08234A 48%,#05162F 100%) !important;
+    color:var(--wc-text) !important;
+}
+
+body:before{
+    content:"";
+    position:fixed;
+    inset:0;
+    z-index:-1;
+    pointer-events:none;
+    background:
+        repeating-linear-gradient(90deg,rgba(255,255,255,.035) 0 1px,transparent 1px 82px),
+        repeating-linear-gradient(0deg,rgba(255,255,255,.024) 0 1px,transparent 1px 72px),
+        radial-gradient(circle at 50% -8%,rgba(255,255,255,.10),transparent 38%);
+}
+
+.hero{
+    min-height:390px !important;
+    padding:24px 38px 118px !important;
+    background:
+        radial-gradient(circle at 72% 10%, rgba(14,99,230,.32), transparent 34%),
+        radial-gradient(circle at 16% 30%, rgba(85,183,255,.18), transparent 32%),
+        linear-gradient(135deg,#05162F 0%,#08234A 50%,#0E63E6 100%) !important;
+    box-shadow:0 26px 80px rgba(0,0,0,.16);
+}
+
+.hero:before{
+    background:
+        repeating-linear-gradient(90deg,rgba(255,255,255,.045) 0 1px,transparent 1px 76px),
+        repeating-linear-gradient(0deg,rgba(255,255,255,.024) 0 1px,transparent 1px 76px),
+        radial-gradient(circle at 50% 110%,rgba(255,255,255,.12),transparent 36%) !important;
+}
+
+.nav,
+.hero-content,
+.container{
+    max-width:1180px !important;
+}
+
+.nav{
+    align-items:center !important;
+}
+
+.logo-card{
+    width:150px !important;
+    height:56px !important;
+    border-radius:18px !important;
+}
+
+.logo-card img{
+    max-width:126px !important;
+    max-height:38px !important;
+}
+
+.brand-title{
+    font-size:18px !important;
+    line-height:1.1 !important;
+    color:#fff !important;
+}
+
+.brand-sub{
+    font-size:11px !important;
+    color:rgba(255,255,255,.78) !important;
+}
+
+.top-link,
+.logout{
+    min-height:40px !important;
+    padding:10px 15px !important;
+    font-size:12px !important;
+}
+
+.hero-content{
+    margin:52px auto 0 !important;
+    grid-template-columns:1.08fr .92fr !important;
+    gap:28px !important;
+}
+
+.badge{
+    margin-bottom:14px !important;
+    font-size:11px !important;
+}
+
+.hero h1{
+    font-size:50px !important;
+    line-height:.99 !important;
+    letter-spacing:-2px !important;
+}
+
+.hero p{
+    max-width:620px !important;
+    font-size:14px !important;
+    line-height:1.75 !important;
+    color:rgba(255,255,255,.84) !important;
+}
+
+.daily-card{
+    padding:24px !important;
+    border-radius:24px !important;
+    background:linear-gradient(135deg,rgba(255,255,255,.13),rgba(255,255,255,.065)) !important;
+    border:1px solid rgba(168,231,255,.18) !important;
+    box-shadow:0 22px 64px rgba(0,0,0,.24) !important;
+}
+
+.daily-prize{
+    font-size:30px !important;
+}
+
+.daily-sub{
+    font-size:13px !important;
+    color:rgba(255,255,255,.75) !important;
+}
+
+.hero-mini-grid div{
+    border-radius:16px !important;
+    background:rgba(255,255,255,.12) !important;
+    border:1px solid rgba(168,231,255,.15) !important;
+}
+
+.container{
+    margin:-64px auto 46px !important;
+    padding:0 20px !important;
+}
+
+.stats{
+    grid-template-columns:repeat(5,minmax(0,1fr)) !important;
+    gap:14px !important;
+    margin-bottom:18px !important;
+}
+
+.stat{
+    min-height:118px !important;
+    padding:19px 18px !important;
+    border-radius:22px !important;
+    background:linear-gradient(180deg,#FFFFFF 0%,#F7FAFF 100%) !important;
+    border:1px solid rgba(255,255,255,.72) !important;
+    box-shadow:0 18px 48px rgba(0,0,0,.18) !important;
+}
+
+.stat:before{
+    width:38px !important;
+    height:38px !important;
+    top:16px !important;
+    right:16px !important;
+    border-radius:15px !important;
+}
+
+.stat-label{
+    font-size:11px !important;
+    letter-spacing:.25px !important;
+}
+
+.stat-value{
+    font-size:30px !important;
+    line-height:1 !important;
+}
+
+.stat-note{
+    font-size:11px !important;
+}
+
+.news-ticker{
+    max-width:1180px !important;
+    margin:0 auto 18px !important;
+    padding:0 !important;
+}
+
+.news-ticker-inner{
+    min-height:48px !important;
+    border-radius:18px !important;
+    background:linear-gradient(135deg,#061A36,#071F42 58%,#0A3A76) !important;
+    border:1px solid rgba(168,231,255,.16) !important;
+    box-shadow:0 20px 50px rgba(0,0,0,.22) !important;
+}
+
+.news-label{
+    min-width:122px !important;
+    justify-content:center !important;
+    background:linear-gradient(135deg,#EF4444,#DC2626) !important;
+    border-radius:18px 0 0 18px !important;
+    font-size:11px !important;
+}
+
+.news-track span{
+    font-size:12px !important;
+    color:rgba(255,255,255,.92) !important;
+}
+
+.news-view{
+    font-size:11px !important;
+}
+
+.live-map-card,
+.knockout-card,
+.match-card-premium,
+.match-list-card,
+.layout .card{
+    background:
+        radial-gradient(circle at 100% 0%, rgba(14,99,230,.22), transparent 34%),
+        radial-gradient(circle at 0% 100%, rgba(85,183,255,.10), transparent 34%),
+        linear-gradient(135deg,#061A36 0%,#08254D 58%,#0A3A76 100%) !important;
+    color:#fff !important;
+    border:1px solid var(--wc-line) !important;
+    box-shadow:
+        0 26px 64px rgba(0,0,0,.24),
+        inset 0 1px 0 rgba(255,255,255,.06) !important;
+}
+
+.live-map-card{
+    border-radius:28px !important;
+    padding:22px !important;
+    margin-bottom:18px !important;
+}
+
+.map-head,
+.bracket-head{
+    margin-bottom:18px !important;
+}
+
+.map-title,
+.bracket-title{
+    font-size:19px !important;
+    line-height:1.2 !important;
+    color:#fff !important;
+}
+
+.map-legend{
+    gap:12px !important;
+    font-size:11px !important;
+    color:rgba(255,255,255,.78) !important;
+}
+
+.map-stage{
+    min-height:300px !important;
+    grid-template-columns:1fr 246px !important;
+    gap:16px !important;
+}
+
+.live-map-bg{
+    inset:64px 26px 26px !important;
+    opacity:.68 !important;
+    background:
+        radial-gradient(ellipse at 16% 35%, rgba(85,183,255,.36) 0 12%, transparent 15%),
+        radial-gradient(ellipse at 44% 42%, rgba(85,183,255,.32) 0 14%, transparent 18%),
+        radial-gradient(ellipse at 70% 38%, rgba(85,183,255,.30) 0 18%, transparent 23%),
+        radial-gradient(ellipse at 54% 68%, rgba(85,183,255,.24) 0 12%, transparent 15%),
+        repeating-radial-gradient(circle at 50% 50%, rgba(168,231,255,.16) 0 1px, transparent 1px 5px) !important;
+}
+
+.world-lines{
+    border-color:rgba(168,231,255,.26) !important;
+    opacity:.76 !important;
+}
+
+.map-pin-card{
+    width:190px !important;
+    min-height:78px !important;
+    padding:11px !important;
+    border-radius:17px !important;
+    background:rgba(6,26,54,.88) !important;
+    border:1px solid rgba(168,231,255,.20) !important;
+    box-shadow:0 22px 46px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.08) !important;
+}
+
+.map-pin-status{
+    font-size:9px !important;
+    padding:5px 8px !important;
+}
+
+.map-pin-teams{
+    font-size:12px !important;
+}
+
+.map-score-mini{
+    font-size:17px !important;
+}
+
+.map-pin-time{
+    font-size:10px !important;
+}
+
+.tournament-progress{
+    padding:17px !important;
+    border-radius:22px !important;
+    background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.065)) !important;
+    border:1px solid rgba(168,231,255,.18) !important;
+    box-shadow:0 20px 44px rgba(0,0,0,.18) !important;
+}
+
+.progress-title{
+    font-size:12px !important;
+}
+
+.progress-copy b{
+    font-size:11px !important;
+}
+
+.progress-copy span{
+    font-size:10px !important;
+}
+
+.knockout-card{
+    border-radius:28px !important;
+    padding:0 !important;
+    margin:18px 0 !important;
+    overflow:hidden !important;
+}
+
+.knockout-card .bracket-head{
+    padding:20px 22px 15px !important;
+    margin:0 !important;
+    border-bottom:1px solid rgba(168,231,255,.12) !important;
+    background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.025)) !important;
+}
+
+.bracket-title-wrap{
+    min-width:0;
+}
+
+.bracket-subtitle{
+    margin-top:5px;
+    color:rgba(255,255,255,.62);
+    font-size:12px;
+    font-weight:800;
+    line-height:1.45;
+}
+
+.bracket-head-actions{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    flex-wrap:wrap;
+    justify-content:flex-end;
+}
+
+.bracket-more-btn,
+.bracket-show-full{
+    border:1px solid rgba(168,231,255,.20);
+    color:#fff;
+    background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.07));
+    min-height:40px;
+    padding:10px 15px;
+    border-radius:14px;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:9px;
+    transition:.22s ease;
+    font-family:inherit;
+    box-shadow:0 14px 32px rgba(0,0,0,.18);
+}
+
+.bracket-more-btn:hover,
+.bracket-show-full:hover{
+    transform:translateY(-1px);
+    background:linear-gradient(135deg,rgba(255,255,255,.22),rgba(255,255,255,.11));
+}
+
+.bracket-shell{
+    padding:18px 22px 20px !important;
+    position:relative !important;
+    background:
+        radial-gradient(circle at 58% 48%, rgba(14,99,230,.12), transparent 36%),
+        linear-gradient(180deg,rgba(255,255,255,.015),rgba(255,255,255,0)) !important;
+}
+
+.bracket-grid{
+    min-width:1060px !important;
+    gap:14px !important;
+    align-items:start !important;
+}
+
+.bracket-stage-title{
+    margin-bottom:14px !important;
+    color:rgba(255,255,255,.88) !important;
+    letter-spacing:.35px !important;
+    font-size:11px !important;
+}
+
+.bracket-match{
+    background:linear-gradient(135deg,rgba(255,255,255,.12),rgba(255,255,255,.06)) !important;
+    border:1px solid rgba(168,231,255,.18) !important;
+    box-shadow:0 17px 38px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.08) !important;
+    min-height:96px !important;
+    margin-bottom:14px !important;
+    border-radius:17px !important;
+    transition:.22s ease;
+}
+
+.bracket-match:hover{
+    transform:translateY(-2px);
+    border-color:rgba(168,231,255,.38) !important;
+}
+
+.bracket-row{
+    font-size:11px !important;
+    color:#fff !important;
+}
+
+.bracket-team img,
+.bracket-team-fallback{
+    width:20px !important;
+    height:20px !important;
+    box-shadow:0 8px 16px rgba(0,0,0,.14);
+}
+
+.bracket-status{
+    padding-top:8px !important;
+    border-top:1px solid rgba(255,255,255,.08) !important;
+    font-size:9px !important;
+}
+
+.bracket-match:after{
+    background:rgba(168,231,255,.22) !important;
+}
+
+.bracket-preview-mode{
+    max-height:520px !important;
+}
+
+.bracket-preview-mode .bracket-shell{
+    max-height:390px !important;
+    overflow:hidden !important;
+}
+
+.bracket-preview-mode .bracket-shell:after{
+    content:"";
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:0;
+    height:120px;
+    pointer-events:none;
+    background:linear-gradient(180deg,rgba(6,26,54,0),rgba(6,26,54,.90) 70%,#061A36);
+}
+
+.bracket-preview-footer{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 24px 24px;
+    position:relative;
+    z-index:4;
+}
+
+.bracket-show-full{
+    min-width:210px;
+}
+
+.knockout-card.expanded{
+    max-height:none !important;
+}
+
+.knockout-card.expanded .bracket-shell{
+    max-height:none !important;
+    overflow-x:auto !important;
+    overflow-y:visible !important;
+}
+
+.knockout-card.expanded .bracket-shell:after{
+    display:none !important;
+}
+
+.knockout-card.expanded .bracket-preview-footer{
+    display:none !important;
+}
+
+.knockout-card.expanded .bracket-more-btn{
+    background:linear-gradient(135deg,rgba(17,163,106,.35),rgba(17,163,106,.18)) !important;
+}
+
+.match-dashboard{
+    gap:18px !important;
+}
+
+.match-card-premium,
+.match-list-card{
+    min-height:265px !important;
+    border-radius:28px !important;
+}
+
+.card-title,
+.fixture-title,
+.leader-name,
+.profile-line span:last-child{
+    color:#fff !important;
+}
+
+.card-title small,
+.fixture-sub,
+.profile-line span:first-child,
+.leader-loc,
+.game-tip{
+    color:rgba(255,255,255,.64) !important;
+}
+
+.fixture-row,
+.leader-row,
+.profile-line{
+    border-bottom:1px solid rgba(168,231,255,.11) !important;
+}
+
+.fixture-score{
+    background:rgba(255,255,255,.10) !important;
+    color:#fff !important;
+    border:1px solid rgba(168,231,255,.12);
+}
+
+.layout{
+    margin-top:18px !important;
+}
+
+.rank{
+    background:rgba(255,255,255,.12) !important;
+    color:#fff !important;
+}
+
+.points{
+    background:rgba(17,163,106,.15) !important;
+    color:#7EF4AE !important;
+}
+
+.disabled-box{
+    background:rgba(245,200,91,.12) !important;
+    border-color:rgba(245,200,91,.28) !important;
+    color:#FFE19A !important;
+}
+
+.game-panel{
+    border:1px solid rgba(168,231,255,.18) !important;
+    box-shadow:0 26px 64px rgba(0,0,0,.26), inset 0 0 0 1px rgba(255,255,255,.08) !important;
+}
+
+@media(max-width:1050px){
+    .hero-content{
+        grid-template-columns:1fr !important;
+    }
+
+    .stats{
+        grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    }
+
+    .map-stage{
+        grid-template-columns:1fr !important;
+    }
+}
+
+@media(max-width:768px){
+    .hero{
+        padding:18px 14px 92px !important;
+    }
+
+    .container{
+        margin-top:-48px !important;
+        padding:0 12px !important;
+    }
+
+    .hero h1{
+        font-size:35px !important;
+    }
+
+    .hero p{
+        font-size:13px !important;
+    }
+
+    .stats{
+        grid-template-columns:1fr !important;
+        gap:12px !important;
+    }
+
+    .stat{
+        min-height:104px !important;
+        border-radius:20px !important;
+    }
+
+    .news-ticker{
+        margin-bottom:14px !important;
+    }
+
+    .news-ticker-inner{
+        min-height:46px !important;
+    }
+
+    .news-label{
+        min-width:auto !important;
+        padding:0 12px !important;
+        font-size:10px !important;
+    }
+
+    .live-map-card,
+    .knockout-card,
+    .match-card-premium,
+    .match-list-card,
+    .layout .card{
+        border-radius:22px !important;
+    }
+
+    .map-head,
+    .bracket-head{
+        flex-direction:column !important;
+        align-items:flex-start !important;
+    }
+
+    .bracket-head-actions{
+        width:100%;
+        justify-content:space-between;
+    }
+
+    .map-pin-card{
+        width:100% !important;
+    }
+
+    .bracket-grid{
+        min-width:940px !important;
+    }
+
+    .bracket-preview-mode{
+        max-height:560px !important;
+    }
+
+    .bracket-preview-mode .bracket-shell{
+        max-height:410px !important;
+    }
+
+    .bracket-shell{
+        padding:16px !important;
+    }
+
+    .bracket-show-full{
+        width:100%;
+    }
+}
+/* ================= END FINAL WC2026 DASHBOARD REFINEMENT ================= */
+
+
+/* ================= WIDE PROFESSIONAL DASHBOARD LAYOUT ================= */
+:root{
+    --wide-max:1680px;
+    --wide-pad:clamp(18px,3.2vw,48px);
+    --wc-bg-1:#04142B;
+    --wc-bg-2:#071F42;
+    --wc-bg-3:#0B4FB8;
+    --wc-card:rgba(7,31,66,.90);
+    --wc-card-2:rgba(10,45,92,.72);
+    --wc-border:rgba(168,231,255,.18);
+    --wc-white:#FFFFFF;
+    --wc-muted:rgba(255,255,255,.68);
+}
+
+html{
+    background:#04142B !important;
+}
+
+body{
+    background:
+        radial-gradient(circle at 8% 8%, rgba(85,183,255,.18), transparent 30%),
+        radial-gradient(circle at 92% 8%, rgba(14,99,230,.30), transparent 34%),
+        radial-gradient(circle at 50% 76%, rgba(245,200,91,.07), transparent 30%),
+        linear-gradient(180deg,#04142B 0%,#071F42 45%,#04142B 100%) !important;
+    color:#fff !important;
+    overflow-x:hidden;
+}
+
+body:before{
+    content:"";
+    position:fixed;
+    inset:0;
+    z-index:-1;
+    background:
+        repeating-linear-gradient(90deg,rgba(255,255,255,.036) 0 1px,transparent 1px 90px),
+        repeating-linear-gradient(0deg,rgba(255,255,255,.024) 0 1px,transparent 1px 78px),
+        radial-gradient(circle at 50% -10%,rgba(255,255,255,.11),transparent 34%);
+    pointer-events:none;
+}
+
+/* Wider page */
+.nav,
+.hero-content,
+.container,
+.news-ticker{
+    width:min(var(--wide-max), calc(100vw - (var(--wide-pad) * 2))) !important;
+    max-width:none !important;
+}
+
+.hero{
+    padding-left:var(--wide-pad) !important;
+    padding-right:var(--wide-pad) !important;
+    min-height:405px !important;
+    padding-bottom:116px !important;
+    background:
+        radial-gradient(circle at 72% 18%, rgba(14,99,230,.38), transparent 32%),
+        radial-gradient(circle at 15% 28%, rgba(85,183,255,.16), transparent 30%),
+        linear-gradient(135deg,#04142B 0%,#08254D 48%,#0E63E6 100%) !important;
+}
+
+.hero:after{
+    right:clamp(36px,7vw,130px) !important;
+    bottom:18px !important;
+    font-size:clamp(120px,10vw,210px) !important;
+    opacity:.09 !important;
+}
+
+.nav{
+    margin:0 auto !important;
+}
+
+.hero-content{
+    margin:54px auto 0 !important;
+    grid-template-columns:minmax(520px,1.05fr) minmax(420px,.72fr) !important;
+    align-items:center !important;
+    gap:clamp(36px,6vw,110px) !important;
+}
+
+.hero h1{
+    font-size:clamp(48px,4.4vw,72px) !important;
+    line-height:.96 !important;
+    letter-spacing:-2.8px !important;
+}
+
+.hero p{
+    max-width:720px !important;
+    font-size:15px !important;
+    color:rgba(255,255,255,.86) !important;
+}
+
+.daily-card{
+    max-width:530px !important;
+    margin-left:auto !important;
+    padding:28px !important;
+    border-radius:28px !important;
+    background:linear-gradient(135deg,rgba(255,255,255,.14),rgba(255,255,255,.065)) !important;
+    border:1px solid rgba(168,231,255,.20) !important;
+    box-shadow:0 28px 70px rgba(0,0,0,.24) !important;
+}
+
+.container{
+    margin:-58px auto 54px !important;
+    padding:0 !important;
+}
+
+/* Stats use all horizontal space */
+.stats{
+    grid-template-columns:repeat(5,minmax(180px,1fr)) !important;
+    gap:clamp(14px,1.4vw,24px) !important;
+    margin-bottom:22px !important;
+}
+
+.stat{
+    min-height:124px !important;
+    padding:22px 22px !important;
+    border-radius:24px !important;
+    background:linear-gradient(180deg,#FFFFFF 0%,#F7FAFF 100%) !important;
+    box-shadow:0 22px 55px rgba(0,0,0,.20) !important;
+}
+
+/* Ticker */
+.news-ticker{
+    margin:0 auto 20px !important;
+    padding:0 !important;
+}
+
+.news-ticker-inner{
+    min-height:52px !important;
+    border-radius:18px !important;
+    background:linear-gradient(135deg,#061A36,#071F42 58%,#0B3D78) !important;
+    border:1px solid var(--wc-border) !important;
+    box-shadow:0 22px 55px rgba(0,0,0,.24) !important;
+}
+
+.news-label{
+    min-width:132px !important;
+    justify-content:center !important;
+    background:linear-gradient(135deg,#EF4444,#DC2626) !important;
+    border-radius:18px 0 0 18px !important;
+}
+
+/* Dark panels */
+.live-map-card,
+.knockout-card,
+.match-card-premium,
+.match-list-card,
+.layout .card{
+    color:#fff !important;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(14,99,230,.24), transparent 34%),
+        radial-gradient(circle at 0% 100%, rgba(85,183,255,.10), transparent 34%),
+        linear-gradient(135deg,#061A36 0%,#08254D 58%,#0A3A76 100%) !important;
+    border:1px solid var(--wc-border) !important;
+    box-shadow:0 28px 70px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.06) !important;
+}
+
+/* Make map use the wide space */
+.live-map-card{
+    border-radius:30px !important;
+    padding:28px !important;
+    margin-bottom:22px !important;
+}
+
+.map-title{
+    font-size:22px !important;
+}
+
+.map-stage{
+    min-height:430px !important;
+    grid-template-columns:1fr 340px !important;
+    gap:26px !important;
+}
+
+.map-pins{
+    min-height:430px !important;
+}
+
+.live-map-bg{
+    inset:72px 32px 32px !important;
+    opacity:.72 !important;
+}
+
+.world-lines{
+    inset:100px 130px 70px !important;
+}
+
+.map-pin-card{
+    width:240px !important;
+    min-height:96px !important;
+    padding:14px !important;
+    border-radius:20px !important;
+    background:rgba(6,26,54,.88) !important;
+    border:1px solid rgba(168,231,255,.22) !important;
+    box-shadow:0 26px 55px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.08) !important;
+}
+
+.map-pin-card:nth-child(1){left:4% !important;top:18% !important}
+.map-pin-card:nth-child(2){left:33% !important;top:6% !important}
+.map-pin-card:nth-child(3){left:48% !important;top:52% !important}
+.map-pin-card:nth-child(4){right:10% !important;top:30% !important}
+.map-pin-card:nth-child(5){left:14% !important;bottom:8% !important}
+
+.map-pin-status{
+    font-size:10px !important;
+}
+
+.map-pin-teams{
+    font-size:14px !important;
+}
+
+.map-team-mini img,
+.map-team-fallback{
+    width:28px !important;
+    height:28px !important;
+}
+
+.map-score-mini{
+    font-size:20px !important;
+}
+
+.map-pin-time{
+    font-size:11px !important;
+}
+
+.tournament-progress{
+    padding:22px !important;
+    border-radius:24px !important;
+    background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.065)) !important;
+    border:1px solid rgba(168,231,255,.20) !important;
+    align-self:stretch !important;
+}
+
+.progress-title{
+    font-size:13px !important;
+}
+
+.progress-copy b{
+    font-size:12px !important;
+}
+
+.progress-copy span{
+    font-size:11px !important;
+}
+
+/* Bracket nicer + half open preview */
+.knockout-card{
+    border-radius:30px !important;
+    padding:0 !important;
+    margin:22px 0 !important;
+    overflow:hidden !important;
+}
+
+.knockout-card .bracket-head{
+    padding:22px 28px 16px !important;
+    margin:0 !important;
+    border-bottom:1px solid rgba(168,231,255,.12) !important;
+    background:linear-gradient(180deg,rgba(255,255,255,.075),rgba(255,255,255,.025)) !important;
+}
+
+.bracket-title-wrap{
+    min-width:0;
+}
+
+.bracket-subtitle{
+    margin-top:5px;
+    color:rgba(255,255,255,.64);
+    font-size:12px;
+    font-weight:800;
+    line-height:1.45;
+}
+
+.bracket-head-actions{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:16px;
+    flex-wrap:wrap;
+}
+
+.bracket-more-btn,
+.bracket-show-full{
+    border:1px solid rgba(168,231,255,.22);
+    color:#fff;
+    background:linear-gradient(135deg,rgba(255,255,255,.17),rgba(255,255,255,.07));
+    min-height:42px;
+    padding:10px 16px;
+    border-radius:15px;
+    font-size:12px;
+    font-weight:900;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:9px;
+    transition:.22s ease;
+    font-family:inherit;
+    box-shadow:0 16px 34px rgba(0,0,0,.18);
+}
+
+.bracket-more-btn:hover,
+.bracket-show-full:hover{
+    transform:translateY(-1px);
+    background:linear-gradient(135deg,rgba(255,255,255,.23),rgba(255,255,255,.11));
+}
+
+.bracket-shell{
+    padding:22px 28px 24px !important;
+    position:relative !important;
+    background:
+        radial-gradient(circle at 58% 48%, rgba(14,99,230,.13), transparent 36%),
+        linear-gradient(180deg,rgba(255,255,255,.015),rgba(255,255,255,0)) !important;
+}
+
+.bracket-grid{
+    min-width:1360px !important;
+    grid-template-columns:1.15fr 1.05fr .95fr .95fr .95fr .95fr !important;
+    gap:24px !important;
+    align-items:start !important;
+}
+
+.bracket-stage-title{
+    margin-bottom:15px !important;
+    color:rgba(255,255,255,.90) !important;
+    letter-spacing:.4px !important;
+    font-size:12px !important;
+}
+
+.bracket-match{
+    background:linear-gradient(135deg,rgba(255,255,255,.12),rgba(255,255,255,.06)) !important;
+    border:1px solid rgba(168,231,255,.20) !important;
+    box-shadow:0 18px 40px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.08) !important;
+    min-height:104px !important;
+    margin-bottom:16px !important;
+    border-radius:18px !important;
+    transition:.22s ease;
+}
+
+.bracket-match:hover{
+    transform:translateY(-2px);
+    border-color:rgba(168,231,255,.40) !important;
+}
+
+.bracket-row{
+    font-size:12px !important;
+    color:#fff !important;
+}
+
+.bracket-status{
+    padding-top:8px !important;
+    border-top:1px solid rgba(255,255,255,.08) !important;
+    font-size:10px !important;
+}
+
+.bracket-preview-mode{
+    max-height:585px !important;
+}
+
+.bracket-preview-mode .bracket-shell{
+    max-height:435px !important;
+    overflow:hidden !important;
+}
+
+.bracket-preview-mode .bracket-shell:after{
+    content:"";
+    position:absolute;
+    left:0;
+    right:0;
+    bottom:0;
+    height:130px;
+    pointer-events:none;
+    background:linear-gradient(180deg,rgba(6,26,54,0),rgba(6,26,54,.90) 68%,#061A36);
+}
+
+.bracket-preview-footer{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:0 28px 26px;
+    position:relative;
+    z-index:4;
+}
+
+.bracket-show-full{
+    min-width:230px;
+}
+
+.knockout-card.expanded{
+    max-height:none !important;
+}
+
+.knockout-card.expanded .bracket-shell{
+    max-height:none !important;
+    overflow-x:auto !important;
+    overflow-y:visible !important;
+}
+
+.knockout-card.expanded .bracket-shell:after{
+    display:none !important;
+}
+
+.knockout-card.expanded .bracket-preview-footer{
+    display:none !important;
+}
+
+.knockout-card.expanded .bracket-more-btn{
+    background:linear-gradient(135deg,rgba(17,163,106,.35),rgba(17,163,106,.18)) !important;
+}
+
+/* Bottom content wider grid */
+.match-dashboard{
+    grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr) !important;
+    gap:22px !important;
+    margin-top:22px !important;
+}
+
+.layout{
+    grid-template-columns:minmax(0,1.55fr) minmax(360px,.65fr) !important;
+    gap:22px !important;
+    margin-top:22px !important;
+}
+
+.match-card-premium,
+.match-list-card{
+    min-height:300px !important;
+    border-radius:28px !important;
+}
+
+.card-title,
+.fixture-title,
+.leader-name,
+.profile-line span:last-child{
+    color:#fff !important;
+}
+
+.card-title small,
+.fixture-sub,
+.profile-line span:first-child,
+.leader-loc,
+.game-tip{
+    color:rgba(255,255,255,.66) !important;
+}
+
+.fixture-row,
+.leader-row,
+.profile-line{
+    border-bottom:1px solid rgba(168,231,255,.11) !important;
+}
+
+.fixture-score{
+    background:rgba(255,255,255,.10) !important;
+    color:#fff !important;
+    border:1px solid rgba(168,231,255,.12);
+}
+
+.rank{
+    background:rgba(255,255,255,.12) !important;
+    color:#fff !important;
+}
+
+.points{
+    background:rgba(17,163,106,.15) !important;
+    color:#7EF4AE !important;
+}
+
+.disabled-box{
+    background:rgba(245,200,91,.12) !important;
+    border-color:rgba(245,200,91,.28) !important;
+    color:#FFE19A !important;
+}
+
+.game-panel{
+    border:1px solid rgba(168,231,255,.18) !important;
+    box-shadow:0 28px 70px rgba(0,0,0,.28), inset 0 0 0 1px rgba(255,255,255,.08) !important;
+}
+
+/* Large monitors: use empty sides even more */
+@media(min-width:1500px){
+    :root{
+        --wide-max:1720px;
+        --wide-pad:56px;
+    }
+
+    .map-stage{
+        grid-template-columns:1fr 360px !important;
+    }
+
+    .map-pin-card{
+        width:250px !important;
+    }
+}
+
+@media(max-width:1180px){
+    .hero-content{
+        grid-template-columns:1fr !important;
+    }
+
+    .daily-card{
+        margin-left:0 !important;
+        max-width:100% !important;
+    }
+
+    .stats{
+        grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    }
+
+    .map-stage,
+    .match-dashboard,
+    .layout{
+        grid-template-columns:1fr !important;
+    }
+}
+
+@media(max-width:768px){
+    .nav,
+    .hero-content,
+    .container,
+    .news-ticker{
+        width:calc(100vw - 24px) !important;
+    }
+
+    .hero{
+        padding:18px 12px 92px !important;
+    }
+
+    .hero h1{
+        font-size:35px !important;
+        letter-spacing:-1.4px !important;
+    }
+
+    .hero p{
+        font-size:13px !important;
+    }
+
+    .container{
+        margin-top:-46px !important;
+    }
+
+    .stats{
+        grid-template-columns:1fr !important;
+        gap:12px !important;
+    }
+
+    .stat{
+        min-height:104px !important;
+        border-radius:20px !important;
+    }
+
+    .news-ticker-inner{
+        min-height:46px !important;
+    }
+
+    .news-label{
+        min-width:auto !important;
+        padding:0 12px !important;
+        font-size:10px !important;
+    }
+
+    .live-map-card,
+    .knockout-card,
+    .match-card-premium,
+    .match-list-card,
+    .layout .card{
+        border-radius:22px !important;
+    }
+
+    .map-head,
+    .bracket-head{
+        flex-direction:column !important;
+        align-items:flex-start !important;
+    }
+
+    .map-stage{
+        min-height:auto !important;
+    }
+
+    .map-pins{
+        min-height:auto !important;
+        display:grid !important;
+        gap:10px !important;
+    }
+
+    .map-pin-card{
+        position:relative !important;
+        left:auto !important;
+        right:auto !important;
+        top:auto !important;
+        bottom:auto !important;
+        width:100% !important;
+    }
+
+    .tournament-progress{
+        padding:16px !important;
+    }
+
+    .bracket-head-actions{
+        width:100%;
+        justify-content:space-between;
+    }
+
+    .bracket-grid{
+        min-width:980px !important;
+        gap:14px !important;
+    }
+
+    .bracket-preview-mode{
+        max-height:560px !important;
+    }
+
+    .bracket-preview-mode .bracket-shell{
+        max-height:410px !important;
+    }
+
+    .bracket-shell{
+        padding:16px !important;
+    }
+
+    .bracket-show-full{
+        width:100%;
+    }
+}
+/* ================= END WIDE PROFESSIONAL DASHBOARD LAYOUT ================= */
+
+</style>
+</head>
+
+<body>
+
+<header class="hero">
+    <div class="nav">
+        <div class="brand">
+            <div class="logo-card">
+                <img src="<?= htmlspecialchars($logoPath, ENT_QUOTES, 'UTF-8') ?>" alt="CATRION">
+            </div>
+            <div>
+                <div class="brand-title">FIFA World Cup 2026 Challenge</div>
+                <div class="brand-sub">Prediction League • Daily Goal Rush</div>
+            </div>
+        </div>
+
+        <div class="top-actions">
+            <a href="/WC2026/" class="top-link active">Home</a>
+            <a href="/WC2026/matches" class="top-link">Matches</a>
+            <form method="POST" action="/WC2026/" style="margin:0;">
+                <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="action" value="logout">
+                <button type="submit" class="logout">Logout</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="hero-content">
+        <div>
+            <div class="badge"><i></i> CATRION FIFA WORLD CUP 2026</div>
+            <h1>Score Goals.<br><span>Predict Matches.</span></h1>
+            <p>
+                Welcome, <?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>.
+                Play the daily 30-second challenge, predict real World Cup matches,
+                collect points, and climb the CATRION leaderboard.
+            </p>
+        </div>
+
+        <div class="daily-card">
+            <div class="daily-title">Challenge Hub</div>
+            <div class="daily-prize">SAR 20,000</div>
+            <div class="daily-sub">
+                Daily Goal Rush, real match predictions, live fixtures, bonus questions, and leaderboard points.
+            </div>
+            <div class="hero-mini-grid">
+                <div><b>30s</b><span>Daily Game</span></div>
+                <div><b><?= (int)$matchesCount ?></b><span>Matches</span></div>
+                <div><b>20K</b><span>Prize Pool</span></div>
+            </div>
+        </div>
+    </div>
+</header>
+
+<main class="container">
+
+    <section class="stats">
+        <div class="stat">
+            <div class="stat-label">My Points</div>
+            <div class="stat-value"><?= (int)$myGamePoints ?></div>
+            <div class="stat-note">All game points</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-label">My Rank</div>
+            <div class="stat-value"><?= htmlspecialchars($myRank, ENT_QUOTES, 'UTF-8') ?></div>
+            <div class="stat-note">Daily game leaderboard</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-label">Best Score</div>
+            <div class="stat-value"><?= (int)$myBestScore ?></div>
+            <div class="stat-note">Highest daily score</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-label">World Cup Matches</div>
+            <div class="stat-value"><?= (int)$matchesCount ?></div>
+            <div class="stat-note"><?= (int)$liveMatchesCount ?> live • <?= (int)$finishedMatchesCount ?> finished</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-label">Prize Pool</div>
+            <div class="stat-value">20K</div>
+            <div class="stat-note">SAR 20,000</div>
+        </div>
+    </section>
+
+    <section class="news-ticker" aria-label="World Cup news">
+        <div class="news-ticker-inner">
+            <div class="news-label">● Match News</div>
+            <div class="news-track">
+                <?php if (!empty($newsMatches)): ?>
+                    <span>
+                        <?php foreach ($newsMatches as $nm): ?>
+                            <?php
+                                $nmStatus = wc_match_status_label($nm);
+                                $nmScore = ((int)($nm['is_live'] ?? 0) === 1 || (int)($nm['is_finished'] ?? 0) === 1)
+                                    ? ((is_null($nm['home_score']) ? '-' : (int)$nm['home_score']) . ' - ' . (is_null($nm['away_score']) ? '-' : (int)$nm['away_score']))
+                                    : date('d M - h:i A', strtotime((string)$nm['match_datetime']));
+                            ?>
+                            <?= htmlspecialchars(wc_safe_team($nm['home_team']), ENT_QUOTES, 'UTF-8') ?>
+                            vs
+                            <?= htmlspecialchars(wc_safe_team($nm['away_team']), ENT_QUOTES, 'UTF-8') ?>
+                            • <?= htmlspecialchars($nmStatus, ENT_QUOTES, 'UTF-8') ?>
+                            • <?= htmlspecialchars($nmScore, ENT_QUOTES, 'UTF-8') ?>
+                            &nbsp;&nbsp; • &nbsp;&nbsp;
+                        <?php endforeach; ?>
+                    </span>
+                    <span>
+                        <?php foreach ($newsMatches as $nm): ?>
+                            <?php
+                                $nmStatus = wc_match_status_label($nm);
+                                $nmScore = ((int)($nm['is_live'] ?? 0) === 1 || (int)($nm['is_finished'] ?? 0) === 1)
+                                    ? ((is_null($nm['home_score']) ? '-' : (int)$nm['home_score']) . ' - ' . (is_null($nm['away_score']) ? '-' : (int)$nm['away_score']))
+                                    : date('d M - h:i A', strtotime((string)$nm['match_datetime']));
+                            ?>
+                            <?= htmlspecialchars(wc_safe_team($nm['home_team']), ENT_QUOTES, 'UTF-8') ?>
+                            vs
+                            <?= htmlspecialchars(wc_safe_team($nm['away_team']), ENT_QUOTES, 'UTF-8') ?>
+                            • <?= htmlspecialchars($nmStatus, ENT_QUOTES, 'UTF-8') ?>
+                            • <?= htmlspecialchars($nmScore, ENT_QUOTES, 'UTF-8') ?>
+                            &nbsp;&nbsp; • &nbsp;&nbsp;
+                        <?php endforeach; ?>
+                    </span>
+                <?php else: ?>
+                    <span>World Cup updates will appear after fixtures are synced.</span>
+                <?php endif; ?>
+            </div>
+            <a class="news-view" href="/WC2026/matches">View all →</a>
+        </div>
+    </section>
+
+    <section class="card live-map-card">
+        <div class="live-map-bg"></div>
+        <div class="world-lines"></div>
+
+        <div class="map-head">
+            <div class="map-title"><span class="map-dot"></span> Live World Cup Map</div>
+            <div class="map-legend">
+                <span class="legend-item"><i class="legend-bullet live"></i> Live Now</span>
+                <span class="legend-item"><i class="legend-bullet upcoming"></i> Upcoming</span>
+                <span class="legend-item"><i class="legend-bullet finished"></i> Finished</span>
+            </div>
+        </div>
+
+        <div class="map-stage">
+            <div class="map-pins">
+                <?php if (!empty($mapMatches)): ?>
+                    <?php foreach ($mapMatches as $mp): ?>
+                        <?php
+                            $mpStatus = wc_match_status_label($mp);
+                            $mpScore = ($mpStatus === 'Live' || $mpStatus === 'Finished')
+                                ? ((is_null($mp['home_score']) ? '-' : (int)$mp['home_score']) . ' - ' . (is_null($mp['away_score']) ? '-' : (int)$mp['away_score']))
+                                : 'VS';
+                        ?>
+                        <div class="map-pin-card">
+                            <div class="map-pin-status <?= htmlspecialchars($mpStatus, ENT_QUOTES, 'UTF-8') ?>">
+                                <?= htmlspecialchars($mpStatus, ENT_QUOTES, 'UTF-8') ?>
+                            </div>
+                            <div class="map-pin-teams">
+                                <div class="map-team-mini">
+                                    <?php if (!empty($mp['home_logo'])): ?>
+                                        <img src="<?= htmlspecialchars($mp['home_logo'], ENT_QUOTES, 'UTF-8') ?>" alt="">
+                                    <?php else: ?>
+                                        <span class="map-team-fallback"><?= htmlspecialchars(mb_substr(wc_safe_team($mp['home_team']), 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php endif; ?>
+                                    <span><?= htmlspecialchars(mb_substr(wc_safe_team($mp['home_team']), 0, 3), ENT_QUOTES, 'UTF-8') ?></span>
+                                </div>
+                                <div class="map-score-mini"><?= htmlspecialchars($mpScore, ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="map-team-mini">
+                                    <?php if (!empty($mp['away_logo'])): ?>
+                                        <img src="<?= htmlspecialchars($mp['away_logo'], ENT_QUOTES, 'UTF-8') ?>" alt="">
+                                    <?php else: ?>
+                                        <span class="map-team-fallback"><?= htmlspecialchars(mb_substr(wc_safe_team($mp['away_team']), 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php endif; ?>
+                                    <span><?= htmlspecialchars(mb_substr(wc_safe_team($mp['away_team']), 0, 3), ENT_QUOTES, 'UTF-8') ?></span>
+                                </div>
+                            </div>
+                            <div class="map-pin-time">
+                                <?= htmlspecialchars(date('d M Y - h:i A', strtotime((string)$mp['match_datetime'])), ENT_QUOTES, 'UTF-8') ?>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="bracket-empty">No synced matches available for the live map yet.</div>
+                <?php endif; ?>
+            </div>
+
+            <aside class="tournament-progress">
+                <div class="progress-title">Tournament Progress</div>
+                <div class="progress-line <?= $knockoutFinished > 0 ? '' : 'pending' ?>">
+                    <span class="progress-node"></span>
+                    <div class="progress-copy">
+                        <b>Knockout Stage</b>
+                        <span><?= (int)$knockoutFinished ?> / <?= (int)$knockoutTotal ?> completed</span>
+                    </div>
+                </div>
+                <div class="progress-line <?= count($knockoutStages['Quarter Finals'] ?? []) > 0 ? '' : 'pending' ?>">
+                    <span class="progress-node"></span>
+                    <div class="progress-copy">
+                        <b>Quarter Finals</b>
+                        <span><?= (int)count($knockoutStages['Quarter Finals'] ?? []) ?> matches from API</span>
+                    </div>
+                </div>
+                <div class="progress-line <?= count($knockoutStages['Semi Finals'] ?? []) > 0 ? '' : 'pending' ?>">
+                    <span class="progress-node"></span>
+                    <div class="progress-copy">
+                        <b>Semi Finals</b>
+                        <span><?= (int)count($knockoutStages['Semi Finals'] ?? []) ?> matches from API</span>
+                    </div>
+                </div>
+                <div class="progress-line <?= count($knockoutStages['Final'] ?? []) > 0 ? '' : 'pending' ?>">
+                    <span class="progress-node"></span>
+                    <div class="progress-copy">
+                        <b>Final</b>
+                        <span><?= (int)count($knockoutStages['Final'] ?? []) ?> match from API</span>
+                    </div>
+                </div>
+                <div class="match-links">
+                    <a href="/WC2026/matches" class="match-link soft">View Full Matches</a>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section class="card knockout-card bracket-preview-mode" id="knockoutBracketCard">
+        <div class="bracket-head">
+            <div class="bracket-title-wrap">
+                <div class="bracket-title">🏆 World Cup Knockout Bracket</div>
+                <div class="bracket-subtitle">
+                    API-powered tournament path. Preview is collapsed for a cleaner home page.
+                </div>
+            </div>
+
+            <div class="bracket-head-actions">
+                <div class="map-legend">
+                    <span class="legend-item"><i class="legend-bullet finished"></i> Finished</span>
+                    <span class="legend-item"><i class="legend-bullet upcoming"></i> Upcoming</span>
+                    <span class="legend-item"><i class="legend-bullet live"></i> Live</span>
+                </div>
+
+                <button type="button" class="bracket-more-btn" id="bracketMoreBtn">
+                    MORE <span>→</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="bracket-shell" id="bracketShell">
+            <?php if ($knockoutTotal > 0): ?>
+                <div class="bracket-grid">
+                    <?php foreach ($knockoutStages as $stageName => $stageMatches): ?>
+                        <?php if ($stageName === 'Knockout' && empty($stageMatches)) continue; ?>
+                        <div class="bracket-col">
+                            <div class="bracket-stage-title"><?= htmlspecialchars($stageName, ENT_QUOTES, 'UTF-8') ?></div>
+                            <?php if (!empty($stageMatches)): ?>
+                                <?php foreach ($stageMatches as $bm): ?>
+                                    <?php
+                                        $bmStatus = wc_match_status_label($bm);
+                                        $bmUpcomingClass = $bmStatus === 'Upcoming' ? 'upcoming' : '';
+                                    ?>
+                                    <div class="bracket-match">
+                                        <div class="bracket-row">
+                                            <div class="bracket-team">
+                                                <?php if (!empty($bm['home_logo'])): ?>
+                                                    <img src="<?= htmlspecialchars($bm['home_logo'], ENT_QUOTES, 'UTF-8') ?>" alt="">
+                                                <?php else: ?>
+                                                    <span class="bracket-team-fallback"><?= htmlspecialchars(mb_substr(wc_safe_team($bm['home_team']), 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                                                <?php endif; ?>
+                                                <span><?= htmlspecialchars(wc_safe_team($bm['home_team']), ENT_QUOTES, 'UTF-8') ?></span>
+                                            </div>
+                                            <div class="bracket-score"><?= is_null($bm['home_score']) ? '-' : (int)$bm['home_score'] ?></div>
+                                        </div>
+                                        <div class="bracket-row">
+                                            <div class="bracket-team">
+                                                <?php if (!empty($bm['away_logo'])): ?>
+                                                    <img src="<?= htmlspecialchars($bm['away_logo'], ENT_QUOTES, 'UTF-8') ?>" alt="">
+                                                <?php else: ?>
+                                                    <span class="bracket-team-fallback"><?= htmlspecialchars(mb_substr(wc_safe_team($bm['away_team']), 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                                                <?php endif; ?>
+                                                <span><?= htmlspecialchars(wc_safe_team($bm['away_team']), ENT_QUOTES, 'UTF-8') ?></span>
+                                            </div>
+                                            <div class="bracket-score"><?= is_null($bm['away_score']) ? '-' : (int)$bm['away_score'] ?></div>
+                                        </div>
+                                        <div class="bracket-status <?= htmlspecialchars($bmUpcomingClass, ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= htmlspecialchars($bmStatus, ENT_QUOTES, 'UTF-8') ?> •
+                                            <?= htmlspecialchars(date('d M - h:i A', strtotime((string)$bm['match_datetime'])), ENT_QUOTES, 'UTF-8') ?>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <div class="bracket-match">
+                                    <div class="bracket-row">
+                                        <div class="bracket-team"><span class="bracket-team-fallback">?</span><span>Waiting API</span></div>
+                                        <div class="bracket-score">-</div>
+                                    </div>
+                                    <div class="bracket-row">
+                                        <div class="bracket-team"><span class="bracket-team-fallback">?</span><span>Waiting API</span></div>
+                                        <div class="bracket-score">-</div>
+                                    </div>
+                                    <div class="bracket-status upcoming">Upcoming</div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="bracket-empty">
+                    Knockout bracket will appear automatically once knockout fixtures are available from the API.
+                    The section is already connected to <strong>WC2026_Matches</strong> and will update after sync.
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="bracket-preview-footer" id="bracketPreviewFooter">
+            <button type="button" class="bracket-show-full" id="bracketShowFull">
+                Show Full Bracket <span>↗</span>
+            </button>
+        </div>
+    </section>
+
+    <section class="match-dashboard">
+        <div class="card match-card-premium">
+            <?php if (!empty($liveMatches)): ?>
+                <?php $m = $liveMatches[0]; ?>
+                <div class="match-kicker"><i></i> Live Now</div>
+            <?php elseif (!empty($nextMatch)): ?>
+                <?php $m = $nextMatch[0]; ?>
+                <div class="match-kicker"><i></i> Next World Cup Match</div>
+            <?php else: ?>
+                <?php $m = null; ?>
+                <div class="match-kicker"><i></i> World Cup Matches</div>
+            <?php endif; ?>
+
+            <?php if ($m): ?>
+                <div class="match-teams">
+                    <div class="match-team">
+                        <div class="team-logo">
+                            <?php if (!empty($m['home_logo'])): ?>
+                                <img src="<?= htmlspecialchars($m['home_logo'], ENT_QUOTES, 'UTF-8') ?>" alt="">
+                            <?php else: ?>
+                                <span><?= htmlspecialchars(mb_substr($m['home_team'], 0, 2), ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <strong><?= htmlspecialchars($m['home_team'], ENT_QUOTES, 'UTF-8') ?></strong>
+                    </div>
+
+                    <div class="score-box">
+                        <?php if ((int)($m['is_live'] ?? 0) === 1 || (int)($m['is_finished'] ?? 0) === 1): ?>
+                            <b><?= is_null($m['home_score']) ? '-' : (int)$m['home_score'] ?> - <?= is_null($m['away_score']) ? '-' : (int)$m['away_score'] ?></b>
+                            <span><?= htmlspecialchars($m['status_short'] ?: 'Live', ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php else: ?>
+                            <b>VS</b>
+                            <span><?= date('d M', strtotime($m['match_datetime'])) ?></span>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="match-team">
+                        <div class="team-logo">
+                            <?php if (!empty($m['away_logo'])): ?>
+                                <img src="<?= htmlspecialchars($m['away_logo'], ENT_QUOTES, 'UTF-8') ?>" alt="">
+                            <?php else: ?>
+                                <span><?= htmlspecialchars(mb_substr($m['away_team'], 0, 2), ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <strong><?= htmlspecialchars($m['away_team'], ENT_QUOTES, 'UTF-8') ?></strong>
+                    </div>
+                </div>
+
+                <div class="match-meta-premium">
+                    <?php if ((int)($m['is_live'] ?? 0) === 1): ?>
+                        <span class="live-badge">Live<?= !empty($m['elapsed']) ? ' ' . (int)$m['elapsed'] . "'" : '' ?></span>
+                    <?php else: ?>
+                        <span class="status-badge"><?= htmlspecialchars($m['status_long'] ?: 'Scheduled', ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endif; ?>
+                    <br>
+                    <?= date('D, d M Y - h:i A', strtotime($m['match_datetime'])) ?>
+                    <?php if (!empty($m['stadium']) || !empty($m['city'])): ?>
+                        <br><?= htmlspecialchars(trim(($m['stadium'] ?? '') . (!empty($m['city']) ? ' • ' . $m['city'] : '')), ENT_QUOTES, 'UTF-8') ?>
+                    <?php endif; ?>
+                </div>
+
+                <div class="match-links">
+                    <a href="/WC2026/matches" class="match-link primary">View Matches</a>
+                    <a href="/WC2026/matches" class="match-link soft">Submit Prediction</a>
+                </div>
+            <?php else: ?>
+                <div class="match-meta-premium">
+                    Matches were synced successfully. Once upcoming fixtures are available by date, they will appear here.
+                    <br>Last sync: <?= $lastApiSync ? htmlspecialchars((string)$lastApiSync, ENT_QUOTES, 'UTF-8') : 'Not synced yet' ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="card match-list-card">
+            <h2 class="card-title">
+                World Cup Feed
+                <small><?= (int)$matchesCount ?> matches synced</small>
+            </h2>
+
+            <?php $feedRows = !empty($liveMatches) ? $liveMatches : (!empty($latestResults) ? $latestResults : $upcomingMatches); ?>
+            <?php if (!empty($feedRows)): ?>
+                <?php foreach ($feedRows as $fx): ?>
+                    <div class="fixture-row">
+                        <div class="fixture-main">
+                            <div class="fixture-logos">
+                                <?php if (!empty($fx['home_logo'])): ?>
+                                    <img src="<?= htmlspecialchars($fx['home_logo'], ENT_QUOTES, 'UTF-8') ?>" alt="">
+                                <?php else: ?>
+                                    <span class="fixture-logo-fallback"><?= htmlspecialchars(mb_substr($fx['home_team'], 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php endif; ?>
+                                <?php if (!empty($fx['away_logo'])): ?>
+                                    <img src="<?= htmlspecialchars($fx['away_logo'], ENT_QUOTES, 'UTF-8') ?>" alt="">
+                                <?php else: ?>
+                                    <span class="fixture-logo-fallback"><?= htmlspecialchars(mb_substr($fx['away_team'], 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <div>
+                                <div class="fixture-title"><?= htmlspecialchars($fx['home_team'], ENT_QUOTES, 'UTF-8') ?> vs <?= htmlspecialchars($fx['away_team'], ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="fixture-sub"><?= date('d M Y - h:i A', strtotime($fx['match_datetime'])) ?> • <?= htmlspecialchars($fx['status_long'] ?: 'Scheduled', ENT_QUOTES, 'UTF-8') ?></div>
+                            </div>
+                        </div>
+                        <div class="fixture-score <?= ((int)($fx['is_live'] ?? 0) === 1) ? 'live' : '' ?>">
+                            <?php if ((int)($fx['is_live'] ?? 0) === 1 || (int)($fx['is_finished'] ?? 0) === 1): ?>
+                                <?= is_null($fx['home_score']) ? '-' : (int)$fx['home_score'] ?> - <?= is_null($fx['away_score']) ? '-' : (int)$fx['away_score'] ?>
+                            <?php else: ?>
+                                VS
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="disabled-box">
+                    No match records found yet in <strong>wc_fixtures</strong>.
+                </div>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <section class="layout">
+        <div>
+            <div class="card">
+                <h2 class="card-title">
+                    Daily Goal Rush
+                    <small>One play per day</small>
+                </h2>
+
+                <?php if ($todayPlayed > 0): ?>
+                    <?php $tg = $todayGame[0] ?? []; ?>
+                    <div class="disabled-box">
+                        You already used today’s play.<br><br>
+                        <?php if (($tg['status'] ?? '') === 'Started'): ?>
+                            Your game was started today, so it is locked until tomorrow even if the browser was refreshed or closed.<br><br>
+                            <strong>Status:</strong> Started<br>
+                            <strong>Total Points:</strong> 0<br><br>
+                        <?php else: ?>
+                            <strong>Goals:</strong> <?= (int)($tg['goals'] ?? 0) ?><br>
+                            <strong>Goal Points:</strong> <?= (int)($tg['goal_points'] ?? 0) ?><br>
+                            <strong>Bonus:</strong> <?= !empty($tg['bonus_correct']) ? 'Correct +' . (int)$tg['bonus_points'] : 'Not earned' ?><br>
+                            <strong>Total Points:</strong> <?= (int)($tg['total_points'] ?? 0) ?><br><br>
+                        <?php endif; ?>
+                        Come back tomorrow for a new chance.
+                    </div>
+                <?php else: ?>
+                    <div class="game-panel" id="gamePanel">
+                        <div class="game-top">
+                            <div class="game-pill"><span>Time</span><b id="timeLeft">30</b></div>
+                            <div class="game-pill"><span>Goals</span><b id="goals">0</b></div>
+                            <div class="game-pill"><span>Points</span><b id="points">0</b></div>
+                        </div>
+
+                        <div class="field">
+                            <div class="stadium"></div>
+                            <div class="light-beam left"></div>
+                            <div class="light-beam right"></div>
+                            <div class="pitch-lines"></div>
+                            <div class="goal"></div>
+                            <div class="target-zone high left">30</div>
+                            <div class="target-zone high right">30</div>
+                            <div class="target-zone mid left">20</div>
+                            <div class="target-zone mid right">20</div>
+                            <div class="target-zone center">10</div>
+                            <div class="keeper" id="keeper"></div>
+                            <button class="ball disabled" id="ball" type="button" aria-label="Shoot the ball"></button>
+                            <div class="aim"><div class="aim-dot" id="aimDot"></div></div>
+                            <div class="golden-banner" id="goldenBanner">GOLDEN BALL +50</div>
+                            <div class="combo-banner" id="comboBanner">COMBO</div>
+                            <div class="tap-hint">
+                                <div>
+                                    🎯 Tap the ball to shoot!
+                                    <small>Use the moving target line and avoid the goalkeeper</small>
+                                </div>
+                            </div>
+                            <div class="goal-flash" id="goalFlash">GOAL!</div>
+                            <div class="miss-flash" id="missFlash">SAVED!</div>
+                            <div class="countdown-overlay" id="countdownOverlay">3</div>
+                        </div>
+                    </div>
+
+                    <div class="game-actions">
+                        <button class="primary-btn" id="startBtn" type="button">Start Daily Game</button>
+                        <button class="secondary-btn hidden-shoot" id="shootBtn" type="button" disabled>Shoot</button>
+                        <span class="game-tip">After start, the ball becomes your shoot button.</span>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div>
+            <div class="card">
+                <h2 class="card-title">Top Leaderboard</h2>
+
+                <?php if (!empty($leaderboard)): ?>
+                    <?php foreach ($leaderboard as $i => $row): ?>
+                        <div class="leader-row">
+                            <div class="rank"><?= $i + 1 ?></div>
+                            <div>
+                                <div class="leader-name"><?= htmlspecialchars($row['full_name'], ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="leader-loc"><?= htmlspecialchars($row['location'] ?: 'CATRION', ENT_QUOTES, 'UTF-8') ?></div>
+                            </div>
+                            <div class="points"><?= (int)$row['total_points'] ?> pts</div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="disabled-box">
+                        Leaderboard will appear after participants play the daily game.
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">My Profile</h2>
+
+                <div class="profile-line">
+                    <span>Name</span>
+                    <span><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></span>
+                </div>
+
+                <div class="profile-line">
+                    <span>Mobile</span>
+                    <span><?= htmlspecialchars($mobile, ENT_QUOTES, 'UTF-8') ?></span>
+                </div>
+
+                <div class="profile-line">
+                    <span>User Type</span>
+                    <span><?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?></span>
+                </div>
+
+                <div class="profile-line">
+                    <span>Days Played</span>
+                    <span><?= (int)$playedDays ?></span>
+                </div>
+
+                <div class="profile-line">
+                    <span>Participants</span>
+                    <span><?= (int)$participantsCount ?></span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<div class="modal" id="quizModal">
+    <div class="modal-card">
+        <div class="modal-kicker">Bonus Question</div>
+        <h3 id="questionText">Question</h3>
+        <div class="answers" id="answersBox"></div>
+        <div class="result-box" id="quizResult"></div>
+    </div>
+</div>
+
+<div class="modal" id="mysteryModal">
+    <div class="modal-card">
+        <div class="modal-kicker">CATRION Food Bonus Roll</div>
+        <h3>Roll the daily food bonus</h3>
+        <div class="mystery-note">Get three matching food icons for the highest bonus. Your bonus will be saved with today’s game result.</div>
+        <div class="food-roll-machine">
+            <div class="mystery-grid">
+                <div class="food-slot" id="foodSlot1">🍔</div>
+                <div class="food-slot" id="foodSlot2">🍕</div>
+                <div class="food-slot" id="foodSlot3">🍟</div>
+            </div>
+            <button class="food-roll-btn" id="foodRollBtn" type="button">Roll Bonus</button>
+            <div class="food-roll-result" id="mysteryResult"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="finalModal">
+    <div class="modal-card">
+        <div class="modal-kicker">Game Completed</div>
+        <h3 id="finalTitle">Your score is saved</h3>
+        <div class="disabled-box" id="finalDetails"></div>
+        <br>
+        <button class="primary-btn" type="button" onclick="location.reload()">Done</button>
+    </div>
+</div>
+
+<script>
+const csrf = <?= json_encode($csrf) ?>;
+const bonusQuestion = <?= $bonusQuestionJson ?>;
+
+const GAME_DURATION = 30;
+const NORMAL_BALL_POINTS = 10;
+const GOLDEN_BONUS_POINTS = 50;
+
+let gameStarted = false;
+let gameFinished = false;
+let timeLeft = GAME_DURATION;
+let goals = 0;
+let targetPoints = 0;
+let goldenGoals = 0;
+let goldenPoints = 0;
+let comboStreak = 0;
+let comboBonus = 0;
+let mysteryBonus = 0;
+let bonusAnswer = '';
+let bonusQuestionId = bonusQuestion ? parseInt(bonusQuestion.id, 10) : 0;
+let bonusShown = false;
+let timer = null;
+let goldenTimer = null;
+let quizTriggerTimeLeft = Math.floor(Math.random() * 13) + 15; // random during middle of 45s game // random between 20 and 40 seconds left
+let aimX = 50;
+let aimDirection = 1;
+let keeperX = 40;
+let keeperDirection = 1;
+let isGoldenBall = false;
+let savingScore = false;
+let mysteryChosen = false;
+let gameStartTimestamp = null;
+
+const timeLeftEl = document.getElementById('timeLeft');
+const goalsEl = document.getElementById('goals');
+const pointsEl = document.getElementById('points');
+const aimDot = document.getElementById('aimDot');
+const keeper = document.getElementById('keeper');
+const ball = document.getElementById('ball');
+const startBtn = document.getElementById('startBtn');
+const shootBtn = document.getElementById('shootBtn');
+const goalFlash = document.getElementById('goalFlash');
+const missFlash = document.getElementById('missFlash');
+const countdownOverlay = document.getElementById('countdownOverlay');
+const goldenBanner = document.getElementById('goldenBanner');
+const comboBanner = document.getElementById('comboBanner');
+const mysteryModal = document.getElementById('mysteryModal');
+const mysteryResult = document.getElementById('mysteryResult');
+
+function currentGamePoints(){
+    return targetPoints + goldenPoints + comboBonus + mysteryBonus;
+}
+
+function updateScore(){
+    goalsEl.textContent = goals;
+    pointsEl.textContent = currentGamePoints();
+}
+
+function showGoalFlash(text){
+    if (!goalFlash) return;
+    goalFlash.textContent = text || 'GOAL!';
+    goalFlash.classList.remove('active');
+    void goalFlash.offsetWidth;
+    goalFlash.classList.add('active');
+    setTimeout(() => goalFlash.classList.remove('active'), 750);
+}
+
+function showMissFlash(){
+    if (!missFlash) return;
+    missFlash.classList.remove('active');
+    void missFlash.offsetWidth;
+    missFlash.classList.add('active');
+    setTimeout(() => missFlash.classList.remove('active'), 550);
+}
+
+function showCombo(text){
+    if (!comboBanner) return;
+    comboBanner.textContent = text;
+    comboBanner.classList.add('active');
+    setTimeout(() => comboBanner.classList.remove('active'), 900);
+}
+
+function setGoldenBall(active){
+    isGoldenBall = active;
+    if (!ball || !goldenBanner) return;
+
+    if (active) {
+        ball.classList.add('golden');
+        goldenBanner.classList.add('active');
+    } else {
+        ball.classList.remove('golden');
+        goldenBanner.classList.remove('active');
+    }
+}
+
+function scheduleGoldenBall(){
+    if (!gameStarted || gameFinished) return;
+
+    const delay = (Math.floor(Math.random() * 8) + 10) * 1000; // 10-17 seconds
+
+    goldenTimer = setTimeout(() => {
+        if (!gameStarted || gameFinished) return;
+
+        setGoldenBall(true);
+
+        setTimeout(() => {
+            setGoldenBall(false);
+            scheduleGoldenBall();
+        }, 4200);
+    }, delay);
+}
+
+function getTargetPoints(x){
+    if (x <= 24 || x >= 76) return 30;
+    if (x <= 38 || x >= 62) return 20;
+    return 10;
+}
+
+function animateField(){
+    if (!aimDot || !keeper) return;
+
+    const elapsed = GAME_DURATION - timeLeft;
+    let aimSpeed = elapsed > 45 ? 2.55 : (elapsed > 30 ? 2.25 : 1.85);
+    let keeperSpeed = elapsed > 45 ? 2.25 : (elapsed > 30 ? 1.75 : 1.12);
+
+    aimX += aimDirection * aimSpeed;
+    if (aimX >= 96 || aimX <= 4) aimDirection *= -1;
+    aimDot.style.left = aimX + '%';
+
+    keeperX += keeperDirection * keeperSpeed;
+    if (keeperX >= 70 || keeperX <= 30) keeperDirection *= -1;
+
+    // Smart goalkeeper: occasional quick reaction jump
+    if (gameStarted && !gameFinished && Math.random() < 0.012) {
+        keeperX += (aimX > keeperX ? 1 : -1) * (Math.random() * 4);
+        keeperX = Math.max(30, Math.min(70, keeperX));
+    }
+
+    keeper.style.left = keeperX + '%';
+
+    requestAnimationFrame(animateField);
+}
+
+function shoot(){
+    if (!gameStarted || gameFinished || !ball) return;
+
+    const targetX = aimX;
+    const keeperCenter = keeperX;
+    const blocked = Math.abs(targetX - keeperCenter) < 9;
+
+    ball.classList.add('shooting');
+    ball.style.left = targetX + '%';
+    ball.style.bottom = blocked ? '230px' : '330px';
+
+    setTimeout(() => {
+        ball.classList.remove('shooting');
+        ball.style.left = '50%';
+        ball.style.bottom = '54px';
+    }, 360);
+
+    if (!blocked) {
+        const shotPoints = getTargetPoints(targetX);
+        goals++;
+        targetPoints += shotPoints;
+        comboStreak++;
+
+        let flashText = '+' + shotPoints;
+
+        if (isGoldenBall) {
+            goldenGoals++;
+            goldenPoints += GOLDEN_BONUS_POINTS;
+            flashText = 'GOLDEN +' + (shotPoints + GOLDEN_BONUS_POINTS);
+            setGoldenBall(false);
+        }
+
+        if (comboStreak > 0 && comboStreak % 5 === 0) {
+            comboBonus += 50;
+            showCombo('🔥 COMBO x' + comboStreak + ' +50');
+        } else if (comboStreak > 0 && comboStreak % 3 === 0) {
+            comboBonus += 20;
+            showCombo('🔥 COMBO x' + comboStreak + ' +20');
+        }
+
+        updateScore();
+        showGoalFlash(flashText);
+    } else {
+        comboStreak = 0;
+        showMissFlash();
+    }
+}
+
+function openQuiz(){
+    if (!bonusQuestion || bonusShown) return;
+    bonusShown = true;
+
+    const modal = document.getElementById('quizModal');
+    const questionText = document.getElementById('questionText');
+    const answersBox = document.getElementById('answersBox');
+    const quizResult = document.getElementById('quizResult');
+
+    questionText.textContent = bonusQuestion.question_text;
+    answersBox.innerHTML = '';
+    quizResult.className = 'result-box';
+    quizResult.textContent = '';
+
+    const answers = [
+        ['A', bonusQuestion.option_a],
+        ['B', bonusQuestion.option_b],
+        ['C', bonusQuestion.option_c],
+        ['D', bonusQuestion.option_d]
+    ];
+
+    answers.forEach(([key, value]) => {
+        const btn = document.createElement('button');
+        btn.className = 'answer-btn';
+        btn.type = 'button';
+        btn.textContent = key + '. ' + value;
+        btn.onclick = () => {
+            bonusAnswer = key;
+            quizResult.className = 'result-box ok';
+            quizResult.textContent = 'Answer submitted! Continue playing.';
+            setTimeout(() => modal.classList.remove('active'), 750);
+        };
+        answersBox.appendChild(btn);
+    });
+
+    modal.classList.add('active');
+}
+
+function runStartCountdown(callback){
+    if (!countdownOverlay) {
+        callback();
+        return;
+    }
+
+    let count = 3;
+    countdownOverlay.textContent = count;
+    countdownOverlay.classList.add('active');
+
+    const countdownTimer = setInterval(() => {
+        count--;
+
+        if (count > 0) {
+            countdownOverlay.textContent = count;
+        } else {
+            countdownOverlay.textContent = 'GO!';
+        }
+
+        if (count < 0) {
+            clearInterval(countdownTimer);
+            countdownOverlay.classList.remove('active');
+            callback();
+        }
+    }, 700);
+}
+
+function startGame(){
+    if (gameStarted) return;
+
+    startBtn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('csrf', csrf);
+    formData.append('action', 'start_daily_game');
+
+    fetch('/WC2026/', {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.ok) {
+            alert(data.message || 'You already played today.');
+            location.reload();
+            return;
+        }
+
+        runStartCountdown(() => {
+            gameStarted = true;
+            gameFinished = false;
+            gameStartTimestamp = Date.now();
+            timeLeft = GAME_DURATION;
+            goals = 0;
+            targetPoints = 0;
+            goldenGoals = 0;
+            goldenPoints = 0;
+            comboStreak = 0;
+            comboBonus = 0;
+            mysteryBonus = 0;
+            mysteryChosen = false;
+            bonusAnswer = '';
+            bonusShown = false;
+            quizTriggerTimeLeft = Math.floor(Math.random() * 13) + 15; // random during middle of 45s game
+
+            updateScore();
+            timeLeftEl.textContent = timeLeft;
+            shootBtn.disabled = false;
+            if (ball) ball.classList.remove('disabled');
+
+            scheduleGoldenBall();
+
+            timer = setInterval(() => {
+                timeLeft--;
+                timeLeftEl.textContent = timeLeft;
+
+                if (timeLeft === quizTriggerTimeLeft) {
+                    openQuiz();
+                }
+
+                if (timeLeft <= 0) {
+                    finishGame();
+                }
+            }, 1000);
+        });
+    })
+    .catch(() => {
+        startBtn.disabled = false;
+        alert('Unable to start the game. Please try again.');
+    });
+}
+
+function finishGame(){
+    if (gameFinished) return;
+
+    gameFinished = true;
+    gameStarted = false;
+    shootBtn.disabled = true;
+    if (ball) ball.classList.add('disabled');
+
+    if (timer) clearInterval(timer);
+    if (goldenTimer) clearTimeout(goldenTimer);
+    setGoldenBall(false);
+
+    openMysteryBox();
+}
+
+function openMysteryBox(){
+    if (!mysteryModal) {
+        saveScore();
+        return;
+    }
+
+    mysteryChosen = false;
+    mysteryModal.classList.add('active');
+
+    const foodItems = ['🍔', '🍕', '🍟', '🌭', '🥤', '🍗'];
+    const slots = [
+        document.getElementById('foodSlot1'),
+        document.getElementById('foodSlot2'),
+        document.getElementById('foodSlot3')
+    ];
+    const rollBtn = document.getElementById('foodRollBtn');
+
+    if (mysteryResult) {
+        mysteryResult.className = 'food-roll-result';
+        mysteryResult.innerHTML = '';
+    }
+
+    if (!rollBtn || slots.some(slot => !slot)) {
+        saveScore();
+        return;
+    }
+
+    rollBtn.disabled = false;
+    rollBtn.textContent = 'Roll Bonus';
+
+    slots.forEach((slot, index) => {
+        slot.textContent = foodItems[index] || '🍔';
+        slot.classList.remove('rolling');
+    });
+
+    rollBtn.onclick = () => {
+        if (mysteryChosen) return;
+        mysteryChosen = true;
+        rollBtn.disabled = true;
+        rollBtn.textContent = 'Rolling...';
+
+        let ticks = 0;
+        const maxTicks = 30;
+        const finalItems = [
+            foodItems[Math.floor(Math.random() * foodItems.length)],
+            foodItems[Math.floor(Math.random() * foodItems.length)],
+            foodItems[Math.floor(Math.random() * foodItems.length)]
+        ];
+
+        slots.forEach(slot => slot.classList.add('rolling'));
+
+        const rollTimer = setInterval(() => {
+            ticks++;
+
+            slots.forEach((slot) => {
+                slot.textContent = foodItems[Math.floor(Math.random() * foodItems.length)];
+            });
+
+            if (ticks >= maxTicks) {
+                clearInterval(rollTimer);
+
+                slots.forEach((slot, index) => {
+                    slot.classList.remove('rolling');
+                    slot.textContent = finalItems[index];
+                });
+
+                const counts = {};
+                finalItems.forEach(item => {
+                    counts[item] = (counts[item] || 0) + 1;
+                });
+
+                const highestMatch = Math.max(...Object.values(counts));
+
+                if (highestMatch === 3) {
+                    mysteryBonus = 100;
+                    mysteryResult.innerHTML = '🎉 JACKPOT! Three matching meals <strong>+100 Points</strong>';
+                } else if (highestMatch === 2) {
+                    mysteryBonus = 50;
+                    mysteryResult.innerHTML = '✨ Nice Roll! Two matching meals <strong>+50 Points</strong>';
+                } else {
+                    mysteryBonus = 10;
+                    mysteryResult.innerHTML = '🍽️ Daily Roll Bonus <strong>+10 Points</strong>';
+                }
+
+                mysteryResult.classList.add('active');
+                updateScore();
+
+                setTimeout(() => {
+                    mysteryModal.classList.remove('active');
+                    saveScore();
+                }, 2200);
+            }
+        }, 85);
+    };
+}
+
+function saveScore(){
+    if (savingScore) return;
+    savingScore = true;
+    if (startBtn) startBtn.disabled = true;
+
+    const formData = new FormData();
+    formData.append('csrf', csrf);
+    formData.append('action', 'finish_daily_game');
+    formData.append('goals', goals);
+    formData.append('target_points', targetPoints);
+    formData.append('golden_goals', goldenGoals);
+    formData.append('golden_points', goldenPoints);
+    formData.append('combo_bonus', comboBonus);
+    formData.append('mystery_bonus', mysteryBonus);
+    formData.append('goal_points', currentGamePoints());
+    formData.append('duration_seconds', gameStartTimestamp ? Math.max(1, Math.min(GAME_DURATION, Math.round((Date.now() - gameStartTimestamp) / 1000))) : GAME_DURATION);
+    formData.append('bonus_question_id', bonusQuestionId);
+    formData.append('bonus_answer', bonusAnswer);
+
+    fetch('/WC2026/', {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+    })
+    .then(async (r) => {
+        const text = await r.text();
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            throw new Error(text || 'Invalid server response');
+        }
+    })
+    .then(data => {
+        if (data.ok) {
+            setTimeout(() => {
+                location.reload();
+            }, 600);
+        } else {
+            alert(data.message || 'Unable to save your score.');
+            location.reload();
+        }
+    })
+    .catch((err) => {
+        console.error(err);
+        alert('Unable to save your score. ' + (err && err.message ? err.message : 'Please try again.'));
+        savingScore = false;
+    });
+}
+
+if (startBtn) startBtn.addEventListener('click', startGame);
+if (shootBtn) shootBtn.addEventListener('click', shoot);
+if (ball) ball.addEventListener('click', shoot);
+document.addEventListener('keydown', e => {
+    if (e.code === 'Space') {
+        e.preventDefault();
+        shoot();
+    }
+});
+
+animateField();
+</script>
+<script>
+/* WC2026 game duration hard sync */
+document.addEventListener('DOMContentLoaded', function(){
+    const timeLeftElHard = document.getElementById('timeLeft');
+    if (timeLeftElHard && timeLeftElHard.textContent.trim() === '45') {
+        timeLeftElHard.textContent = '30';
+    }
+});
+</script>
+
+
+<script>
+(function(){
+    const card = document.getElementById('knockoutBracketCard');
+    const moreBtn = document.getElementById('bracketMoreBtn');
+    const showFullBtn = document.getElementById('bracketShowFull');
+
+    function expandBracket(){
+        if (!card) return;
+        card.classList.add('expanded');
+        card.classList.remove('bracket-preview-mode');
+
+        if (moreBtn) {
+            moreBtn.innerHTML = 'FULL VIEW <span>✓</span>';
+        }
+
+        setTimeout(() => {
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 80);
+    }
+
+    if (moreBtn) {
+        moreBtn.addEventListener('click', expandBracket);
+    }
+
+    if (showFullBtn) {
+        showFullBtn.addEventListener('click', expandBracket);
+    }
+})();
+</script>
+
+
+<!-- ===================== WOW / ANIMATED UI LAYER ===================== -->
+<style>
+@media (prefers-reduced-motion:no-preference){
+
+  /* ---------- keyframes ---------- */
+  @keyframes wcUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}
+  @keyframes wcAurora{0%{transform:translate(-5%,-3%) rotate(0deg)}50%{transform:translate(5%,3%) rotate(10deg)}100%{transform:translate(-5%,-3%) rotate(0deg)}}
+  @keyframes wcFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  @keyframes wcGrad{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+  @keyframes wcPulse{0%{box-shadow:0 0 0 0 rgba(17,163,106,.6)}100%{box-shadow:0 0 0 12px rgba(17,163,106,0)}}
+  @keyframes wcShine{0%{transform:translateX(-160%) skewX(-18deg)}55%,100%{transform:translateX(280%) skewX(-18deg)}}
+  @keyframes wcConfFall{to{transform:translateY(380px) rotate(560deg);opacity:0}}
+  @keyframes wcGlowPulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+  /* ---------- animated background layers (injected by JS) ---------- */
+  .wc-aurora{
+    position:fixed;inset:-25%;z-index:-1;pointer-events:none;opacity:.7;
+    background:
+      radial-gradient(closest-side at 22% 26%, rgba(85,183,255,.22), transparent 70%),
+      radial-gradient(closest-side at 80% 16%, rgba(14,99,230,.24), transparent 70%),
+      radial-gradient(closest-side at 62% 82%, rgba(245,200,91,.12), transparent 70%);
+    animation:wcAurora 24s ease-in-out infinite;
+  }
+  .wc-spark{position:fixed;inset:0;z-index:-1;pointer-events:none}
+
+  /* ---------- hero entrance + animated headline ---------- */
+  .hero .badge{animation:wcUp .8s cubic-bezier(.16,1,.3,1) both}
+  .hero h1{animation:wcUp .9s cubic-bezier(.16,1,.3,1) .12s both}
+  .hero p{animation:wcUp .9s cubic-bezier(.16,1,.3,1) .24s both}
+  .daily-card{animation:wcUp 1s cubic-bezier(.16,1,.3,1) .34s both}
+
+  .hero h1 span{
+    background:linear-gradient(90deg,#A8E7FF,#FFE19A,#55B7FF,#A8E7FF);
+    background-size:200% auto;
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    animation:wcGrad 6s linear infinite;
+  }
+
+  .badge i{animation:wcGlowPulse 1.6s ease-in-out infinite}
+  .daily-card:before{animation:wcFloat 4s ease-in-out infinite}
+
+  /* sheen sweep across the white logo card */
+  .logo-card{position:relative;overflow:hidden}
+  .logo-card:after{
+    content:"";position:absolute;top:0;left:0;width:42%;height:100%;pointer-events:none;
+    background:linear-gradient(120deg,transparent,rgba(255,255,255,.7),transparent);
+    transform:translateX(-160%) skewX(-18deg);
+    animation:wcShine 6s ease-in-out 1.2s infinite;
+  }
+
+  /* ---------- scroll reveal (added via JS only when supported) ---------- */
+  .wc-reveal{opacity:0;transform:translateY(30px);
+    transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+  .wc-reveal.wc-in{opacity:1;transform:none}
+
+  /* ---------- cards: lift + glow + cursor spotlight ---------- */
+  .wc-spot{position:relative}
+  .wc-spot>*{position:relative;z-index:1}
+  .wc-glow{
+    position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;z-index:0;
+    transition:opacity .35s ease;
+    background:radial-gradient(440px circle at var(--mx,50%) var(--my,50%), rgba(85,183,255,.16), transparent 45%);
+  }
+  .wc-spot:hover .wc-glow{opacity:1}
+
+  .stat{position:relative;overflow:hidden;transition:transform .25s ease, box-shadow .3s ease}
+  .stat:hover{transform:translateY(-5px); box-shadow:0 26px 60px rgba(7,42,85,.30)}
+  .stat .wc-bar{position:absolute;left:0;right:0;top:0;height:3px;z-index:2;transform:scaleX(0);transform-origin:left;
+    background:linear-gradient(90deg,#0E63E6,#55B7FF,#F5C85B);transition:transform .45s ease}
+  .stat:hover .wc-bar{transform:scaleX(1)}
+
+  .live-map-card:hover,.knockout-card:hover,
+  .match-card-premium:hover,.match-list-card:hover,
+  .layout .card:hover{
+    box-shadow:0 30px 72px rgba(0,0,0,.30), 0 0 0 1px rgba(168,231,255,.30), 0 0 42px rgba(85,183,255,.12) !important;
+  }
+
+  /* ---------- live map pins: radar ping ---------- */
+  .map-pin-status.Live{position:relative}
+  .map-pin-status.Live:after{
+    content:"";position:absolute;right:-5px;top:50%;width:9px;height:9px;border-radius:50%;
+    transform:translateY(-50%);background:#11A36A;animation:wcPulse 1.5s ease-out infinite;
+  }
+
+  /* ---------- primary buttons: hover shine ---------- */
+  .match-link.primary,.primary-btn,.food-roll-btn,.bracket-show-full,.bracket-more-btn{position:relative;overflow:hidden}
+  .match-link.primary:after,.primary-btn:after,.food-roll-btn:after,
+  .bracket-show-full:after,.bracket-more-btn:after{
+    content:"";position:absolute;top:0;left:0;width:38%;height:100%;pointer-events:none;
+    background:linear-gradient(120deg,transparent,rgba(255,255,255,.5),transparent);
+    transform:translateX(-160%) skewX(-18deg);transition:transform .6s ease;
+  }
+  .match-link.primary:hover:after,.primary-btn:hover:after,.food-roll-btn:hover:after,
+  .bracket-show-full:hover:after,.bracket-more-btn:hover:after{transform:translateX(320%) skewX(-18deg)}
+
+  /* ---------- confetti (spawned on GOAL) ---------- */
+  .wc-conf{position:absolute;top:28%;width:9px;height:15px;border-radius:2px;z-index:30;pointer-events:none;
+    animation:wcConfFall 1.15s ease-in forwards}
+
+  /* gentle float for the daily-game ball is already in the base CSS */
+}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var d = document, body = d.body;
+
+  /* ---------- aurora ---------- */
+  var aurora = d.createElement('div'); aurora.className = 'wc-aurora'; body.appendChild(aurora);
+
+  /* ---------- drifting spark particles ---------- */
+  var canvas = d.createElement('canvas'); canvas.className = 'wc-spark'; body.appendChild(canvas);
+  var ctx = canvas.getContext('2d');
+  var DPR = Math.min(window.devicePixelRatio || 1, 1.5), W = 0, H = 0, parts = [], raf = null;
+  function size(){ W = innerWidth; H = innerHeight; canvas.width = W*DPR; canvas.height = H*DPR;
+    canvas.style.width = W+'px'; canvas.style.height = H+'px'; ctx.setTransform(DPR,0,0,DPR,0,0); }
+  function seed(){ parts = []; var n = Math.min(64, Math.round(W*H/30000));
+    for (var i=0;i<n;i++) parts.push({x:Math.random()*W, y:Math.random()*H, r:Math.random()*2+.5,
+      s:Math.random()*.45+.12, a:Math.random()*.45+.12}); }
+  function loop(){ ctx.clearRect(0,0,W,H);
+    for (var i=0;i<parts.length;i++){ var p=parts[i]; p.y-=p.s; if(p.y<-6){ p.y=H+6; p.x=Math.random()*W; }
+      ctx.fillStyle='rgba(168,231,255,'+p.a+')'; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.28); ctx.fill(); }
+    raf = requestAnimationFrame(loop); }
+  size(); seed(); loop();
+  addEventListener('resize', function(){ size(); seed(); });
+  d.addEventListener('visibilitychange', function(){ if(d.hidden){ cancelAnimationFrame(raf); raf=null; } else if(!raf){ loop(); } });
+
+  /* ---------- cursor spotlight on cards ---------- */
+  d.querySelectorAll('.card,.stat,.live-map-card,.knockout-card').forEach(function(el){
+    el.classList.add('wc-spot');
+    var g = d.createElement('span'); g.className = 'wc-glow'; el.insertBefore(g, el.firstChild);
+    el.addEventListener('pointermove', function(e){
+      var r = el.getBoundingClientRect();
+      el.style.setProperty('--mx', (e.clientX-r.left)+'px');
+      el.style.setProperty('--my', (e.clientY-r.top)+'px');
+    });
+  });
+
+  /* ---------- stat accent bar ---------- */
+  d.querySelectorAll('.stat').forEach(function(el){ var b=d.createElement('span'); b.className='wc-bar'; el.insertBefore(b, el.firstChild); });
+
+  /* ---------- scroll reveal ---------- */
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(es){ es.forEach(function(en){
+      if (en.isIntersecting){ en.target.classList.add('wc-in'); io.unobserve(en.target); } });
+    }, {threshold:.12, rootMargin:'0px 0px -6% 0px'});
+    d.querySelectorAll('.stat, .news-ticker, .live-map-card, .knockout-card, .match-dashboard .card, .layout .card')
+      .forEach(function(el){ el.classList.add('wc-reveal'); io.observe(el); });
+  }
+
+  /* ---------- count-up for integer stat values ---------- */
+  if ('IntersectionObserver' in window){
+    var cio = new IntersectionObserver(function(es){ es.forEach(function(en){
+      if (!en.isIntersecting) return;
+      var el = en.target, raw = el.textContent.trim();
+      cio.unobserve(el);
+      if (!/^\d+$/.test(raw)) return;
+      var target = parseInt(raw,10), start = performance.now(), dur = 1200;
+      (function tick(now){ var p = Math.min(1,(now-start)/dur), e = 1-Math.pow(1-p,3);
+        el.textContent = Math.round(target*e); if(p<1) requestAnimationFrame(tick); })(start);
+    }); }, {threshold:.6});
+    d.querySelectorAll('.stat-value').forEach(function(el){ cio.observe(el); });
+  }
+
+  /* ---------- confetti burst whenever a GOAL flashes ---------- */
+  var gf = d.getElementById('goalFlash');
+  if (gf && 'MutationObserver' in window){
+    var cols = ['#F5C85B','#55B7FF','#11A36A','#FFFFFF','#0E63E6','#FFE19A'];
+    new MutationObserver(function(muts){
+      for (var i=0;i<muts.length;i++){
+        if (muts[i].attributeName === 'class' && gf.classList.contains('active')){
+          var host = gf.parentElement || body, hw = host.clientWidth || 320;
+          for (var k=0;k<28;k++){
+            var s = d.createElement('span'); s.className = 'wc-conf';
+            s.style.left = (16 + Math.random()*(hw-32)) + 'px';
+            s.style.background = cols[k % cols.length];
+            s.style.animationDelay = (Math.random()*.12) + 's';
+            s.style.transform = 'translateY(0) rotate(' + (Math.random()*360) + 'deg)';
+            host.appendChild(s);
+            (function(node){ setTimeout(function(){ node.remove(); }, 1400); })(s);
+          }
+          break;
+        }
+      }
+    }).observe(gf, {attributes:true, attributeFilter:['class']});
+  }
+})();
+</script>
+
+</body>
+</html>
