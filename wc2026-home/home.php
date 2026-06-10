@@ -482,6 +482,39 @@ $standingsRows = wc_rows($conn, "
     ORDER BY grp ASC, rank_pos ASC
 ");
 
+/* ---- Country flags from WC2026_Filter_Countries (matched by name or code) ---- */
+$flagByName = [];
+$flagByCode = [];
+foreach (wc_rows($conn, "SELECT country_name, country_code, flag_path FROM WC2026_Filter_Countries WHERE status='Active'") as $fr) {
+    $fp = trim((string)($fr['flag_path'] ?? ''));
+    if ($fp === '') continue;
+    $flagByName[mb_strtolower(trim((string)($fr['country_name'] ?? '')))] = $fp;
+    $flagByCode[strtolower(trim((string)($fr['country_code'] ?? '')))]   = $fp;
+}
+
+function wc_flag(string $team, array $byName, array $byCode): string {
+    $k = mb_strtolower(trim($team));
+    if ($k === '') return '';
+    if (isset($byName[$k])) return $byName[$k];
+    if (isset($byCode[$k])) return $byCode[$k];
+    return '';
+}
+
+function wc_attach_flags(array &$rows, array $byName, array $byCode): void {
+    foreach ($rows as &$r) {
+        if (empty($r['home_logo'])) { $f = wc_flag((string)($r['home_team'] ?? ''), $byName, $byCode); if ($f !== '') $r['home_logo'] = $f; }
+        if (empty($r['away_logo'])) { $f = wc_flag((string)($r['away_team'] ?? ''), $byName, $byCode); if ($f !== '') $r['away_logo'] = $f; }
+    }
+    unset($r);
+}
+
+wc_attach_flags($liveMatches, $flagByName, $flagByCode);
+wc_attach_flags($nextMatch, $flagByName, $flagByCode);
+wc_attach_flags($upcomingMatches, $flagByName, $flagByCode);
+wc_attach_flags($latestResults, $flagByName, $flagByCode);
+wc_attach_flags($newsMatches, $flagByName, $flagByCode);
+wc_attach_flags($mapMatches, $flagByName, $flagByCode);
+
 function wc_group_letter_from_name(?string $groupName): string {
     $g = strtoupper(trim((string)$groupName));
 
@@ -563,13 +596,26 @@ $projectedR32Slots = [
     ['R32-16', 'Round of 32', ['G', 1], ['3RD', 4], '1G vs Best 3rd #4', '2026-07-06 02:00:00'],
 ];
 
+/*
+ * Correct bracket cascade (counts now match a real World Cup knockout):
+ *   Round of 32 = 16 ties -> Round of 16 = 8 -> Quarter Finals = 4
+ *   -> Semi Finals = 2 -> Final = 1 (+ Third Place = 1)
+ * Pairings follow the standard winner-feeds-next-slot order so the
+ * connector lines line up correctly between columns.
+ */
 $projectedNextSlots = [
     ['Round of 16', 'Winner R32-01', 'Winner R32-02', 'W R32-01 vs W R32-02', '2026-07-07 02:00:00'],
     ['Round of 16', 'Winner R32-03', 'Winner R32-04', 'W R32-03 vs W R32-04', '2026-07-07 22:00:00'],
     ['Round of 16', 'Winner R32-05', 'Winner R32-06', 'W R32-05 vs W R32-06', '2026-07-08 02:00:00'],
     ['Round of 16', 'Winner R32-07', 'Winner R32-08', 'W R32-07 vs W R32-08', '2026-07-08 22:00:00'],
+    ['Round of 16', 'Winner R32-09', 'Winner R32-10', 'W R32-09 vs W R32-10', '2026-07-09 02:00:00'],
+    ['Round of 16', 'Winner R32-11', 'Winner R32-12', 'W R32-11 vs W R32-12', '2026-07-09 22:00:00'],
+    ['Round of 16', 'Winner R32-13', 'Winner R32-14', 'W R32-13 vs W R32-14', '2026-07-10 02:00:00'],
+    ['Round of 16', 'Winner R32-15', 'Winner R32-16', 'W R32-15 vs W R32-16', '2026-07-10 22:00:00'],
     ['Quarter Finals', 'Winner R16-01', 'Winner R16-02', 'W R16-01 vs W R16-02', '2026-07-11 22:00:00'],
     ['Quarter Finals', 'Winner R16-03', 'Winner R16-04', 'W R16-03 vs W R16-04', '2026-07-12 02:00:00'],
+    ['Quarter Finals', 'Winner R16-05', 'Winner R16-06', 'W R16-05 vs W R16-06', '2026-07-12 22:00:00'],
+    ['Quarter Finals', 'Winner R16-07', 'Winner R16-08', 'W R16-07 vs W R16-08', '2026-07-13 02:00:00'],
     ['Semi Finals', 'Winner QF-01', 'Winner QF-02', 'W QF-01 vs W QF-02', '2026-07-15 02:00:00'],
     ['Semi Finals', 'Winner QF-03', 'Winner QF-04', 'W QF-03 vs W QF-04', '2026-07-16 02:00:00'],
     ['Final', 'Winner SF-01', 'Winner SF-02', 'W SF-01 vs W SF-02', '2026-07-19 22:00:00'],
@@ -638,6 +684,8 @@ foreach ($projectedNextSlots as $slot) {
 
     $slotNo++;
 }
+
+wc_attach_flags($knockoutMatches, $flagByName, $flagByCode);
 
 $knockoutStages = [
     'Round of 32' => [],
@@ -4263,42 +4311,49 @@ body:before{
             </div>
             <div>
                 <div class="brand-title">FIFA World Cup 2026 Challenge</div>
-                <div class="brand-sub">Prediction League • Daily Goal Rush</div>
+                <div class="brand-sub" data-i18n="brandSub">Prediction League • Daily Goal Rush</div>
             </div>
         </div>
 
         <div class="top-actions">
-            <a href="/WC2026/" class="top-link active">Home</a>
-            <a href="/WC2026/matches" class="top-link">Matches</a>
+            <div class="theme-switch" role="group" aria-label="Theme">
+                <button type="button" class="theme-btn" data-theme-set="catrion" data-i18n="themeCatrion">CATRION</button>
+                <button type="button" class="theme-btn" data-theme-set="saudi" data-i18n="themeSaudi">Saudi</button>
+            </div>
+            <div class="lang-switch" role="group" aria-label="Language">
+                <button type="button" class="lang-btn" data-lang-set="en">EN</button>
+                <button type="button" class="lang-btn" data-lang-set="ar">عربي</button>
+            </div>
+            <a href="/WC2026/" class="top-link active" data-i18n="navHome">Home</a>
+            <a href="/WC2026/matches" class="top-link" data-i18n="navMatches">Matches</a>
             <form method="POST" action="/WC2026/" style="margin:0;">
                 <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="action" value="logout">
-                <button type="submit" class="logout">Logout</button>
+                <button type="submit" class="logout" data-i18n="navLogout">Logout</button>
             </form>
         </div>
     </div>
 
     <div class="hero-content">
         <div>
-            <div class="badge"><i></i> CATRION FIFA WORLD CUP 2026</div>
-            <h1>Score Goals.<br><span>Predict Matches.</span></h1>
+            <div class="badge"><i></i> <span data-i18n="heroBadge">CATRION FIFA WORLD CUP 2026</span></div>
+            <h1 data-i18n-html="heroTitle">Score Goals.<br><span>Predict Matches.</span></h1>
             <p>
-                Welcome, <?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>.
-                Play the daily 30-second challenge, predict real World Cup matches,
-                collect points, and climb the CATRION leaderboard.
+                <span data-i18n="heroWelcome">Welcome,</span> <b><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></b>.
+                <span data-i18n="heroIntro">Play the daily 30-second challenge, predict real World Cup matches, collect points, and climb the CATRION leaderboard.</span>
             </p>
         </div>
 
         <div class="daily-card">
-            <div class="daily-title">Challenge Hub</div>
+            <div class="daily-title" data-i18n="dailyTitle">Challenge Hub</div>
             <div class="daily-prize">SAR 20,000</div>
-            <div class="daily-sub">
+            <div class="daily-sub" data-i18n="dailySub">
                 Daily Goal Rush, real match predictions, live fixtures, bonus questions, and leaderboard points.
             </div>
             <div class="hero-mini-grid">
-                <div><b>30s</b><span>Daily Game</span></div>
-                <div><b><?= (int)$matchesCount ?></b><span>Matches</span></div>
-                <div><b>20K</b><span>Prize Pool</span></div>
+                <div><b>30s</b><span data-i18n="miniDailyGame">Daily Game</span></div>
+                <div><b><?= (int)$matchesCount ?></b><span data-i18n="miniMatches">Matches</span></div>
+                <div><b>20K</b><span data-i18n="miniPrize">Prize Pool</span></div>
             </div>
         </div>
     </div>
@@ -4308,31 +4363,31 @@ body:before{
 
     <section class="stats">
         <div class="stat">
-            <div class="stat-label">My Points</div>
+            <div class="stat-label" data-i18n="statMyPoints">My Points</div>
             <div class="stat-value"><?= (int)$myGamePoints ?></div>
-            <div class="stat-note">All game points</div>
+            <div class="stat-note" data-i18n="statMyPointsNote">All game points</div>
         </div>
 
         <div class="stat">
-            <div class="stat-label">My Rank</div>
+            <div class="stat-label" data-i18n="statRank">My Rank</div>
             <div class="stat-value"><?= htmlspecialchars($myRank, ENT_QUOTES, 'UTF-8') ?></div>
-            <div class="stat-note">Daily game leaderboard</div>
+            <div class="stat-note" data-i18n="statRankNote">Daily game leaderboard</div>
         </div>
 
         <div class="stat">
-            <div class="stat-label">Best Score</div>
+            <div class="stat-label" data-i18n="statBest">Best Score</div>
             <div class="stat-value"><?= (int)$myBestScore ?></div>
-            <div class="stat-note">Highest daily score</div>
+            <div class="stat-note" data-i18n="statBestNote">Highest daily score</div>
         </div>
 
         <div class="stat">
-            <div class="stat-label">World Cup Matches</div>
+            <div class="stat-label" data-i18n="statMatches">World Cup Matches</div>
             <div class="stat-value"><?= (int)$matchesCount ?></div>
-            <div class="stat-note"><?= (int)$liveMatchesCount ?> live • <?= (int)$finishedMatchesCount ?> finished</div>
+            <div class="stat-note"><?= (int)$liveMatchesCount ?> <span data-i18n="live">live</span> • <?= (int)$finishedMatchesCount ?> <span data-i18n="finished">finished</span></div>
         </div>
 
         <div class="stat">
-            <div class="stat-label">Prize Pool</div>
+            <div class="stat-label" data-i18n="statPrize">Prize Pool</div>
             <div class="stat-value">20K</div>
             <div class="stat-note">SAR 20,000</div>
         </div>
@@ -4340,7 +4395,7 @@ body:before{
 
     <section class="news-ticker" aria-label="World Cup news">
         <div class="news-ticker-inner">
-            <div class="news-label">● Match News</div>
+            <div class="news-label">● <span data-i18n="matchNews">Match News</span></div>
             <div class="news-track">
                 <?php if (!empty($newsMatches)): ?>
                     <span>
@@ -4387,12 +4442,39 @@ body:before{
         <div class="live-map-bg"></div>
         <div class="world-lines"></div>
 
+        <!-- Inline world map (no external services) -->
+        <svg class="world-map-svg" viewBox="0 0 1000 480" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <g class="wm-grid">
+                <line x1="0" y1="120" x2="1000" y2="120"></line>
+                <line x1="0" y1="240" x2="1000" y2="240"></line>
+                <line x1="0" y1="360" x2="1000" y2="360"></line>
+                <line x1="250" y1="0" x2="250" y2="480"></line>
+                <line x1="500" y1="0" x2="500" y2="480"></line>
+                <line x1="750" y1="0" x2="750" y2="480"></line>
+            </g>
+            <g class="wm-land">
+                <!-- North America -->
+                <path d="M180,55 C140,55 110,80 110,110 C80,120 70,150 95,165 C90,200 130,215 150,200 C175,235 220,225 225,190 C255,185 272,150 250,130 C276,110 255,75 220,85 C210,60 198,55 180,55 Z"/>
+                <path d="M222,196 C234,220 250,232 256,260 C260,278 248,292 264,300 C272,286 268,262 262,244 C256,222 244,206 234,194 Z"/>
+                <!-- South America -->
+                <path d="M300,268 C274,280 270,312 286,336 C280,372 302,408 322,432 C338,448 352,430 345,404 C362,374 356,334 340,314 C346,290 326,262 300,268 Z"/>
+                <!-- Europe -->
+                <path d="M480,90 C463,96 470,122 491,121 C496,142 527,141 531,120 C557,126 556,94 534,90 C519,74 495,78 480,90 Z"/>
+                <!-- Africa -->
+                <path d="M520,158 C494,170 495,202 516,216 C506,252 526,302 546,342 C562,362 582,346 576,314 C602,280 591,219 565,200 C571,174 545,152 520,158 Z"/>
+                <!-- Asia -->
+                <path d="M600,80 C570,90 575,122 601,126 C590,162 621,182 651,171 C661,206 722,216 742,185 C802,201 862,170 856,134 C882,109 855,74 815,85 C780,54 700,55 660,80 C640,64 615,70 600,80 Z"/>
+                <!-- Oceania -->
+                <path d="M800,330 C779,340 785,372 811,376 C826,401 871,401 881,375 C906,365 900,334 874,330 C849,314 820,318 800,330 Z"/>
+            </g>
+        </svg>
+
         <div class="map-head">
-            <div class="map-title"><span class="map-dot"></span> Live World Cup Map</div>
+            <div class="map-title"><span class="map-dot"></span> <span data-i18n="liveMapTitle">Live World Cup Map</span></div>
             <div class="map-legend">
-                <span class="legend-item"><i class="legend-bullet live"></i> Live Now</span>
-                <span class="legend-item"><i class="legend-bullet upcoming"></i> Upcoming</span>
-                <span class="legend-item"><i class="legend-bullet finished"></i> Finished</span>
+                <span class="legend-item"><i class="legend-bullet live"></i> <span data-i18n="legendLive">Live Now</span></span>
+                <span class="legend-item"><i class="legend-bullet upcoming"></i> <span data-i18n="legendUpcoming">Upcoming</span></span>
+                <span class="legend-item"><i class="legend-bullet finished"></i> <span data-i18n="legendFinished">Finished</span></span>
             </div>
         </div>
 
@@ -4440,37 +4522,37 @@ body:before{
             </div>
 
             <aside class="tournament-progress">
-                <div class="progress-title">Tournament Progress</div>
+                <div class="progress-title" data-i18n="progressTitle">Tournament Progress</div>
                 <div class="progress-line <?= $knockoutFinished > 0 ? '' : 'pending' ?>">
                     <span class="progress-node"></span>
                     <div class="progress-copy">
-                        <b>Knockout Stage</b>
-                        <span><?= (int)$knockoutFinished ?> / <?= (int)$knockoutTotal ?> completed</span>
+                        <b data-i18n="stageKnockout">Knockout Stage</b>
+                        <span><?= (int)$knockoutFinished ?> / <?= (int)$knockoutTotal ?> <span data-i18n="completed">completed</span></span>
                     </div>
                 </div>
                 <div class="progress-line <?= count($knockoutStages['Quarter Finals'] ?? []) > 0 ? '' : 'pending' ?>">
                     <span class="progress-node"></span>
                     <div class="progress-copy">
-                        <b>Quarter Finals</b>
-                        <span><?= (int)count($knockoutStages['Quarter Finals'] ?? []) ?> matches from API</span>
+                        <b data-i18n="stageQF">Quarter Finals</b>
+                        <span><?= (int)count($knockoutStages['Quarter Finals'] ?? []) ?> <span data-i18n="matchesFromApi">matches</span></span>
                     </div>
                 </div>
                 <div class="progress-line <?= count($knockoutStages['Semi Finals'] ?? []) > 0 ? '' : 'pending' ?>">
                     <span class="progress-node"></span>
                     <div class="progress-copy">
-                        <b>Semi Finals</b>
-                        <span><?= (int)count($knockoutStages['Semi Finals'] ?? []) ?> matches from API</span>
+                        <b data-i18n="stageSF">Semi Finals</b>
+                        <span><?= (int)count($knockoutStages['Semi Finals'] ?? []) ?> <span data-i18n="matchesFromApi">matches</span></span>
                     </div>
                 </div>
                 <div class="progress-line <?= count($knockoutStages['Final'] ?? []) > 0 ? '' : 'pending' ?>">
                     <span class="progress-node"></span>
                     <div class="progress-copy">
-                        <b>Final</b>
-                        <span><?= (int)count($knockoutStages['Final'] ?? []) ?> match from API</span>
+                        <b data-i18n="stageFinal">Final</b>
+                        <span><?= (int)count($knockoutStages['Final'] ?? []) ?> <span data-i18n="matchFromApi">match</span></span>
                     </div>
                 </div>
                 <div class="match-links">
-                    <a href="/WC2026/matches" class="match-link soft">View Full Matches</a>
+                    <a href="/WC2026/matches" class="match-link soft" data-i18n="viewFullMatches">View Full Matches</a>
                 </div>
             </aside>
         </div>
@@ -4479,21 +4561,21 @@ body:before{
     <section class="card knockout-card bracket-preview-mode" id="knockoutBracketCard">
         <div class="bracket-head">
             <div class="bracket-title-wrap">
-                <div class="bracket-title">🏆 World Cup Knockout Bracket</div>
-                <div class="bracket-subtitle">
-                    API-powered tournament path. Preview is collapsed for a cleaner home page.
+                <div class="bracket-title">🏆 <span data-i18n="bracketTitle">World Cup Knockout Bracket</span></div>
+                <div class="bracket-subtitle" data-i18n="bracketSub">
+                    Projected tournament path (R32 → R16 → QF → SF → Final). Preview is collapsed for a cleaner home page.
                 </div>
             </div>
 
             <div class="bracket-head-actions">
                 <div class="map-legend">
-                    <span class="legend-item"><i class="legend-bullet finished"></i> Finished</span>
-                    <span class="legend-item"><i class="legend-bullet upcoming"></i> Upcoming</span>
-                    <span class="legend-item"><i class="legend-bullet live"></i> Live</span>
+                    <span class="legend-item"><i class="legend-bullet finished"></i> <span data-i18n="legendFinished">Finished</span></span>
+                    <span class="legend-item"><i class="legend-bullet upcoming"></i> <span data-i18n="legendUpcoming">Upcoming</span></span>
+                    <span class="legend-item"><i class="legend-bullet live"></i> <span data-i18n="legendLive2">Live</span></span>
                 </div>
 
                 <button type="button" class="bracket-more-btn" id="bracketMoreBtn">
-                    MORE <span>→</span>
+                    <span data-i18n="more">MORE</span> <span>→</span>
                 </button>
             </div>
         </div>
@@ -4566,7 +4648,7 @@ body:before{
 
         <div class="bracket-preview-footer" id="bracketPreviewFooter">
             <button type="button" class="bracket-show-full" id="bracketShowFull">
-                Show Full Bracket <span>↗</span>
+                <span data-i18n="showFullBracket">Show Full Bracket</span> <span>↗</span>
             </button>
         </div>
     </section>
@@ -4575,13 +4657,13 @@ body:before{
         <div class="card match-card-premium">
             <?php if (!empty($liveMatches)): ?>
                 <?php $m = $liveMatches[0]; ?>
-                <div class="match-kicker"><i></i> Live Now</div>
+                <div class="match-kicker"><i></i> <span data-i18n="kickerLive">Live Now</span></div>
             <?php elseif (!empty($nextMatch)): ?>
                 <?php $m = $nextMatch[0]; ?>
-                <div class="match-kicker"><i></i> Next World Cup Match</div>
+                <div class="match-kicker"><i></i> <span data-i18n="kickerNext">Next World Cup Match</span></div>
             <?php else: ?>
                 <?php $m = null; ?>
-                <div class="match-kicker"><i></i> World Cup Matches</div>
+                <div class="match-kicker"><i></i> <span data-i18n="kickerMatches">World Cup Matches</span></div>
             <?php endif; ?>
 
             <?php if ($m): ?>
@@ -4633,8 +4715,8 @@ body:before{
                 </div>
 
                 <div class="match-links">
-                    <a href="/WC2026/matches" class="match-link primary">View Matches</a>
-                    <a href="/WC2026/matches" class="match-link soft">Submit Prediction</a>
+                    <a href="/WC2026/matches" class="match-link primary" data-i18n="viewMatches">View Matches</a>
+                    <a href="/WC2026/matches" class="match-link soft" data-i18n="submitPrediction">Submit Prediction</a>
                 </div>
             <?php else: ?>
                 <div class="match-meta-premium">
@@ -4646,8 +4728,8 @@ body:before{
 
         <div class="card match-list-card">
             <h2 class="card-title">
-                World Cup Feed
-                <small><?= (int)$matchesCount ?> matches synced</small>
+                <span data-i18n="worldCupFeed">World Cup Feed</span>
+                <small><?= (int)$matchesCount ?> <span data-i18n="matchesSynced">matches synced</span></small>
             </h2>
 
             <?php $feedRows = !empty($liveMatches) ? $liveMatches : (!empty($latestResults) ? $latestResults : $upcomingMatches); ?>
@@ -4693,8 +4775,8 @@ body:before{
         <div>
             <div class="card">
                 <h2 class="card-title">
-                    Daily Goal Rush
-                    <small>One play per day</small>
+                    <span data-i18n="dailyGoalRush">Daily Goal Rush</span>
+                    <small data-i18n="onePlayPerDay">One play per day</small>
                 </h2>
 
                 <?php if ($todayPlayed > 0): ?>
@@ -4716,9 +4798,9 @@ body:before{
                 <?php else: ?>
                     <div class="game-panel" id="gamePanel">
                         <div class="game-top">
-                            <div class="game-pill"><span>Time</span><b id="timeLeft">30</b></div>
-                            <div class="game-pill"><span>Goals</span><b id="goals">0</b></div>
-                            <div class="game-pill"><span>Points</span><b id="points">0</b></div>
+                            <div class="game-pill"><span data-i18n="gameTime">Time</span><b id="timeLeft">30</b></div>
+                            <div class="game-pill"><span data-i18n="gameGoals">Goals</span><b id="goals">0</b></div>
+                            <div class="game-pill"><span data-i18n="gamePoints">Points</span><b id="points">0</b></div>
                         </div>
 
                         <div class="field">
@@ -4739,8 +4821,8 @@ body:before{
                             <div class="combo-banner" id="comboBanner">COMBO</div>
                             <div class="tap-hint">
                                 <div>
-                                    🎯 Tap the ball to shoot!
-                                    <small>Use the moving target line and avoid the goalkeeper</small>
+                                    🎯 <span data-i18n="tapToShoot">Tap the ball to shoot!</span>
+                                    <small data-i18n="tapHintSub">Use the moving target line and avoid the goalkeeper</small>
                                 </div>
                             </div>
                             <div class="goal-flash" id="goalFlash">GOAL!</div>
@@ -4750,9 +4832,9 @@ body:before{
                     </div>
 
                     <div class="game-actions">
-                        <button class="primary-btn" id="startBtn" type="button">Start Daily Game</button>
-                        <button class="secondary-btn hidden-shoot" id="shootBtn" type="button" disabled>Shoot</button>
-                        <span class="game-tip">After start, the ball becomes your shoot button.</span>
+                        <button class="primary-btn" id="startBtn" type="button" data-i18n="startGame">Start Daily Game</button>
+                        <button class="secondary-btn hidden-shoot" id="shootBtn" type="button" disabled data-i18n="shoot">Shoot</button>
+                        <span class="game-tip" data-i18n="gameTip">After start, the ball becomes your shoot button.</span>
                     </div>
                 <?php endif; ?>
             </div>
@@ -4760,7 +4842,7 @@ body:before{
 
         <div>
             <div class="card">
-                <h2 class="card-title">Top Leaderboard</h2>
+                <h2 class="card-title" data-i18n="topLeaderboard">Top Leaderboard</h2>
 
                 <?php if (!empty($leaderboard)): ?>
                     <?php foreach ($leaderboard as $i => $row): ?>
@@ -4781,30 +4863,30 @@ body:before{
             </div>
 
             <div class="card">
-                <h2 class="card-title">My Profile</h2>
+                <h2 class="card-title" data-i18n="myProfile">My Profile</h2>
 
                 <div class="profile-line">
-                    <span>Name</span>
+                    <span data-i18n="pfName">Name</span>
                     <span><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></span>
                 </div>
 
                 <div class="profile-line">
-                    <span>Mobile</span>
+                    <span data-i18n="pfMobile">Mobile</span>
                     <span><?= htmlspecialchars($mobile, ENT_QUOTES, 'UTF-8') ?></span>
                 </div>
 
                 <div class="profile-line">
-                    <span>User Type</span>
+                    <span data-i18n="pfType">User Type</span>
                     <span><?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?></span>
                 </div>
 
                 <div class="profile-line">
-                    <span>Days Played</span>
+                    <span data-i18n="pfDays">Days Played</span>
                     <span><?= (int)$playedDays ?></span>
                 </div>
 
                 <div class="profile-line">
-                    <span>Participants</span>
+                    <span data-i18n="pfParticipants">Participants</span>
                     <span><?= (int)$participantsCount ?></span>
                 </div>
             </div>
@@ -4848,6 +4930,64 @@ body:before{
         <button class="primary-btn" type="button" onclick="location.reload()">Done</button>
     </div>
 </div>
+
+<!-- ===================== SITE FOOTER ===================== -->
+<footer class="wc-footer">
+    <div class="wc-footer-inner">
+        <div class="wc-foot-brand">
+            <div class="logo-card">
+                <img src="<?= htmlspecialchars($logoPath, ENT_QUOTES, 'UTF-8') ?>" alt="CATRION">
+            </div>
+            <div class="wc-foot-by">
+                <b>CATRION &copy; IT Digital &amp; Transformation</b>
+                <span class="wc-odd">One-Day-Delivery</span>
+            </div>
+        </div>
+        <div class="wc-foot-note" data-i18n="footerNote">
+            FIFA World Cup 2026 Challenge • Prediction League &amp; Daily Goal Rush
+        </div>
+    </div>
+</footer>
+
+<!-- ===================== AI FAN AGENT (floating widget) ===================== -->
+<button class="wc-agent-fab" id="wcAgentFab" type="button" aria-label="Open AI Fan Agent" aria-controls="wcAgentPanel" aria-expanded="false">
+    <span class="wc-agent-online" aria-hidden="true"></span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="4" y="7" width="16" height="12" rx="4"/><path d="M12 7V4M9 13h.01M15 13h.01M9 16h6M2 11v3M22 11v3"/>
+    </svg>
+</button>
+
+<section class="wc-agent-panel" id="wcAgentPanel" aria-label="AI Fan Agent" aria-hidden="true">
+    <div class="wc-agent-head">
+        <span class="wc-agent-ava" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="4"/><path d="M12 7V4M9 13h.01M15 13h.01M9 16h6M2 11v3M22 11v3"/></svg>
+        </span>
+        <div class="wc-agent-meta">
+            <b data-i18n="agentName">WC2026 Fan Agent</b>
+            <span data-i18n="agentStatus">Online • AI-powered</span>
+        </div>
+        <button class="wc-agent-x" id="wcAgentClose" type="button" aria-label="Close">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+    </div>
+    <div class="wc-agent-tools">
+        <select id="wcAgentMode" class="wc-agent-select" aria-label="AI function">
+            <option value="fan" data-i18n="agentFan">Fan Assistant</option>
+            <option value="predict" data-i18n="agentPredict">Match Predictor</option>
+            <option value="tactical" data-i18n="agentTactical">Tactical Analyst</option>
+            <option value="summary" data-i18n="agentSummary">Match Summary</option>
+            <option value="command" data-i18n="agentCommand">Command Center</option>
+        </select>
+    </div>
+    <div class="wc-agent-body" id="wcAgentBody" aria-live="polite"></div>
+    <div class="wc-agent-chips" id="wcAgentChips"></div>
+    <form class="wc-agent-input" id="wcAgentForm">
+        <input id="wcAgentText" autocomplete="off" data-i18n-ph="agentPlaceholder" placeholder="Ask about today’s matches…">
+        <button type="submit" aria-label="Send">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+    </form>
+</section>
 
 <script>
 const csrf = <?= json_encode($csrf) ?>;
@@ -5001,13 +5141,23 @@ function shoot(){
 
     ball.classList.add('shooting');
     ball.style.left = targetX + '%';
-    ball.style.bottom = blocked ? '230px' : '330px';
+
+    if (blocked) {
+        // goalkeeper save: the ball stops in front of the keeper
+        ball.style.bottom = '205px';
+        ball.style.transform = 'translateX(-50%) scale(.8)';
+    } else {
+        // GOAL: the ball flies up and settles INSIDE the goal frame / net
+        ball.style.bottom = '252px';
+        ball.style.transform = 'translateX(-50%) scale(.5)';
+    }
 
     setTimeout(() => {
         ball.classList.remove('shooting');
         ball.style.left = '50%';
-        ball.style.bottom = '54px';
-    }, 360);
+        ball.style.bottom = '70px';
+        ball.style.transform = '';
+    }, 460);
 
     if (!blocked) {
         const shotPoints = getTargetPoints(targetX);
@@ -5574,6 +5724,280 @@ document.addEventListener('DOMContentLoaded', function(){
       }
     }).observe(gf, {attributes:true, attributeFilter:['class']});
   }
+})();
+</script>
+
+<!-- ===================== THEMES · WORLD MAP · FOOTER · AGENT · BILINGUAL ===================== -->
+<style>
+/* ---------- top toggles (theme + language) ---------- */
+.theme-switch,.lang-switch{display:inline-flex;gap:4px;padding:4px;border-radius:999px;
+    background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22)}
+.theme-btn,.lang-btn{border:0;border-radius:999px;padding:8px 12px;background:transparent;color:#fff;
+    font-weight:900;font-size:12px;cursor:pointer;font-family:inherit;line-height:1;transition:.2s}
+.theme-btn.active,.lang-btn.active{background:#fff;color:var(--deep,#0B2C55)}
+html[data-theme="saudi"] .theme-btn.active,html[data-theme="saudi"] .lang-btn.active{color:#06371f}
+
+/* ---------- inline world map ---------- */
+.world-map-svg{position:absolute;left:0;right:0;top:48px;height:calc(100% - 66px);width:100%;
+    z-index:1;opacity:.6;pointer-events:none}
+.world-map-svg .wm-land path{fill:rgba(85,183,255,.16);stroke:rgba(168,231,255,.5);stroke-width:1.4;
+    filter:drop-shadow(0 0 7px rgba(85,183,255,.30))}
+.world-map-svg .wm-grid line{stroke:rgba(168,231,255,.10);stroke-width:1}
+
+/* ---------- footer ---------- */
+.wc-footer{position:relative;z-index:2;margin-top:26px;padding:26px clamp(18px,3.2vw,48px);
+    border-top:1px solid rgba(168,231,255,.14);background:rgba(4,18,40,.55)}
+.wc-footer-inner{max-width:1680px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap}
+.wc-foot-brand{display:flex;align-items:center;gap:14px}
+.wc-footer .logo-card{width:120px;height:46px;box-shadow:0 10px 24px rgba(0,0,0,.3)}
+.wc-footer .logo-card img{max-width:96px;max-height:30px}
+.wc-foot-by b{display:block;color:#fff;font-size:14px;font-weight:900;letter-spacing:-.2px}
+.wc-odd{display:inline-block;margin-top:5px;font-size:11px;font-weight:900;color:#071A35;letter-spacing:.3px;
+    background:linear-gradient(135deg,#F5C85B,#FFE19A);padding:3px 11px;border-radius:999px;text-transform:uppercase}
+.wc-foot-note{color:rgba(255,255,255,.62);font-size:12px;font-weight:700;max-width:420px;text-align:end}
+@media(max-width:768px){.wc-footer-inner{flex-direction:column;text-align:center}.wc-foot-note{text-align:center}}
+
+/* ---------- AI agent floating widget ---------- */
+.wc-agent-fab{position:fixed;bottom:24px;inset-inline-end:24px;z-index:1400;width:62px;height:62px;border-radius:50%;
+    border:0;cursor:pointer;color:#06202e;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,#F5C85B,#FFE19A);box-shadow:0 14px 34px rgba(245,200,91,.45);
+    animation:wcAgentFloat 4s ease-in-out infinite}
+.wc-agent-fab svg{width:30px;height:30px}
+.wc-agent-fab:before{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid #F5C85B;animation:wcAgentRing 2.4s ease-out infinite}
+.wc-agent-online{position:absolute;top:5px;inset-inline-end:5px;width:13px;height:13px;border-radius:50%;background:#22C55E;border:2px solid #06202e;box-shadow:0 0 8px #22C55E}
+@keyframes wcAgentFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes wcAgentRing{0%{transform:scale(1);opacity:.6}80%,100%{transform:scale(1.8);opacity:0}}
+.wc-agent-panel{position:fixed;bottom:98px;inset-inline-end:24px;z-index:1400;width:min(94vw,380px);
+    background:linear-gradient(180deg,#071F42,#05162F);border:1px solid rgba(168,231,255,.25);border-radius:22px;overflow:hidden;
+    box-shadow:0 34px 80px rgba(0,0,0,.6);transform:translateY(18px) scale(.97);opacity:0;visibility:hidden;
+    transform-origin:bottom right;transition:transform .3s cubic-bezier(.16,1,.3,1),opacity .3s,visibility .3s}
+html[dir="rtl"] .wc-agent-panel{transform-origin:bottom left}
+.wc-agent-panel.open{transform:none;opacity:1;visibility:visible}
+.wc-agent-head{display:flex;align-items:center;gap:11px;padding:15px 16px;background:linear-gradient(135deg,rgba(245,200,91,.16),rgba(85,183,255,.12));border-bottom:1px solid rgba(168,231,255,.16)}
+.wc-agent-ava{width:40px;height:40px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#06202e;background:linear-gradient(135deg,#F5C85B,#FFE19A)}
+.wc-agent-ava svg{width:23px;height:23px}
+.wc-agent-meta{flex:1;min-width:0}
+.wc-agent-meta b{display:block;color:#fff;font-size:14px;font-weight:900}
+.wc-agent-meta span{color:rgba(255,255,255,.7);font-size:11px;font-weight:700}
+.wc-agent-x{width:32px;height:32px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center}
+.wc-agent-x svg{width:18px;height:18px}
+.wc-agent-tools{padding:12px 16px 0}
+.wc-agent-select{width:100%;min-height:40px;border-radius:12px;border:1px solid rgba(168,231,255,.22);background:rgba(255,255,255,.06);color:#fff;font:inherit;font-weight:800;font-size:13px;padding:0 12px}
+.wc-agent-select option{color:#06202e}
+.wc-agent-body{padding:14px 16px;height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+.wc-msg{max-width:86%;padding:10px 13px;border-radius:15px;font-size:13px;line-height:1.6;white-space:pre-wrap;word-wrap:break-word}
+.wc-msg.bot{align-self:flex-start;background:rgba(255,255,255,.07);border:1px solid rgba(168,231,255,.16);color:#eaf3ff;border-bottom-left-radius:5px}
+.wc-msg.user{align-self:flex-end;background:linear-gradient(135deg,#F5C85B,#FFE19A);color:#06202e;font-weight:700;border-bottom-right-radius:5px}
+html[dir="rtl"] .wc-msg.bot{border-bottom-left-radius:15px;border-bottom-right-radius:5px}
+html[dir="rtl"] .wc-msg.user{border-bottom-right-radius:15px;border-bottom-left-radius:5px}
+.wc-typing{align-self:flex-start;display:flex;gap:4px;padding:11px 13px;background:rgba(255,255,255,.07);border:1px solid rgba(168,231,255,.16);border-radius:15px}
+.wc-typing i{width:7px;height:7px;border-radius:50%;background:#F5C85B;animation:wcType 1.2s infinite}
+.wc-typing i:nth-child(2){animation-delay:.2s}.wc-typing i:nth-child(3){animation-delay:.4s}
+@keyframes wcType{0%{opacity:.25}20%{opacity:1}100%{opacity:.25}}
+.wc-agent-chips{display:flex;flex-wrap:wrap;gap:7px;padding:0 16px 10px}
+.wc-chip{font-size:12px;color:#FFE19A;padding:7px 11px;border-radius:20px;background:rgba(245,200,91,.10);border:1px solid rgba(245,200,91,.3);cursor:pointer;font-family:inherit;font-weight:700}
+.wc-chip:hover{background:rgba(245,200,91,.22);color:#fff}
+.wc-agent-input{display:flex;gap:8px;padding:11px 16px 15px;border-top:1px solid rgba(168,231,255,.14)}
+.wc-agent-input input{flex:1;min-height:42px;border-radius:12px;border:1px solid rgba(168,231,255,.22);background:rgba(255,255,255,.06);color:#fff;padding:0 13px;font:inherit;font-size:13px}
+.wc-agent-input input::placeholder{color:rgba(255,255,255,.5)}
+.wc-agent-input button{width:42px;height:42px;flex:none;border:0;border-radius:12px;cursor:pointer;color:#06202e;background:linear-gradient(135deg,#F5C85B,#FFE19A);display:flex;align-items:center;justify-content:center}
+.wc-agent-input button svg{width:20px;height:20px}
+html[dir="rtl"] .wc-agent-input button svg{transform:scaleX(-1)}
+@media(max-width:600px){.wc-agent-panel{inset-inline-end:12px;inset-inline-start:12px;width:auto}}
+
+/* ---------- SAUDI THEME (toggle) ---------- */
+html[data-theme="saudi"]{background:#03190f !important}
+html[data-theme="saudi"] body{
+    background:
+        radial-gradient(circle at 8% 8%, rgba(34,197,94,.18), transparent 30%),
+        radial-gradient(circle at 92% 8%, rgba(17,163,106,.30), transparent 34%),
+        radial-gradient(circle at 50% 76%, rgba(245,200,91,.08), transparent 30%),
+        linear-gradient(180deg,#03190f 0%,#06371f 45%,#03190f 100%) !important}
+html[data-theme="saudi"] .hero{
+    background:
+        radial-gradient(circle at 72% 18%, rgba(17,163,106,.40), transparent 32%),
+        radial-gradient(circle at 15% 28%, rgba(34,197,94,.18), transparent 30%),
+        linear-gradient(135deg,#03190f 0%,#0a5a32 48%,#0e7c43 100%) !important}
+html[data-theme="saudi"] .hero h1 span{color:#FFE19A}
+html[data-theme="saudi"] .live-map-card,
+html[data-theme="saudi"] .knockout-card,
+html[data-theme="saudi"] .match-card-premium,
+html[data-theme="saudi"] .match-list-card,
+html[data-theme="saudi"] .layout .card{
+    background:
+        radial-gradient(circle at 100% 0%, rgba(17,163,106,.26), transparent 34%),
+        linear-gradient(135deg,#06291a 0%,#0a3f27 58%,#0e6a3e 100%) !important}
+html[data-theme="saudi"] .game-panel{background:#06291a !important}
+html[data-theme="saudi"] .world-map-svg .wm-land path{fill:rgba(34,197,94,.18);stroke:rgba(126,244,174,.5)}
+html[data-theme="saudi"] .wc-aurora{background:
+    radial-gradient(closest-side at 22% 26%, rgba(34,197,94,.22), transparent 70%),
+    radial-gradient(closest-side at 80% 16%, rgba(17,163,106,.24), transparent 70%),
+    radial-gradient(closest-side at 62% 82%, rgba(245,200,91,.12), transparent 70%) !important}
+html[data-theme="saudi"] .map-dot{background:#FFE19A;box-shadow:0 0 18px rgba(255,225,154,.9)}
+
+/* RTL niceties */
+html[dir="rtl"] .news-track span{animation-direction:reverse}
+html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  var d=document, root=document.documentElement;
+
+  /* ===== THEME ===== */
+  var theme = (function(){ try{ return localStorage.getItem('wc_theme')||'catrion'; }catch(e){ return 'catrion'; } })();
+  function applyTheme(t){
+    theme = (t==='saudi')?'saudi':'catrion';
+    root.setAttribute('data-theme', theme);
+    d.querySelectorAll('.theme-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-theme-set')===theme); });
+    try{ localStorage.setItem('wc_theme', theme); }catch(e){}
+  }
+  d.querySelectorAll('.theme-btn').forEach(function(b){ b.addEventListener('click', function(){ applyTheme(b.getAttribute('data-theme-set')); }); });
+
+  /* ===== BILINGUAL ===== */
+  var T = {
+    en:{
+      brandSub:'Prediction League • Daily Goal Rush',themeCatrion:'CATRION',themeSaudi:'Saudi',
+      navHome:'Home',navMatches:'Matches',navLogout:'Logout',
+      heroBadge:'CATRION FIFA WORLD CUP 2026',
+      heroTitle:'Score Goals.<br><span>Predict Matches.</span>',
+      heroWelcome:'Welcome,',
+      heroIntro:'Play the daily 30-second challenge, predict real World Cup matches, collect points, and climb the CATRION leaderboard.',
+      dailyTitle:'Challenge Hub',
+      dailySub:'Daily Goal Rush, real match predictions, live fixtures, bonus questions, and leaderboard points.',
+      miniDailyGame:'Daily Game',miniMatches:'Matches',miniPrize:'Prize Pool',
+      statMyPoints:'My Points',statMyPointsNote:'All game points',statRank:'My Rank',statRankNote:'Daily game leaderboard',
+      statBest:'Best Score',statBestNote:'Highest daily score',statMatches:'World Cup Matches',live:'live',finished:'finished',
+      statPrize:'Prize Pool',matchNews:'Match News',liveMapTitle:'Live World Cup Map',
+      legendLive:'Live Now',legendUpcoming:'Upcoming',legendFinished:'Finished',legendLive2:'Live',
+      progressTitle:'Tournament Progress',stageKnockout:'Knockout Stage',completed:'completed',
+      stageQF:'Quarter Finals',matchesFromApi:'matches',stageSF:'Semi Finals',stageFinal:'Final',matchFromApi:'match',
+      viewFullMatches:'View Full Matches',bracketTitle:'World Cup Knockout Bracket',
+      bracketSub:'Projected tournament path (R32 → R16 → QF → SF → Final). Preview is collapsed for a cleaner home page.',
+      more:'MORE',showFullBracket:'Show Full Bracket',
+      kickerLive:'Live Now',kickerNext:'Next World Cup Match',kickerMatches:'World Cup Matches',
+      viewMatches:'View Matches',submitPrediction:'Submit Prediction',worldCupFeed:'World Cup Feed',matchesSynced:'matches synced',
+      dailyGoalRush:'Daily Goal Rush',onePlayPerDay:'One play per day',
+      gameTime:'Time',gameGoals:'Goals',gamePoints:'Points',
+      tapToShoot:'Tap the ball to shoot!',tapHintSub:'Use the moving target line and avoid the goalkeeper',
+      startGame:'Start Daily Game',shoot:'Shoot',gameTip:'After start, the ball becomes your shoot button.',
+      topLeaderboard:'Top Leaderboard',myProfile:'My Profile',pfName:'Name',pfMobile:'Mobile',pfType:'User Type',pfDays:'Days Played',pfParticipants:'Participants',
+      footerNote:'FIFA World Cup 2026 Challenge • Prediction League & Daily Goal Rush',
+      agentName:'WC2026 Fan Agent',agentStatus:'Online • AI-powered',
+      agentFan:'Fan Assistant',agentPredict:'Match Predictor',agentTactical:'Tactical Analyst',agentSummary:'Match Summary',agentCommand:'Command Center',
+      agentPlaceholder:'Ask about today’s matches…',
+      agentGreeting:'Hi! I’m your World Cup 2026 Fan Agent. Pick a skill above, then ask me anything about fixtures, predictions, tactics, or today’s action.',
+      agentChips:['What should I watch today?','Predict the next match','Give me a tactical view'],
+      agentTyping:'Thinking…',agentErr:'Sorry, the agent could not respond. Please try again.',
+      agentInstruction:'Respond in clear, fan-friendly English. If live data is missing, say what is missing.'
+    },
+    ar:{
+      brandSub:'دوري التوقعات • تحدي الأهداف اليومي',themeCatrion:'كاتريون',themeSaudi:'السعودية',
+      navHome:'الرئيسية',navMatches:'المباريات',navLogout:'خروج',
+      heroBadge:'كاتريون · كأس العالم 2026',
+      heroTitle:'سجّل الأهداف.<br><span>توقّع المباريات.</span>',
+      heroWelcome:'مرحبًا،',
+      heroIntro:'العب تحدي الـ30 ثانية اليومي، وتوقّع مباريات كأس العالم الحقيقية، واجمع النقاط، وتصدّر لوحة كاتريون.',
+      dailyTitle:'مركز التحدي',
+      dailySub:'تحدي الأهداف اليومي، توقعات حقيقية، مباريات مباشرة، أسئلة إضافية، ونقاط لوحة الصدارة.',
+      miniDailyGame:'اللعبة اليومية',miniMatches:'مباريات',miniPrize:'إجمالي الجائزة',
+      statMyPoints:'نقاطي',statMyPointsNote:'كل نقاط اللعبة',statRank:'ترتيبي',statRankNote:'لوحة اللعبة اليومية',
+      statBest:'أفضل نتيجة',statBestNote:'أعلى نتيجة يومية',statMatches:'مباريات كأس العالم',live:'مباشر',finished:'منتهية',
+      statPrize:'إجمالي الجائزة',matchNews:'أخبار المباريات',liveMapTitle:'خريطة كأس العالم المباشرة',
+      legendLive:'مباشر الآن',legendUpcoming:'قادمة',legendFinished:'منتهية',legendLive2:'مباشر',
+      progressTitle:'تقدّم البطولة',stageKnockout:'دور خروج المغلوب',completed:'مكتملة',
+      stageQF:'ربع النهائي',matchesFromApi:'مباريات',stageSF:'نصف النهائي',stageFinal:'النهائي',matchFromApi:'مباراة',
+      viewFullMatches:'عرض كل المباريات',bracketTitle:'مخطط أدوار خروج المغلوب',
+      bracketSub:'المسار المتوقع للبطولة (دور 32 ← دور 16 ← ربع ← نصف ← النهائي). المعاينة مطوية لصفحة أنظف.',
+      more:'المزيد',showFullBracket:'عرض المخطط كاملًا',
+      kickerLive:'مباشر الآن',kickerNext:'المباراة القادمة',kickerMatches:'مباريات كأس العالم',
+      viewMatches:'عرض المباريات',submitPrediction:'أرسل توقعك',worldCupFeed:'تغذية كأس العالم',matchesSynced:'مباراة متزامنة',
+      dailyGoalRush:'تحدي الأهداف اليومي',onePlayPerDay:'محاولة واحدة يوميًا',
+      gameTime:'الوقت',gameGoals:'أهداف',gamePoints:'نقاط',
+      tapToShoot:'انقر الكرة للتسديد!',tapHintSub:'استخدم خط التصويب المتحرك وتفادَ الحارس',
+      startGame:'ابدأ اللعبة اليومية',shoot:'سدّد',gameTip:'بعد البدء تتحوّل الكرة إلى زر التسديد.',
+      topLeaderboard:'لوحة الصدارة',myProfile:'ملفي',pfName:'الاسم',pfMobile:'الجوال',pfType:'نوع المستخدم',pfDays:'أيام اللعب',pfParticipants:'المشاركون',
+      footerNote:'تحدي كأس العالم 2026 • دوري التوقعات وتحدي الأهداف اليومي',
+      agentName:'وكيل جماهير 2026',agentStatus:'متصل • مدعوم بالذكاء',
+      agentFan:'مساعد الجماهير',agentPredict:'متوقّع المباراة',agentTactical:'محلل تكتيكي',agentSummary:'ملخص المباراة',agentCommand:'مركز القيادة',
+      agentPlaceholder:'اسأل عن مباريات اليوم…',
+      agentGreeting:'مرحبًا! أنا وكيل جماهير كأس العالم 2026. اختر مهارة من الأعلى ثم اسألني عن المباريات أو التوقعات أو التكتيك أو أحداث اليوم.',
+      agentChips:['ماذا أشاهد اليوم؟','توقّع المباراة القادمة','أعطني رؤية تكتيكية'],
+      agentTyping:'أفكّر…',agentErr:'عذرًا، تعذّر على الوكيل الرد. حاول مرة أخرى.',
+      agentInstruction:'أجب بالعربية بأسلوب واضح ومناسب للجماهير. إذا كانت البيانات الحية غير متوفرة فاذكر ذلك.'
+    }
+  };
+  var lang = (function(){ try{ return localStorage.getItem('wc_lang')||'en'; }catch(e){ return 'en'; } })();
+  function tr(k){ return (T[lang]&&T[lang][k]!=null)?T[lang][k]:(T.en[k]!=null?T.en[k]:k); }
+
+  function applyLang(l){
+    lang = (l==='ar')?'ar':'en';
+    root.lang = lang; root.dir = (lang==='ar')?'rtl':'ltr';
+    d.querySelectorAll('[data-i18n]').forEach(function(el){ var v=tr(el.getAttribute('data-i18n')); if(v!=null) el.textContent=v; });
+    d.querySelectorAll('[data-i18n-html]').forEach(function(el){ var v=tr(el.getAttribute('data-i18n-html')); if(v!=null) el.innerHTML=v; });
+    d.querySelectorAll('[data-i18n-ph]').forEach(function(el){ var v=tr(el.getAttribute('data-i18n-ph')); if(v!=null) el.setAttribute('placeholder',v); });
+    d.querySelectorAll('.lang-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-lang-set')===lang); });
+    try{ localStorage.setItem('wc_lang', lang); }catch(e){}
+    if (typeof renderAgentGreeting==='function') renderAgentGreeting();
+  }
+  d.querySelectorAll('.lang-btn').forEach(function(b){ b.addEventListener('click', function(){ applyLang(b.getAttribute('data-lang-set')); }); });
+
+  /* ===== AI FAN AGENT ===== */
+  var endpointMap={
+    fan:'/AI-Gateway/api/wc_ai_fan_assistant.php',
+    predict:'/AI-Gateway/api/wc_ai_predict.php',
+    tactical:'/AI-Gateway/api/wc_ai_tactical.php',
+    summary:'/AI-Gateway/api/wc_ai_match_summary.php',
+    command:'/AI-Gateway/api/wc_ai_command_center.php'
+  };
+  var fab=d.getElementById('wcAgentFab'), panel=d.getElementById('wcAgentPanel'),
+      bodyEl=d.getElementById('wcAgentBody'), chipsEl=d.getElementById('wcAgentChips'),
+      form=d.getElementById('wcAgentForm'), input=d.getElementById('wcAgentText'),
+      modeSel=d.getElementById('wcAgentMode');
+
+  function addMsg(text,who){ var m=d.createElement('div'); m.className='wc-msg '+who; m.textContent=text; bodyEl.appendChild(m); bodyEl.scrollTop=bodyEl.scrollHeight; return m; }
+  window.renderAgentGreeting=function(){
+    if(!bodyEl) return;
+    bodyEl.innerHTML=''; addMsg(tr('agentGreeting'),'bot');
+    chipsEl.innerHTML='';
+    (tr('agentChips')||[]).forEach(function(c){
+      var b=d.createElement('button'); b.type='button'; b.className='wc-chip'; b.textContent=c;
+      b.addEventListener('click', function(){ input.value=c; send(); }); chipsEl.appendChild(b);
+    });
+  };
+  function setAgent(open){
+    panel.classList.toggle('open',open);
+    panel.setAttribute('aria-hidden',String(!open));
+    fab.setAttribute('aria-expanded',String(open));
+    if(open && bodyEl.children.length===0) renderAgentGreeting();
+    if(open) setTimeout(function(){ input.focus(); },320);
+  }
+  function send(){
+    var q=(input.value||'').trim(); if(!q) return; input.value='';
+    addMsg(q,'user');
+    var mode=modeSel.value, endpoint=endpointMap[mode]||endpointMap.fan;
+    var typing=d.createElement('div'); typing.className='wc-typing'; typing.innerHTML='<i></i><i></i><i></i>';
+    bodyEl.appendChild(typing); bodyEl.scrollTop=bodyEl.scrollHeight;
+    var today=new Date().toISOString().slice(0,10);
+    var payload={ module:'WORLDCUP', lang:lang, date:today,
+        text: tr('agentInstruction')+"\n\nUser request:\n"+q };
+    fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify(payload)})
+      .then(function(r){ return r.text(); })
+      .then(function(txt){ typing.remove(); var data; try{ data=JSON.parse(txt); }catch(e){ addMsg(txt||tr('agentErr'),'bot'); return; }
+        if(data && data.ok===false){ addMsg(data.error||tr('agentErr'),'bot'); return; }
+        addMsg((data && (data.result||data.output))||txt||tr('agentErr'),'bot');
+      })
+      .catch(function(){ typing.remove(); addMsg(tr('agentErr'),'bot'); });
+  }
+  if(fab){ fab.addEventListener('click', function(){ setAgent(!panel.classList.contains('open')); }); }
+  if(d.getElementById('wcAgentClose')){ d.getElementById('wcAgentClose').addEventListener('click', function(){ setAgent(false); }); }
+  if(form){ form.addEventListener('submit', function(e){ e.preventDefault(); send(); }); }
+  d.addEventListener('keydown', function(e){ if(e.key==='Escape') setAgent(false); });
+
+  /* ===== init ===== */
+  applyTheme(theme);
+  applyLang(lang);
 })();
 </script>
 
