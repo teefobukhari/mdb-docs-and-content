@@ -5423,16 +5423,84 @@ body:before{
                 and <strong>WC2026_Filter_Frames</strong>.
             </div>
         <?php else: ?>
-            <div class="studio-layout">
-                <section class="preview-card">
-                    <div class="ff-consent-card" id="ffConsentCard">
-                        <div class="ff-consent-title">📸 Photo Capture Consent</div>
-                        <p class="ff-consent-text">By proceeding, you provide explicit consent to display your photo on the internal Fan Wall during the World Cup. Images will be stored temporarily and deleted after the event. CATRION is not responsible for content shared publicly by employees.</p>
-                        <label class="ff-consent-check">
-                            <input type="checkbox" id="ffConsentCheck">
-                            <span>I agree — activate capture</span>
-                        </label>
+            <div class="studio-layout ff-flow">
+                <!-- 1) Photo Capture Consent -->
+                <div class="ff-consent-card" id="ffConsentCard">
+                    <div class="ff-consent-title">📸 Photo Capture Consent</div>
+                    <p class="ff-consent-text">By proceeding, you provide explicit consent to display your photo on the internal Fan Wall during the World Cup. Images will be stored temporarily and deleted after the event. CATRION is not responsible for content shared publicly by employees.</p>
+                    <label class="ff-consent-check">
+                        <input type="checkbox" id="ffConsentCheck">
+                        <span>I agree — activate capture</span>
+                    </label>
+                </div>
+
+                <!-- 2) Media (platform) -->
+                <div class="option-block">
+                    <div class="platform-row" id="platformList">
+                        <?php foreach ($ffPlatforms as $index => $platform): ?>
+                            <?php $plogo = wc_platform_logo_path($platform['platform_code'] ?? ''); $pfb = wc_platform_logo_fallback($platform['platform_code'] ?? ''); ?>
+                            <button type="button" class="platform-choice <?= $index === 0 ? 'active' : '' ?>"
+                                data-platform-id="<?= (int)$platform['id'] ?>" data-platform-name="<?= htmlspecialchars($platform['platform_name'], ENT_QUOTES, 'UTF-8') ?>"
+                                data-platform-code="<?= htmlspecialchars($platform['platform_code'], ENT_QUOTES, 'UTF-8') ?>" data-width="<?= (int)$platform['width'] ?>" data-height="<?= (int)$platform['height'] ?>">
+                                <?php if ($plogo !== ''): ?><img class="platform-logo" src="<?= htmlspecialchars($plogo, ENT_QUOTES, 'UTF-8') ?>" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"><?php endif; ?>
+                                <span class="platform-logo-fallback" <?= $plogo === '' ? 'style="display:flex;"' : '' ?>><?= htmlspecialchars($pfb, ENT_QUOTES, 'UTF-8') ?></span>
+                                <span class="platform-text"><strong><?= htmlspecialchars($platform['platform_name'], ENT_QUOTES, 'UTF-8') ?></strong><span><?= (int)$platform['width'] ?> × <?= (int)$platform['height'] ?></span></span>
+                            </button>
+                        <?php endforeach; ?>
                     </div>
+                </div>
+
+                <!-- 3) Country (compact) -->
+                <div class="option-block ff-country-block">
+                    <div class="country-picker" id="countryPicker">
+                        <button type="button" class="country-trigger active" id="countryTrigger">
+                            <span class="country-selected">
+                                <img id="selectedCountryFlag" src="<?= htmlspecialchars(wc_asset_path($ffSelectedCountry['flag_path'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" alt="">
+                                <span style="min-width:0;">
+                                    <span class="country-name" id="selectedCountryName"><?= htmlspecialchars($ffSelectedCountry['country_name'] ?? 'Choose Country', ENT_QUOTES, 'UTF-8') ?></span>
+                                    <span class="country-code" id="selectedCountryCode"><?= htmlspecialchars($ffSelectedCountry['country_code'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
+                                </span>
+                            </span>
+                            <span class="country-arrow">⌄</span>
+                        </button>
+                        <div class="country-menu" id="countryMenu">
+                            <div class="country-search-wrap"><input type="text" class="country-search" id="countrySearch" placeholder="Search country..."></div>
+                            <div class="country-options" id="countryOptions">
+                                <?php foreach ($ffCountries as $index => $country): ?>
+                                    <button type="button" class="country-option country-choice <?= $index === 0 ? 'active' : '' ?>"
+                                        data-country-id="<?= (int)$country['id'] ?>" data-country-name="<?= htmlspecialchars($country['country_name'], ENT_QUOTES, 'UTF-8') ?>"
+                                        data-country-code="<?= htmlspecialchars($country['country_code'], ENT_QUOTES, 'UTF-8') ?>" data-flag="<?= htmlspecialchars(wc_asset_path($country['flag_path']), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-search="<?= htmlspecialchars(strtolower($country['country_name'] . ' ' . $country['country_code']), ENT_QUOTES, 'UTF-8') ?>">
+                                        <img src="<?= htmlspecialchars(wc_asset_path($country['flag_path']), ENT_QUOTES, 'UTF-8') ?>" alt="">
+                                        <span><span class="country-name"><?= htmlspecialchars($country['country_name'], ENT_QUOTES, 'UTF-8') ?></span><span class="country-code"><?= htmlspecialchars($country['country_code'], ENT_QUOTES, 'UTF-8') ?></span></span>
+                                    </button>
+                                <?php endforeach; ?>
+                                <div class="no-results" id="noCountryResults">No countries found.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4) Frame — name only (no preview) -->
+                <div class="option-block">
+                    <div class="frame-row frame-row-names" id="frameList">
+                        <?php $firstFrameSet = false; ?>
+                        <?php foreach ($ffFrames as $frame): ?>
+                            <?php
+                                $isSel = $ffSelectedPlatform && (int)$frame['platform_id'] === (int)$ffSelectedPlatform['id'];
+                                $isActive = $isSel && !$firstFrameSet; if ($isActive) $firstFrameSet = true;
+                            ?>
+                            <button type="button" class="frame-choice <?= $isActive ? 'active' : '' ?>"
+                                data-frame-id="<?= (int)$frame['id'] ?>" data-platform-id="<?= (int)$frame['platform_id'] ?>" data-frame-name="<?= htmlspecialchars($frame['frame_name'], ENT_QUOTES, 'UTF-8') ?>"
+                                data-frame="<?= htmlspecialchars(wc_asset_path($frame['frame_path']), ENT_QUOTES, 'UTF-8') ?>" style="<?= $isSel ? '' : 'display:none;' ?>">
+                                <span><?= htmlspecialchars($frame['frame_name'], ENT_QUOTES, 'UTF-8') ?></span>
+                            </button>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+
+                <!-- 5) Photo Preview + 6) Buttons -->
+                <section class="preview-card">
                     <div class="section-label">Photo Preview</div>
                     <div class="camera-wrap">
                         <video id="video" autoplay playsinline muted></video>
@@ -5454,77 +5522,6 @@ body:before{
                     </div>
                     <div class="message" id="messageBox"></div>
                 </section>
-
-                <aside class="options-card">
-                    <div class="option-block">
-                        <div class="platform-row" id="platformList">
-                            <?php foreach ($ffPlatforms as $index => $platform): ?>
-                                <?php $plogo = wc_platform_logo_path($platform['platform_code'] ?? ''); $pfb = wc_platform_logo_fallback($platform['platform_code'] ?? ''); ?>
-                                <button type="button" class="platform-choice <?= $index === 0 ? 'active' : '' ?>"
-                                    data-platform-id="<?= (int)$platform['id'] ?>" data-platform-name="<?= htmlspecialchars($platform['platform_name'], ENT_QUOTES, 'UTF-8') ?>"
-                                    data-platform-code="<?= htmlspecialchars($platform['platform_code'], ENT_QUOTES, 'UTF-8') ?>" data-width="<?= (int)$platform['width'] ?>" data-height="<?= (int)$platform['height'] ?>">
-                                    <?php if ($plogo !== ''): ?><img class="platform-logo" src="<?= htmlspecialchars($plogo, ENT_QUOTES, 'UTF-8') ?>" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"><?php endif; ?>
-                                    <span class="platform-logo-fallback" <?= $plogo === '' ? 'style="display:flex;"' : '' ?>><?= htmlspecialchars($pfb, ENT_QUOTES, 'UTF-8') ?></span>
-                                    <span class="platform-text"><strong><?= htmlspecialchars($platform['platform_name'], ENT_QUOTES, 'UTF-8') ?></strong><span><?= (int)$platform['width'] ?> × <?= (int)$platform['height'] ?></span></span>
-                                </button>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-
-                    <div class="option-block">
-                        <div class="country-picker" id="countryPicker">
-                            <button type="button" class="country-trigger active" id="countryTrigger">
-                                <span class="country-selected">
-                                    <img id="selectedCountryFlag" src="<?= htmlspecialchars(wc_asset_path($ffSelectedCountry['flag_path'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" alt="">
-                                    <span style="min-width:0;">
-                                        <span class="country-name" id="selectedCountryName"><?= htmlspecialchars($ffSelectedCountry['country_name'] ?? 'Choose Country', ENT_QUOTES, 'UTF-8') ?></span>
-                                        <span class="country-code" id="selectedCountryCode"><?= htmlspecialchars($ffSelectedCountry['country_code'] ?? '', ENT_QUOTES, 'UTF-8') ?></span>
-                                    </span>
-                                </span>
-                                <span class="country-arrow">⌄</span>
-                            </button>
-                            <div class="country-menu" id="countryMenu">
-                                <div class="country-search-wrap"><input type="text" class="country-search" id="countrySearch" placeholder="Search country..."></div>
-                                <div class="country-options" id="countryOptions">
-                                    <?php foreach ($ffCountries as $index => $country): ?>
-                                        <button type="button" class="country-option country-choice <?= $index === 0 ? 'active' : '' ?>"
-                                            data-country-id="<?= (int)$country['id'] ?>" data-country-name="<?= htmlspecialchars($country['country_name'], ENT_QUOTES, 'UTF-8') ?>"
-                                            data-country-code="<?= htmlspecialchars($country['country_code'], ENT_QUOTES, 'UTF-8') ?>" data-flag="<?= htmlspecialchars(wc_asset_path($country['flag_path']), ENT_QUOTES, 'UTF-8') ?>"
-                                            data-search="<?= htmlspecialchars(strtolower($country['country_name'] . ' ' . $country['country_code']), ENT_QUOTES, 'UTF-8') ?>">
-                                            <img src="<?= htmlspecialchars(wc_asset_path($country['flag_path']), ENT_QUOTES, 'UTF-8') ?>" alt="">
-                                            <span><span class="country-name"><?= htmlspecialchars($country['country_name'], ENT_QUOTES, 'UTF-8') ?></span><span class="country-code"><?= htmlspecialchars($country['country_code'], ENT_QUOTES, 'UTF-8') ?></span></span>
-                                        </button>
-                                    <?php endforeach; ?>
-                                    <div class="no-results" id="noCountryResults">No countries found.</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="option-block">
-                        <div class="frame-row" id="frameList">
-                            <?php $firstFrameSet = false; ?>
-                            <?php foreach ($ffFrames as $frame): ?>
-                                <?php
-                                    $preview = $frame['preview_path'] ?: $frame['frame_path'];
-                                    $isSel = $ffSelectedPlatform && (int)$frame['platform_id'] === (int)$ffSelectedPlatform['id'];
-                                    $isActive = $isSel && !$firstFrameSet; if ($isActive) $firstFrameSet = true;
-                                ?>
-                                <button type="button" class="frame-choice <?= $isActive ? 'active' : '' ?>"
-                                    data-frame-id="<?= (int)$frame['id'] ?>" data-platform-id="<?= (int)$frame['platform_id'] ?>" data-frame-name="<?= htmlspecialchars($frame['frame_name'], ENT_QUOTES, 'UTF-8') ?>"
-                                    data-frame="<?= htmlspecialchars(wc_asset_path($frame['frame_path']), ENT_QUOTES, 'UTF-8') ?>" style="<?= $isSel ? '' : 'display:none;' ?>">
-                                    <img src="<?= htmlspecialchars(wc_asset_path($preview), ENT_QUOTES, 'UTF-8') ?>" alt=""><span><?= htmlspecialchars($frame['frame_name'], ENT_QUOTES, 'UTF-8') ?></span>
-                                </button>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
-
-                    <div class="selection-summary" id="selectionSummary">
-                        Selected platform: <strong><?= htmlspecialchars($ffSelectedPlatform['platform_name'] ?? '-', ENT_QUOTES, 'UTF-8') ?></strong><br>
-                        Selected country: <strong><?= htmlspecialchars($ffSelectedCountry['country_name'] ?? '-', ENT_QUOTES, 'UTF-8') ?></strong><br>
-                        Selected frame: <strong>-</strong>
-                    </div>
-                </aside>
             </div>
         <?php endif; ?>
         </div>
@@ -7902,6 +7899,14 @@ html[dir="rtl"] #fanFilterModal .ff-consent-text,html[dir="rtl"] #fanFilterModal
 #fanFilterModal .message.ok{display:block;background:#E9FFF5;color:#08764B;border:1px solid #BDF1DA}
 #fanFilterModal .message.err{display:block;background:#FFF1F1;color:#B42318;border:1px solid #FFD0D0}
 @media(max-width:820px){#fanFilterModal .studio-layout{grid-template-columns:1fr}#fanFilterModal .platform-row,#fanFilterModal .frame-row{display:flex;overflow-x:auto;gap:10px;padding-bottom:6px}#fanFilterModal .platform-choice{min-width:140px}#fanFilterModal .frame-choice{min-width:140px}}
+/* (FF) Single-column studio flow: consent → media → country → frame → preview → buttons */
+#fanFilterModal .studio-layout.ff-flow{display:flex !important;flex-direction:column;gap:14px;max-width:540px;margin:0 auto;align-items:stretch}
+/* Country picker — compact */
+#fanFilterModal .ff-country-block{max-width:300px}
+/* Frame — name-only chips (no preview image) */
+#fanFilterModal .frame-row-names{display:flex !important;flex-wrap:wrap;gap:8px;overflow:visible}
+#fanFilterModal .frame-row-names .frame-choice{min-height:0;min-width:0;width:auto;padding:9px 14px;border:2px solid #E1ECF8;box-shadow:none}
+#fanFilterModal .frame-row-names .frame-choice span{margin-top:0;font-size:12.5px}
 </style>
 
 <script>
