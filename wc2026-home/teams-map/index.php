@@ -163,12 +163,15 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         .tm-backdrop{position:fixed;inset:0;z-index:1990;background:rgba(4,12,28,.55);opacity:0;visibility:hidden;transition:.25s}
         .tm-backdrop.show{opacity:1;visibility:visible}
         @media(max-width:760px){
-            .topbar{padding:10px 14px;gap:10px;flex-wrap:nowrap}
-            .brand-logo{height:34px}
+            /* Header: logo · search · burger (burger sits right next to the search box) */
+            .topbar{padding:10px 12px;gap:8px;flex-wrap:nowrap}
+            .brand-logo{height:32px}
             .brand-text{display:none}
             .searchbox{order:2;flex:1 1 auto;max-width:none;min-width:0}
-            .tm-burger{display:inline-flex;order:3}
+            .tm-burger{display:inline-flex;order:3;flex:none}
             .hosts{display:none !important}
+            /* Hide the confederation (location) filters on mobile */
+            .filters{display:none !important}
             .top-actions{position:fixed;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(80vw,300px);margin:0;
                 flex-direction:column;align-items:stretch;gap:10px;overflow-y:auto;-webkit-overflow-scrolling:touch;
                 background:#0c1830;border-inline-start:1px solid var(--line);padding:66px 14px 24px;
@@ -179,7 +182,7 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
             html.tm-nav-open .tm-burger{display:none}
             .top-actions .theme-switch,.top-actions .lang-switch{justify-content:center}
             .top-actions .top-link{width:100%;justify-content:center;text-align:center}
-            .stage{min-height:56vh}
+            .stage{min-height:64vh}
         }
 
         .searchbox{position:relative;flex:1;min-width:180px;max-width:300px;order:5}
