@@ -882,6 +882,13 @@ body{
 
 </main>
 
+<footer class="wc-footer" style="position:relative;z-index:2;margin-top:26px;padding:24px;border-top:1px solid rgba(168,231,255,.14);background:rgba(4,18,40,.55)">
+    <div style="max-width:1680px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap">
+        <b style="color:#fff;font-size:14px;font-weight:900">Developed by CATRION &copy; IT Digital &amp; Transformation</b>
+        <span style="color:rgba(255,255,255,.62);font-size:12px;font-weight:700">CATRION FIFA World Cup 2026 Challenge</span>
+    </div>
+</footer>
+
 <div class="predict-popup" id="predictPopup" aria-hidden="true">
     <div class="predict-popup-card">
         <div class="predict-popup-top">

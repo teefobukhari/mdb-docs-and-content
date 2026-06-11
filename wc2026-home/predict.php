@@ -696,7 +696,97 @@ body.popup-mode .card{background:transparent !important}
                 </div>
             </form>
         <?php endif; ?>
+
+        <!-- Per-match fan reactions & comments -->
+        <section class="match-social" id="matchSocial" data-match="<?= (int)$matchId ?>">
+            <div class="ms-title">Fan reactions</div>
+            <div class="ms-reacts" id="msReacts">
+                <button type="button" class="ms-react" data-reaction="like">👍 <span class="ms-rc" data-for="like">0</span></button>
+                <button type="button" class="ms-react" data-reaction="fire">🔥 <span class="ms-rc" data-for="fire">0</span></button>
+                <button type="button" class="ms-react" data-reaction="goal">⚽ <span class="ms-rc" data-for="goal">0</span></button>
+                <button type="button" class="ms-react" data-reaction="heart">❤️ <span class="ms-rc" data-for="heart">0</span></button>
+            </div>
+
+            <div class="ms-title">Comments</div>
+            <form class="ms-form" id="msForm">
+                <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
+                <input type="hidden" name="match_id" value="<?= (int)$matchId ?>">
+                <input type="text" id="msInput" name="body" maxlength="500" placeholder="Write a comment…" autocomplete="off">
+                <button type="submit">Send</button>
+            </form>
+            <div class="ms-error" id="msError"></div>
+            <div class="ms-list" id="msList"><div class="ms-empty">Loading comments…</div></div>
+        </section>
     </section>
+
+    <style>
+    .match-social{margin-top:22px;padding-top:18px;border-top:1px solid rgba(168,231,255,.16)}
+    .ms-title{color:#A8E7FF;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.4px;margin:0 0 10px}
+    .ms-reacts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+    .ms-react{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(168,231,255,.22);background:rgba(255,255,255,.06);color:#fff;font:inherit;font-weight:900;font-size:15px;padding:9px 14px;border-radius:999px;cursor:pointer;transition:.18s ease}
+    .ms-react:hover{background:rgba(255,255,255,.12)}
+    .ms-react.on{background:linear-gradient(135deg,#F5C85B,#FFE19A);color:#06202e;border-color:#F5C85B}
+    .ms-rc{font-size:13px}
+    .ms-form{display:flex;gap:8px;margin-bottom:12px}
+    .ms-form input{flex:1;min-height:42px;border-radius:12px;border:1px solid rgba(168,231,255,.22);background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:14px;padding:0 13px}
+    .ms-form input::placeholder{color:rgba(255,255,255,.5)}
+    .ms-form button{border:0;border-radius:12px;padding:0 18px;background:linear-gradient(135deg,#F5C85B,#FFE19A);color:#071A35;font-weight:900;cursor:pointer}
+    .ms-error{display:none;margin-bottom:10px;color:#FFB4B4;font-size:13px;font-weight:800}
+    .ms-error.show{display:block}
+    .ms-list{display:flex;flex-direction:column;gap:10px;max-height:300px;overflow:auto}
+    .ms-comment{background:rgba(255,255,255,.05);border:1px solid rgba(168,231,255,.14);border-radius:12px;padding:10px 12px}
+    .ms-comment b{display:block;color:#fff;font-size:13px;font-weight:900}
+    .ms-comment span{color:rgba(255,255,255,.82);font-size:13px;line-height:1.5}
+    .ms-comment small{color:rgba(255,255,255,.45);font-size:11px;font-weight:700}
+    .ms-empty{color:rgba(255,255,255,.55);font-weight:700;font-size:13px;padding:8px 0}
+    body:not(.popup-mode) .ms-form input,body:not(.popup-mode) .ms-react{}
+    </style>
+
+    <script>
+    (function(){
+        var root=document.getElementById('matchSocial'); if(!root) return;
+        var mid=root.dataset.match, csrf="<?= h($csrf) ?>", myName="<?= h($name) ?>";
+        var list=document.getElementById('msList'), form=document.getElementById('msForm'),
+            input=document.getElementById('msInput'), err=document.getElementById('msError'),
+            reactsWrap=document.getElementById('msReacts');
+        function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[c];});}
+        function showErr(m){ if(err){ err.textContent=m; err.classList.add('show'); } }
+        function clrErr(){ if(err){ err.textContent=''; err.classList.remove('show'); } }
+        function renderComments(arr){
+            if(!arr || !arr.length){ list.innerHTML='<div class="ms-empty">Be the first to comment.</div>'; return; }
+            list.innerHTML=''; arr.forEach(function(c){ var el=document.createElement('div'); el.className='ms-comment';
+                el.innerHTML='<b>'+esc(c.name)+' <small>'+esc(c.created_at||'')+'</small></b><span>'+esc(c.body)+'</span>'; list.appendChild(el); });
+        }
+        function renderReacts(r, my){
+            ['like','fire','goal','heart'].forEach(function(k){ var s=root.querySelector('.ms-rc[data-for="'+k+'"]'); if(s) s.textContent=(r&&r[k])||0; });
+            root.querySelectorAll('.ms-react').forEach(function(b){ b.classList.toggle('on', b.dataset.reaction===my); });
+        }
+        function load(){
+            fetch('/WC2026/api/match_feed.php?match='+encodeURIComponent(mid),{credentials:'same-origin'})
+                .then(function(r){return r.json();})
+                .then(function(d){ if(d&&d.ok){ renderComments(d.comments); renderReacts(d.reactions, d.my); } else { renderComments([]); } })
+                .catch(function(){ list.innerHTML='<div class="ms-empty">Comments unavailable (run sql/wc2026_match_social.sql).</div>'; });
+        }
+        reactsWrap.querySelectorAll('.ms-react').forEach(function(b){
+            b.addEventListener('click', function(){
+                fetch('/WC2026/api/match_react.php',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',
+                    body:JSON.stringify({csrf:csrf,match_id:mid,reaction:b.dataset.reaction})})
+                    .then(function(r){return r.json();}).then(function(d){ if(d&&d.ok) renderReacts(d.reactions,d.my); }).catch(function(){});
+            });
+        });
+        if(form) form.addEventListener('submit', function(e){ e.preventDefault(); clrErr();
+            var v=(input.value||'').trim(); if(!v) return;
+            var fd=new FormData(form);
+            fetch('/WC2026/api/match_comment.php',{method:'POST',body:fd,credentials:'same-origin'})
+                .then(function(r){return r.text();}).then(function(t){ var d; try{d=JSON.parse(t);}catch(e){ showErr('Could not post (endpoint missing or tables not created).'); return; }
+                    if(d&&d.ok&&d.comment){ if(list.querySelector('.ms-empty')) list.innerHTML=''; var el=document.createElement('div'); el.className='ms-comment';
+                        el.innerHTML='<b>'+esc(d.comment.name)+' <small>'+esc(d.comment.created_at||'')+'</small></b><span>'+esc(d.comment.body)+'</span>'; list.insertBefore(el,list.firstChild); input.value=''; }
+                    else { showErr((d&&d.message)?d.message:'Could not post your comment.'); } })
+                .catch(function(){ showErr('Could not reach the server.'); });
+        });
+        load();
+    })();
+    </script>
 </main>
 
 <?php if ($savedNow): ?>

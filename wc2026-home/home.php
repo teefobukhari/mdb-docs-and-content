@@ -4511,7 +4511,7 @@ body:before{
                     <?php if ($nxVenue !== ''): ?><div class="next24-venue"><?= htmlspecialchars($nxVenue, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
                     <div class="next24-actions">
                         <?php if ($kickoffOpen): ?>
-                            <a href="/WC2026/matches?fixture=<?= (int)$nx['id'] ?>" class="match-link primary" data-i18n="submitPrediction">Submit Prediction</a>
+                            <button type="button" class="match-link primary" data-predict-url="/WC2026/predict?match=<?= (int)$nx['id'] ?>" data-i18n="submitPrediction">Submit Prediction</button>
                         <?php else: ?>
                             <span class="match-link soft" style="opacity:.6;cursor:not-allowed" data-i18n="predictionsClosed">Predictions Closed</span>
                         <?php endif; ?>
@@ -4655,6 +4655,97 @@ body:before{
         </div>
     </section>
 
+    <?php
+    // 2026 host cities (USA / Canada / Mexico) plotted on a stylized North-America board
+    $wcHostCities = [
+        ['Seattle',105,150,'usa'],['San Francisco',92,236,'usa'],['Los Angeles',120,300,'usa'],
+        ['Kansas City',300,250,'usa'],['Dallas',285,332,'usa'],['Houston',305,366,'usa'],
+        ['Atlanta',396,316,'usa'],['Miami',446,400,'usa'],['Philadelphia',470,238,'usa'],
+        ['New York',489,216,'usa'],['Boston',506,196,'usa'],
+        ['Vancouver',95,118,'can'],['Toronto',437,190,'can'],
+        ['Monterrey',270,398,'mex'],['Guadalajara',233,440,'mex'],['Mexico City',292,460,'mex'],
+    ];
+    ?>
+    <section class="card live-map-card hostmap-card">
+        <div class="map-head">
+            <div class="map-title"><span class="map-dot"></span> <span data-i18n="liveMapTitle">Live World Cup Map</span></div>
+            <div class="map-legend">
+                <span class="legend-item"><i class="legend-bullet usa"></i> <span data-i18n="hostUSA">USA</span></span>
+                <span class="legend-item"><i class="legend-bullet can"></i> <span data-i18n="hostCAN">Canada</span></span>
+                <span class="legend-item"><i class="legend-bullet mex"></i> <span data-i18n="hostMEX">Mexico</span></span>
+            </div>
+        </div>
+
+        <div class="hostmap-stage">
+            <div class="hostmap">
+                <svg viewBox="0 0 640 520" class="hostmap-svg" preserveAspectRatio="xMidYMid meet" aria-label="2026 host cities">
+                    <defs>
+                        <linearGradient id="naFill" x1="0" y1="0" x2="1" y2="1">
+                            <stop offset="0" stop-color="rgba(85,183,255,.20)"/>
+                            <stop offset="1" stop-color="rgba(14,99,230,.12)"/>
+                        </linearGradient>
+                    </defs>
+                    <path class="hostmap-land" d="M120,70 C90,80 80,118 100,140 C70,162 82,208 112,214 C96,258 122,308 152,320 C166,360 208,360 232,440 C248,470 300,476 306,452 C332,428 320,394 300,380 C420,420 470,410 500,380 C540,350 530,300 510,260 C540,240 540,200 510,186 C520,150 482,150 470,176 C442,150 430,110 400,110 C360,80 250,80 200,112 C176,70 146,68 120,70 Z"/>
+                    <g class="hostmap-grid">
+                        <line x1="0" y1="173" x2="640" y2="173"/><line x1="0" y1="346" x2="640" y2="346"/>
+                        <line x1="213" y1="0" x2="213" y2="520"/><line x1="426" y1="0" x2="426" y2="520"/>
+                    </g>
+                    <g class="hostmap-cities">
+                        <?php foreach ($wcHostCities as $i => $hc): ?>
+                            <?php [$cName, $cx, $cy, $cClass] = $hc; $anchor = $cx > 430 ? 'end' : 'start'; $tx = $cx > 430 ? $cx - 12 : $cx + 12; ?>
+                            <g class="hc <?= $cClass ?>" data-city="<?= htmlspecialchars($cName, ENT_QUOTES, 'UTF-8') ?>">
+                                <title><?= htmlspecialchars($cName, ENT_QUOTES, 'UTF-8') ?></title>
+                                <circle class="hc-ring" cx="<?= $cx ?>" cy="<?= $cy ?>" r="9"></circle>
+                                <circle class="hc-dot" cx="<?= $cx ?>" cy="<?= $cy ?>" r="4.2"></circle>
+                                <text class="hc-label" x="<?= $tx ?>" y="<?= $cy + 3 ?>" text-anchor="<?= $anchor ?>"><?= htmlspecialchars($cName, ENT_QUOTES, 'UTF-8') ?></text>
+                            </g>
+                        <?php endforeach; ?>
+                    </g>
+                </svg>
+                <div class="hostmap-cap">📍 <span data-i18n="hostCitiesCap">16 Host Cities · United States · Canada · Mexico</span></div>
+            </div>
+
+            <aside class="hostmap-side">
+                <div class="hostmap-side-head">
+                    <span data-i18n="matchesByLoc">Matches &amp; Locations</span>
+                    <a href="/WC2026/matches" class="match-link soft" data-i18n="viewFullMatches">View Full Matches</a>
+                </div>
+                <div class="map-pins hostmap-list">
+                    <?php if (!empty($mapMatches)): ?>
+                        <?php foreach ($mapMatches as $mp): ?>
+                            <?php
+                                $mpStatus = wc_match_status_label($mp);
+                                $mpScore = ($mpStatus === 'Live' || $mpStatus === 'Finished')
+                                    ? ((is_null($mp['home_score']) ? '-' : (int)$mp['home_score']) . ' - ' . (is_null($mp['away_score']) ? '-' : (int)$mp['away_score']))
+                                    : 'VS';
+                                $mpLoc = trim((string)($mp['city'] ?? '') . (!empty($mp['stadium']) ? ' • ' . $mp['stadium'] : ''));
+                            ?>
+                            <div class="map-pin-card" data-city="<?= htmlspecialchars((string)($mp['city'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                <div class="map-pin-status <?= htmlspecialchars($mpStatus, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($mpStatus, ENT_QUOTES, 'UTF-8') ?></div>
+                                <div class="map-pin-teams">
+                                    <div class="map-team-mini">
+                                        <?php if (!empty($mp['home_logo'])): ?><img src="<?= htmlspecialchars($mp['home_logo'], ENT_QUOTES, 'UTF-8') ?>" alt=""><?php else: ?><span class="map-team-fallback"><?= htmlspecialchars(mb_substr(wc_safe_team($mp['home_team']), 0, 1), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+                                        <span><?= htmlspecialchars(mb_substr(wc_safe_team($mp['home_team']), 0, 3), ENT_QUOTES, 'UTF-8') ?></span>
+                                    </div>
+                                    <div class="map-score-mini"><?= htmlspecialchars($mpScore, ENT_QUOTES, 'UTF-8') ?></div>
+                                    <div class="map-team-mini">
+                                        <?php if (!empty($mp['away_logo'])): ?><img src="<?= htmlspecialchars($mp['away_logo'], ENT_QUOTES, 'UTF-8') ?>" alt=""><?php else: ?><span class="map-team-fallback"><?= htmlspecialchars(mb_substr(wc_safe_team($mp['away_team']), 0, 1), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+                                        <span><?= htmlspecialchars(mb_substr(wc_safe_team($mp['away_team']), 0, 3), ENT_QUOTES, 'UTF-8') ?></span>
+                                    </div>
+                                </div>
+                                <?php if ($mpLoc !== ''): ?><div class="map-pin-city">📍 <?= htmlspecialchars($mpLoc, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
+                                <div class="map-pin-time"><?= htmlspecialchars(date('d M Y - h:i A', strtotime((string)$mp['match_datetime'])), ENT_QUOTES, 'UTF-8') ?></div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <div class="bracket-empty" data-i18n="noMapMatches">No synced matches available yet.</div>
+                    <?php endif; ?>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <?php /* legacy world-map markup removed in favour of the host-cities board */ if (false): ?>
     <section class="card live-map-card">
         <div class="live-map-bg"></div>
         <div class="world-lines"></div>
@@ -4791,6 +4882,7 @@ body:before{
             </aside>
         </div>
     </section>
+    <?php endif; /* legacy world-map */ ?>
 
     <section class="card knockout-card bracket-preview-mode" id="knockoutBracketCard">
         <div class="bracket-head">
@@ -5220,6 +5312,17 @@ body:before{
             <div class="bi-row" id="biVenueRow"><span>Venue</span><b id="biVenue">—</b></div>
         </div>
         <button class="primary-btn" type="button" id="biClose" data-i18n="close">Close</button>
+    </div>
+</div>
+
+<!-- (B3) Submit-prediction pop-up (opened from Next Matches cards) -->
+<div class="predict-popup" id="homePredictPopup" aria-hidden="true">
+    <div class="predict-popup-card">
+        <div class="predict-popup-top">
+            <div class="predict-popup-title" data-i18n="submitPrediction">Submit Prediction</div>
+            <button type="button" class="predict-popup-close" id="homePredictClose" aria-label="Close">×</button>
+        </div>
+        <iframe id="homePredictFrame" src="about:blank" title="Match Prediction"></iframe>
     </div>
 </div>
 
@@ -6237,7 +6340,18 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       soonBadge:'Coming Soon',soonTitle:'Mystery Box',soonSub:'A surprise World Cup reward drop is on its way. Keep playing and predicting — this box unlocks later in the tournament.',soonCta:'Unlocks Soon',
       ffChooseCountry:'Choose Country',ffChooseFrame:'Choose Frame',ffStartCam:'Start Camera',ffUpload:'Upload Photo',ffCapture:'Capture',ffRetake:'Retake',ffSave:'Save & Download',ffReady:'Start the camera or upload a photo.',ffNeedData:'Add active countries and frames to enable the studio.',
       openWall:'Open Fan Wall',closeWall:'Minimize',ffCardSub:'Create your World Cup fan photo — pick your country, choose a frame, snap a selfie and download.',ffOpenStudio:'Open Studio',newPost:'new',
-      navHowTo:'How to Use',navPoints:'Points',ffSearchCountry:'Search country…'
+      navHowTo:'How to Use',navPoints:'Points',ffSearchCountry:'Search country…',
+      howToTitle:'Get started in 5 steps',
+      howStep1t:'Play the Daily Goal Rush',howStep1d:'Tap the ball (or press Space) to shoot. Aim with the moving target line, beat the goalkeeper, and score as many goals as you can in 30 seconds — once per day.',
+      howStep2t:'Predict real matches',howStep2d:'Open Matches or the “Next Matches · 24h” cards, enter your score prediction, and submit before kickoff. Predictions lock the moment the match starts.',
+      howStep3t:'Create a Fan Filter photo',howStep3d:'Open the Fan Filter Studio, pick your country and a frame, snap a selfie or upload a photo, then save & download it.',
+      howStep4t:'Join the Fan Wall',howStep4d:'Post your moment, like and comment on others. New posts appear in the notification bar at the top.',
+      howStep5t:'Climb the leaderboard',howStep5d:'Collect points from games, predictions and your daily photo to rise up the weekly and overall rankings.',
+      pointsTitle:'How to collect points',ptsAction:'Action',ptsReward:'Reward',
+      ptsGoal:'Daily game — score a goal (by zone)',ptsGolden:'Golden ball goal (bonus)',ptsCombo:'Combo streak (every 3 / 5 goals)',ptsMystery:'Daily food bonus roll',
+      ptsPredWin:'Predict the match winner',ptsPredScore:'Predict the correct score',ptsChampion:'Predict the champion (Final only)',ptsPhoto:'Fan Filter photo (once per day)',
+      ptsNote:'Procedure: 1) Play the daily game and bank your goal + bonus points. 2) Submit predictions before kickoff — points are awarded automatically once the official result is synced. 3) Save your daily Fan Filter photo. Weekly score resets every week; overall score is cumulative across the tournament.',
+      hostUSA:'USA',hostCAN:'Canada',hostMEX:'Mexico',hostCitiesCap:'16 Host Cities · United States · Canada · Mexico',matchesByLoc:'Matches & Locations',noMapMatches:'No synced matches available yet.'
     },
     ar:{
       brandSub:'دوري التوقعات • تحدي الأهداف اليومي',themeCatrion:'كاتريون',themeSaudi:'السعودية',
@@ -6286,7 +6400,18 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       soonBadge:'قريبًا',soonTitle:'الصندوق الغامض',soonSub:'مكافأة مفاجئة من كأس العالم في الطريق. واصل اللعب والتوقع — سيُفتح هذا الصندوق لاحقًا خلال البطولة.',soonCta:'يُفتح قريبًا',
       ffChooseCountry:'اختر الدولة',ffChooseFrame:'اختر الإطار',ffStartCam:'تشغيل الكاميرا',ffUpload:'رفع صورة',ffCapture:'التقاط',ffRetake:'إعادة',ffSave:'حفظ وتنزيل',ffReady:'شغّل الكاميرا أو ارفع صورة.',ffNeedData:'أضف دولًا وإطارات نشطة لتفعيل الاستوديو.',
       openWall:'فتح جدار المشجعين',closeWall:'تصغير',ffCardSub:'أنشئ صورتك كمشجع — اختر دولتك، اختر إطارًا، التقط صورة وحمّلها.',ffOpenStudio:'فتح الاستوديو',newPost:'جديد',
-      navHowTo:'طريقة الاستخدام',navPoints:'النقاط',ffSearchCountry:'ابحث عن دولة…'
+      navHowTo:'طريقة الاستخدام',navPoints:'النقاط',ffSearchCountry:'ابحث عن دولة…',
+      howToTitle:'ابدأ في 5 خطوات',
+      howStep1t:'العب تحدي الأهداف اليومي',howStep1d:'انقر الكرة (أو اضغط مسافة) للتسديد. صوّب باستخدام خط الهدف المتحرك، تجاوز الحارس، وسجّل أكبر عدد من الأهداف خلال 30 ثانية — مرة واحدة يوميًا.',
+      howStep2t:'توقّع المباريات الحقيقية',howStep2d:'افتح المباريات أو بطاقات «المباريات القادمة · 24 ساعة»، أدخل توقع النتيجة، وأرسله قبل انطلاق المباراة. تُقفل التوقعات بمجرد بدء المباراة.',
+      howStep3t:'أنشئ صورة فلتر المشجع',howStep3d:'افتح استوديو فلتر المشجع، اختر دولتك وإطارًا، التقط صورة أو ارفع واحدة، ثم احفظها ونزّلها.',
+      howStep4t:'انضم إلى جدار المشجعين',howStep4d:'انشر لحظتك، وتفاعل وعلّق على منشورات الآخرين. تظهر المنشورات الجديدة في شريط الإشعارات بالأعلى.',
+      howStep5t:'تصدّر لوحة الصدارة',howStep5d:'اجمع النقاط من الألعاب والتوقعات وصورتك اليومية لترتقي في التصنيف الأسبوعي والإجمالي.',
+      pointsTitle:'كيف تجمع النقاط',ptsAction:'الإجراء',ptsReward:'المكافأة',
+      ptsGoal:'اللعبة اليومية — تسجيل هدف (حسب المنطقة)',ptsGolden:'هدف الكرة الذهبية (مكافأة)',ptsCombo:'سلسلة متتالية (كل 3 / 5 أهداف)',ptsMystery:'لفة المكافأة الغذائية اليومية',
+      ptsPredWin:'توقّع الفائز بالمباراة',ptsPredScore:'توقّع النتيجة الصحيحة',ptsChampion:'توقّع البطل (النهائي فقط)',ptsPhoto:'صورة فلتر المشجع (مرة يوميًا)',
+      ptsNote:'الطريقة: 1) العب اللعبة اليومية واجمع نقاط الأهداف والمكافآت. 2) أرسل التوقعات قبل انطلاق المباراة — تُمنح النقاط تلقائيًا بعد مزامنة النتيجة الرسمية. 3) احفظ صورة فلتر المشجع اليومية. تُصفّر نقاط الأسبوع أسبوعيًا، أما النقاط الإجمالية فتتراكم طوال البطولة.',
+      hostUSA:'أمريكا',hostCAN:'كندا',hostMEX:'المكسيك',hostCitiesCap:'16 مدينة مضيفة · الولايات المتحدة · كندا · المكسيك',matchesByLoc:'المباريات والمواقع',noMapMatches:'لا توجد مباريات متزامنة بعد.'
     }
   };
   var lang = (function(){ try{ return localStorage.getItem('wc_lang')||'en'; }catch(e){ return 'en'; } })();
@@ -6660,6 +6785,43 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
     background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:13px;padding:0 12px}
 .ff-search::placeholder{color:rgba(255,255,255,.5)}
 .ff-countries-empty{padding:8px 2px;color:rgba(255,255,255,.55);font-size:12px;font-weight:700}
+
+/* (B3) home prediction pop-up (dark, matches the theme) */
+.predict-popup{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(4,18,40,.78);backdrop-filter:blur(10px)}
+.predict-popup.active{display:flex}
+.predict-popup-card{width:100%;max-width:820px;height:min(86vh,760px);background:#0c1830;border:1px solid rgba(168,231,255,.2);border-radius:24px;overflow:hidden;box-shadow:0 35px 90px rgba(0,0,0,.5);position:relative}
+.predict-popup-top{height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 12px 0 22px;border-bottom:1px solid rgba(168,231,255,.14)}
+.predict-popup-title{font-size:18px;font-weight:900;color:#fff}
+.predict-popup-close{width:38px;height:38px;border:0;border-radius:12px;background:rgba(255,255,255,.12);color:#fff;font-size:22px;font-weight:900;cursor:pointer}
+.predict-popup iframe{width:100%;height:calc(100% - 60px);border:0;background:#0c1830}
+@media(max-width:640px){.predict-popup{padding:0;align-items:flex-end}.predict-popup-card{height:94vh;border-radius:20px 20px 0 0}}
+
+/* (A1) host-cities live map */
+.hostmap-card{padding:22px !important}
+.legend-bullet.usa{background:#55B7FF}.legend-bullet.can{background:#E94747}.legend-bullet.mex{background:#22C55E}
+.hostmap-stage{display:grid;grid-template-columns:1.55fr .85fr;gap:20px;align-items:stretch}
+.hostmap{position:relative;border-radius:20px;overflow:hidden;display:flex;flex-direction:column;min-height:380px;
+    background:radial-gradient(circle at 50% 26%,rgba(14,99,230,.20),transparent 60%),linear-gradient(160deg,#061A36,#08254D);
+    border:1px solid rgba(168,231,255,.16)}
+.hostmap-svg{width:100%;flex:1;display:block}
+.hostmap-land{fill:url(#naFill);stroke:rgba(168,231,255,.5);stroke-width:1.6;filter:drop-shadow(0 0 14px rgba(85,183,255,.25))}
+.hostmap-grid line{stroke:rgba(168,231,255,.08);stroke-width:1}
+.hc-label{fill:rgba(255,255,255,.85);font:800 11px Inter,sans-serif;paint-order:stroke;stroke:rgba(6,26,54,.72);stroke-width:2.6}
+.hc-dot{fill:#fff}
+.hc-ring{fill:none;stroke-width:2;transform-origin:center;transform-box:fill-box;animation:wmPing 2.6s ease-out infinite}
+.hc.usa .hc-dot{fill:#55B7FF}.hc.usa .hc-ring{stroke:#55B7FF}
+.hc.can .hc-dot{fill:#E94747}.hc.can .hc-ring{stroke:#E94747}
+.hc.mex .hc-dot{fill:#22C55E}.hc.mex .hc-ring{stroke:#22C55E}
+.hc{opacity:.95;transition:opacity .25s ease}
+.hc.dim{opacity:.3}
+.hc.active .hc-dot{fill:#FFE19A}.hc.active .hc-ring{stroke:#FFE19A;animation-duration:1.3s}.hc.active .hc-label{fill:#FFE19A}
+.hostmap-cap{padding:10px 14px;color:rgba(255,255,255,.7);font-size:12px;font-weight:800;border-top:1px solid rgba(168,231,255,.12);text-align:center}
+.hostmap-side{display:flex;flex-direction:column;min-width:0}
+.hostmap-side-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;color:#fff;font-weight:900;font-size:14px;flex-wrap:wrap}
+.hostmap-list{position:static !important;display:flex !important;flex-direction:column;gap:10px;max-height:400px;overflow:auto;min-height:0}
+.hostmap-list .map-pin-card{position:static !important;inset:auto !important;left:auto !important;right:auto !important;top:auto !important;bottom:auto !important;width:auto !important;cursor:pointer}
+.hostmap-list .map-pin-card.hl{border-color:#FFE19A !important;box-shadow:0 0 0 1px #FFE19A,0 18px 40px rgba(0,0,0,.32) !important}
+@media(max-width:900px){.hostmap-stage{grid-template-columns:1fr}.hostmap{min-height:300px}.hostmap-list{max-height:none}}
 </style>
 
 <script>
@@ -6913,6 +7075,46 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
   loadFeed();
   /* (7) keep the notification bar fresh (15-min window) while the wall is minimized */
   setInterval(function(){ if(wall && wall.classList.contains('collapsed')) loadFeed(); }, 60000);
+})();
+</script>
+
+<script>
+/* (B3) Submit Prediction -> open predict.php in a popup (no full-page navigation) */
+(function(){
+  var pop=document.getElementById('homePredictPopup'), fr=document.getElementById('homePredictFrame'),
+      x=document.getElementById('homePredictClose');
+  if(!pop || !fr) return;
+  function openPop(url){ fr.src = url + (url.indexOf('?')>=0?'&':'?') + 'popup=1'; pop.classList.add('active'); pop.setAttribute('aria-hidden','false'); document.body.style.overflow='hidden'; }
+  function closePop(reload){ pop.classList.remove('active'); pop.setAttribute('aria-hidden','true'); document.body.style.overflow=''; fr.src='about:blank'; if(reload) setTimeout(function(){ location.reload(); }, 200); }
+  document.querySelectorAll('[data-predict-url]').forEach(function(b){ b.addEventListener('click', function(){ openPop(b.dataset.predictUrl); if(window.wcAudit) wcAudit('open_prediction', b.dataset.predictUrl); }); });
+  if(x) x.addEventListener('click', function(){ closePop(true); });
+  pop.addEventListener('click', function(e){ if(e.target===pop) closePop(true); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape' && pop.classList.contains('active')) closePop(true); });
+  window.addEventListener('message', function(ev){ if(ev && ev.data && ev.data.type==='WC2026_PREDICTION_SAVED') closePop(true); });
+})();
+</script>
+
+<script>
+/* (A1) host-cities map: link match cards to host-city dots */
+(function(){
+  var hcs=[].slice.call(document.querySelectorAll('.hostmap .hc'));
+  var cards=[].slice.call(document.querySelectorAll('.hostmap-list .map-pin-card'));
+  if(!hcs.length) return;
+  function norm(s){ return (s||'').toLowerCase().trim(); }
+  function match(host, city){ host=norm(host); city=norm(city); return city!=='' && (host.indexOf(city)>=0 || city.indexOf(host)>=0); }
+  var matchCities=cards.map(function(c){ return norm(c.dataset.city); }).filter(Boolean);
+  var any=matchCities.length>0;
+  hcs.forEach(function(g){
+    var host=g.dataset.city, on=matchCities.some(function(c){ return match(host,c); });
+    if(any){ g.classList.toggle('active', on); g.classList.toggle('dim', !on); }
+  });
+  cards.forEach(function(c){
+    c.addEventListener('click', function(){
+      cards.forEach(function(x){ x.classList.remove('hl'); }); c.classList.add('hl');
+      var city=c.dataset.city;
+      hcs.forEach(function(g){ var on=match(g.dataset.city, city); g.classList.toggle('active', on); g.classList.toggle('dim', !on); });
+    });
+  });
 })();
 </script>
 
