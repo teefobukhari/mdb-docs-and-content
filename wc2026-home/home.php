@@ -4866,16 +4866,44 @@ body:before{
         </div>
     </section>
 
-    <!-- (1) Participating Teams Map — native interactive Leaflet map of the qualified nations -->
-    <?php require_once __DIR__ . '/_teams_map.php'; $teamsMapNations = wc_teams_map_nations($conn); ?>
+    <!-- (1) Participating Teams Map — full 48-nation interactive map embedded (history + players + details panel) -->
+    <?php
+      require_once __DIR__ . '/data/countries.php';
+      $tmCountries = function_exists('wc2026_countries') ? wc2026_countries() : [];
+      $tmMarkers = [];
+      foreach ($tmCountries as $tmCode => $tmC) {
+          $tmMarkers[] = [
+              'code'=>$tmCode,
+              'name'=>$tmC['name_ar'], 'en'=>$tmC['name_en'], 'flag'=>$tmC['flag'],
+              'confed'=>$tmC['confed'], 'group'=>$tmC['group'], 'host'=>!empty($tmC['host']),
+              'lat'=>$tmC['coords'][0], 'lng'=>$tmC['coords'][1],
+              'rank'=>$tmC['fifa_rank'], 'apps'=>$tmC['appearances'], 'titles'=>$tmC['titles'],
+              'history'=>$tmC['history'], 'players'=>$tmC['players'],
+          ];
+      }
+      $tmConfeds = ['UEFA'=>'أوروبا','CONMEBOL'=>'أمريكا الجنوبية','CONCACAF'=>'أمريكا الشمالية','CAF'=>'أفريقيا','AFC'=>'آسيا','OFC'=>'أوقيانوسيا'];
+      $tmConfedCounts = array_count_values(array_column($tmMarkers,'confed'));
+    ?>
     <section class="card teams-map-card" id="teamsMapCard">
         <div class="map-head">
             <div class="map-title"><span class="map-dot"></span> <span data-i18n="teamsMapTitle">Participating Teams Map</span></div>
-            <a href="/WC2026/teams-map/" target="_blank" rel="noopener" class="match-link soft" data-i18n="openTeamsMap">Open Full Map ↗</a>
         </div>
-        <div class="teams-map-sub" data-i18n="teamsMapSub"><?= count($teamsMapNations) ?> qualified nations on the map — tap any country to jump to its fixtures.</div>
+        <div class="teams-map-sub"><?= count($tmMarkers) ?> منتخباً مشاركاً · اضغط على أي دولة لعرض تاريخها الكروي ونجومها</div>
+        <div class="tmx-controls" dir="rtl">
+            <div class="tmx-filters" id="tmxFilters">
+                <button type="button" class="tmx-chip is-active" data-confed="ALL">الكل <small><?= count($tmMarkers) ?></small></button>
+                <?php foreach ($tmConfeds as $tmKey=>$tmLabel): ?>
+                    <button type="button" class="tmx-chip" data-confed="<?= htmlspecialchars($tmKey, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($tmLabel, ENT_QUOTES, 'UTF-8') ?> <small><?= (int)($tmConfedCounts[$tmKey] ?? 0) ?></small></button>
+                <?php endforeach; ?>
+            </div>
+            <div class="tmx-search"><input type="search" id="tmxSearch" placeholder="ابحث عن منتخب…" aria-label="ابحث عن منتخب"></div>
+        </div>
         <div class="teams-map-frame-wrap">
             <div id="teamsLeafletMap" class="teams-map-leaflet" aria-label="Participating teams map"></div>
+            <aside class="tmx-panel" id="tmxPanel" aria-hidden="true" dir="rtl">
+                <button type="button" class="tmx-panel-close" id="tmxPanelClose" aria-label="إغلاق">&times;</button>
+                <div class="tmx-panel-body" id="tmxPanelBody"></div>
+            </aside>
         </div>
     </section>
 
@@ -7268,6 +7296,51 @@ html[data-theme="saudi"] .teams-map-card{
 .teams-map-leaflet .leaflet-popup-content a{color:#A8E7FF;font-weight:900;text-decoration:none}
 .tm-pin{border:2px solid rgba(255,255,255,.9);border-radius:50%;overflow:hidden;background:#0B2C55;box-shadow:0 3px 10px rgba(0,0,0,.5)}
 .tm-pin img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* (1) Full teams map — emoji-flag pins */
+.tmx-pin{display:grid;place-items:center;cursor:pointer}
+.tmx-pin-flag{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#0B2C55;border:2px solid rgba(255,255,255,.85);box-shadow:0 3px 10px rgba(0,0,0,.5);font-size:18px;line-height:1;transition:transform .14s ease}
+.tmx-pin:hover .tmx-pin-flag{transform:scale(1.18)}
+.tmx-pin.is-host .tmx-pin-flag{border-color:#F5C85B;box-shadow:0 0 0 2px rgba(245,200,91,.4),0 3px 10px rgba(0,0,0,.5)}
+
+/* controls: confederation chips + search */
+.tmx-controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:2px 0 14px;justify-content:space-between}
+.tmx-filters{display:flex;flex-wrap:wrap;gap:8px}
+.tmx-chip{border:1px solid rgba(168,231,255,.22);background:rgba(255,255,255,.06);color:#fff;border-radius:999px;padding:7px 13px;font-family:inherit;font-weight:800;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.tmx-chip small{background:rgba(255,255,255,.16);border-radius:999px;padding:1px 7px;font-size:11px;font-weight:900}
+.tmx-chip.is-active{background:#fff;color:#0B2C55;border-color:#fff}
+.tmx-chip.is-active small{background:rgba(11,44,85,.14);color:#0B2C55}
+.tmx-search input{border:1px solid rgba(168,231,255,.22);background:rgba(255,255,255,.06);color:#fff;border-radius:999px;padding:9px 15px;font-family:inherit;font-weight:700;font-size:13px;outline:none;min-width:200px}
+.tmx-search input::placeholder{color:rgba(255,255,255,.5)}
+.tmx-search input:focus{border-color:#55B7FF;background:rgba(255,255,255,.1)}
+
+/* slide-in details panel */
+.teams-map-frame-wrap{position:relative}
+.tmx-panel{position:absolute;top:0;inset-inline-end:0;height:100%;width:min(380px,86%);background:linear-gradient(160deg,#0B2C55,#071A35);border-inline-start:1px solid rgba(168,231,255,.18);box-shadow:-18px 0 50px rgba(0,0,0,.5);transform:translateX(100%);transition:transform .28s ease;overflow-y:auto;z-index:1200;padding:18px}
+.tmx-panel.show{transform:none}
+.tmx-panel-close{position:absolute;top:12px;inset-inline-start:12px;width:34px;height:34px;border:0;border-radius:10px;background:rgba(255,255,255,.12);color:#fff;font-size:20px;font-weight:900;cursor:pointer;line-height:1}
+.tmx-panel-close:hover{background:rgba(255,255,255,.22)}
+.tmx-panel-body{color:#fff;margin-top:8px}
+.tmx-head{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.tmx-flag{font-size:42px;line-height:1}
+.tmx-head-txt h3{margin:0;font-size:20px;font-weight:950;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tmx-en{color:rgba(255,255,255,.6);font-size:13px;font-weight:700}
+.tmx-meta{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+.tmx-badge{background:rgba(168,231,255,.12);border:1px solid rgba(168,231,255,.24);color:#A8E7FF;border-radius:999px;padding:5px 11px;font-size:12px;font-weight:800}
+.tmx-badge.host{background:rgba(245,200,91,.16);border-color:rgba(245,200,91,.4);color:#FFE19A;font-size:11px}
+.tmx-sec{margin-bottom:16px}
+.tmx-sec h4{margin:0 0 7px;font-size:14px;font-weight:900;color:#FFE19A}
+.tmx-sec p{margin:0;font-size:13px;line-height:1.8;color:rgba(255,255,255,.85)}
+.tmx-player{background:rgba(255,255,255,.05);border:1px solid rgba(168,231,255,.14);border-radius:14px;padding:12px;margin-bottom:10px}
+.tmx-player-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tmx-player-top b{font-size:14px;font-weight:900}
+.tmx-pos{font-size:11px;font-weight:800;color:#A8E7FF;background:rgba(168,231,255,.12);border-radius:999px;padding:3px 9px;white-space:nowrap}
+.tmx-player-en{color:rgba(255,255,255,.55);font-size:11px;font-weight:700;margin-top:2px}
+.tmx-player-role{color:#FFE19A;font-size:12px;font-weight:800;margin-top:6px}
+.tmx-player p{margin:6px 0 0;font-size:12px;line-height:1.7;color:rgba(255,255,255,.8)}
+.tmx-moment{margin-top:8px;font-size:12px;font-weight:800;color:#7EF4AE;background:rgba(17,163,106,.12);border-radius:10px;padding:7px 10px;line-height:1.6}
+html[data-theme="saudi"] .tmx-panel{background:linear-gradient(160deg,#0a3f27,#06291a)}
+@media(max-width:640px){.tmx-panel{width:100%}.tmx-search input{min-width:0;width:100%}.tmx-search{flex:1}}
 html[dir="rtl"] .teams-map-sub{text-align:right}
 html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22)}
 @media(max-width:768px){.teams-map-frame-wrap{height:460px}}
@@ -7579,31 +7652,84 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
   });
 })();
 
-/* (1) Participating Teams Map — native Leaflet map of the qualified nations */
+/* (1) Participating Teams Map — full 48-nation map with details panel, filters & search */
 (function(){
   var el=document.getElementById('teamsLeafletMap');
   if(!el || typeof L==='undefined') return;
-  var nations=<?= json_encode($teamsMapNations ?? [], JSON_UNESCAPED_UNICODE) ?>;
+  var markers=<?= json_encode($tmMarkers ?? [], JSON_UNESCAPED_UNICODE) ?>;
+  var confedNames={UEFA:'أوروبا',CONMEBOL:'أمريكا الجنوبية',CONCACAF:'أمريكا الشمالية والوسطى',CAF:'أفريقيا',AFC:'آسيا',OFC:'أوقيانوسيا'};
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
   var map=L.map(el,{zoomControl:true,scrollWheelZoom:false,worldCopyJump:true}).setView([25,10],2);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
     maxZoom:9,minZoom:1,
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
   }).addTo(map);
-  var bounds=[];
-  nations.forEach(function(n){
+
+  var layer={}, bounds=[];
+  markers.forEach(function(m){
     var icon=L.divIcon({
-      className:'tm-pin-wrap',
-      html:'<span class="tm-pin" style="display:block;width:30px;height:30px"><img src="https://flagcdn.com/w40/'+esc(n.code)+'.png" alt="" loading="lazy"></span>',
-      iconSize:[30,30], iconAnchor:[15,15]
+      className:'tmx-pin'+(m.host?' is-host':''),
+      html:'<span class="tmx-pin-flag">'+m.flag+'</span>',
+      iconSize:[34,34], iconAnchor:[17,17]
     });
-    var m=L.marker([n.lat,n.lng],{icon:icon,title:n.name}).addTo(map);
-    m.bindPopup('<strong>'+esc(n.name)+'</strong><br><a href="/WC2026/matches?q='+encodeURIComponent(n.name)+'">View fixtures →</a>');
-    bounds.push([n.lat,n.lng]);
+    var mk=L.marker([m.lat,m.lng],{icon:icon,title:m.name});
+    mk.on('click',function(){ openPanel(m); });
+    mk.addTo(map); layer[m.code]=mk; bounds.push([m.lat,m.lng]);
   });
-  if(bounds.length) map.fitBounds(bounds,{padding:[30,30],maxZoom:4});
+  if(bounds.length) map.fitBounds(bounds,{padding:[28,28],maxZoom:4});
   setTimeout(function(){ map.invalidateSize(); }, 300);
   window.addEventListener('resize', function(){ map.invalidateSize(); });
+
+  var panel=document.getElementById('tmxPanel'), body=document.getElementById('tmxPanelBody');
+  function openPanel(m){
+    var host=m.host?'<span class="tmx-badge host">مستضيف</span>':'';
+    var players=(m.players||[]).map(function(p){
+      return '<div class="tmx-player"><div class="tmx-player-top"><b>'+esc(p.name)+'</b><span class="tmx-pos">'+esc(p.pos)+'</span></div>'+
+             '<div class="tmx-player-en">'+esc(p.en)+'</div>'+
+             '<div class="tmx-player-role">'+esc(p.role)+'</div>'+
+             '<p>'+esc(p.career)+'</p>'+
+             '<div class="tmx-moment">⭐ '+esc(p.moment)+'</div></div>';
+    }).join('');
+    body.innerHTML =
+      '<div class="tmx-head"><span class="tmx-flag">'+m.flag+'</span>'+
+        '<div class="tmx-head-txt"><h3>'+esc(m.name)+' '+host+'</h3><span class="tmx-en">'+esc(m.en)+'</span></div></div>'+
+      '<div class="tmx-meta">'+
+        '<span class="tmx-badge">'+esc(confedNames[m.confed]||m.confed)+'</span>'+
+        '<span class="tmx-badge">المجموعة '+esc(m.group)+'</span>'+
+        '<span class="tmx-badge">تصنيف فيفا #'+esc(m.rank)+'</span>'+
+        '<span class="tmx-badge">'+esc(m.apps)+'</span>'+
+      '</div>'+
+      '<div class="tmx-sec"><h4>🏆 الألقاب</h4><p>'+esc(m.titles)+'</p></div>'+
+      '<div class="tmx-sec"><h4>📜 نبذة تاريخية</h4><p>'+esc(m.history)+'</p></div>'+
+      '<div class="tmx-sec"><h4>⭐ أبرز النجوم</h4>'+players+'</div>';
+    panel.classList.add('show'); panel.setAttribute('aria-hidden','false');
+    map.setView([m.lat,m.lng], Math.max(map.getZoom(),3), {animate:true});
+  }
+  var closeBtn=document.getElementById('tmxPanelClose');
+  if(closeBtn) closeBtn.addEventListener('click',function(){ panel.classList.remove('show'); panel.setAttribute('aria-hidden','true'); });
+
+  /* confederation filters + search */
+  function activeConfed(){ var a=document.querySelector('#tmxFilters .tmx-chip.is-active'); return a?a.dataset.confed:'ALL'; }
+  function applyFilter(){
+    var confed=activeConfed();
+    var sEl=document.getElementById('tmxSearch');
+    var q=(sEl?sEl.value:'').trim().toLowerCase();
+    markers.forEach(function(m){
+      var mk=layer[m.code]; if(!mk) return;
+      var okC=(confed==='ALL'||m.confed===confed);
+      var okQ=(q===''||(m.name+' '+m.en).toLowerCase().indexOf(q)>=0);
+      var elm=mk.getElement(); if(elm) elm.style.display=(okC&&okQ)?'':'none';
+    });
+  }
+  document.querySelectorAll('#tmxFilters .tmx-chip').forEach(function(chip){
+    chip.addEventListener('click',function(){
+      document.querySelectorAll('#tmxFilters .tmx-chip').forEach(function(x){x.classList.remove('is-active');});
+      chip.classList.add('is-active'); applyFilter();
+    });
+  });
+  var search=document.getElementById('tmxSearch');
+  if(search) search.addEventListener('input', applyFilter);
 })();
 </script>
 
