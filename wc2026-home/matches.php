@@ -756,10 +756,11 @@ body{
     width:100%;
     max-width:820px;
     height:min(84vh, 720px);
-    background:#fff;
+    background:#0c1830;
+    border:1px solid rgba(168,231,255,.2);
     border-radius:30px;
     overflow:hidden;
-    box-shadow:0 35px 90px rgba(0,0,0,.35);
+    box-shadow:0 35px 90px rgba(0,0,0,.5);
     position:relative;
     animation:popupIn .24s ease;
 }
@@ -770,9 +771,9 @@ body{
     justify-content:space-between;
     gap:14px;
     padding:0 16px 0 24px;
-    background:#fff;
-    color:var(--deep);
-    border-bottom:1px solid #EDF2F7;
+    background:#0c1830;
+    color:#fff;
+    border-bottom:1px solid rgba(168,231,255,.14);
 }
 .predict-popup-title{
     font-size:22px;
@@ -784,8 +785,8 @@ body{
     height:40px;
     border:0;
     border-radius:15px;
-    background:#EEF3F8;
-    color:var(--deep);
+    background:rgba(255,255,255,.12);
+    color:#fff;
     font-size:24px;
     font-weight:900;
     cursor:pointer;
@@ -794,7 +795,7 @@ body{
     width:100%;
     height:calc(100% - 62px);
     border:0;
-    background:#fff;
+    background:#0c1830;
 }
 @keyframes popupIn{
     from{opacity:0;transform:scale(.94) translateY(12px)}
