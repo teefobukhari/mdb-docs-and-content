@@ -4053,6 +4053,7 @@ body:before{
 .knockout-card,
 .match-card-premium,
 .match-list-card,
+.teams-map-card,
 .layout .card{
     color:#fff !important;
     background:
@@ -5600,8 +5601,7 @@ body:before{
             <div class="bi-row" id="biDateRow"><span data-i18n="biDateLbl">Date</span><b id="biDate">—</b></div>
             <div class="bi-row" id="biTimeRow"><span data-i18n="biTimeLbl">Local Time</span><b id="biTime">—</b></div>
             <div class="bi-row"><span data-i18n="biKickoffLbl">Kickoff</span><b id="biWhen">—</b></div>
-            <div class="bi-row" id="biVenueRow"><span data-i18n="biVenueLbl">Venue / Location</span><b id="biVenue">—</b></div>
-            <div class="bi-row" id="biPathRow"><span data-i18n="biPathLbl">Projected Path</span><b id="biPath">—</b></div>
+            <div class="bi-row" id="biVenueRow"><span data-i18n="biVenueLbl">Location</span><b id="biVenue">—</b></div>
         </div>
         <div class="bi-actions">
             <a class="bi-open" id="biOpen" href="#" target="_blank" rel="noopener" style="display:none" data-i18n="biOpenMatch">Open Match Center ↗</a>
@@ -6352,8 +6352,6 @@ document.addEventListener('DOMContentLoaded', function(){
         // Date / local time
         setDetail('biDateRow','biDate', ds.kdate);
         setDetail('biTimeRow','biTime', ds.ktime);
-        // Projected path (qualification rule) — only for projected fixtures
-        setDetail('biPathRow','biPath', ds.source);
         // "Open Match Center" link — only for real fixtures (id > 0)
         var biOpen = document.getElementById('biOpen');
         if(biOpen){
@@ -6705,6 +6703,7 @@ html[data-theme="saudi"] .live-map-card,
 html[data-theme="saudi"] .knockout-card,
 html[data-theme="saudi"] .match-card-premium,
 html[data-theme="saudi"] .match-list-card,
+html[data-theme="saudi"] .teams-map-card,
 html[data-theme="saudi"] .layout .card{
     background:
         radial-gradient(circle at 100% 0%, rgba(17,163,106,.26), transparent 34%),
@@ -6799,7 +6798,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       ptsNote:'Procedure: 1) Play the daily game and bank your goal + bonus points. 2) Submit predictions before kickoff — points are awarded automatically once the official result is synced. 3) Save your daily Fan Filter photo. Weekly score resets every week; overall score is cumulative across the tournament.',
       hostUSA:'USA',hostCAN:'Canada',hostMEX:'Mexico',hostCitiesCap:'16 Host Cities · United States · Canada · Mexico',matchesByLoc:'Matches & Locations',noMapMatches:'No synced matches available yet.',
       biHtLbl:'Half-time',biFtLbl:'Full-time',biEtLbl:'Extra time',biPenLbl:'Penalties',
-      biDateLbl:'Date',biTimeLbl:'Local Time',biPathLbl:'Projected Path',biOpenMatch:'Open Match Center ↗',
+      biDateLbl:'Date',biTimeLbl:'Local Time',biVenueLbl:'Location',biOpenMatch:'Open Match Center ↗',
       teamsMapTitle:'Participating Teams Map',openTeamsMap:'Open Full Map ↗',teamsMapSub:'Explore all 48 qualified nations — tap any country for its football story, stars and key moments.',
       next24MapTitle:'Next 24 hours',next24MapCap:'Next 24 hours · match locations',next24Empty:'No matches in the next 24 hours.'
     },
@@ -6863,7 +6862,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       ptsNote:'الطريقة: 1) العب اللعبة اليومية واجمع نقاط الأهداف والمكافآت. 2) أرسل التوقعات قبل انطلاق المباراة — تُمنح النقاط تلقائيًا بعد مزامنة النتيجة الرسمية. 3) احفظ صورة فلتر المشجع اليومية. تُصفّر نقاط الأسبوع أسبوعيًا، أما النقاط الإجمالية فتتراكم طوال البطولة.',
       hostUSA:'أمريكا',hostCAN:'كندا',hostMEX:'المكسيك',hostCitiesCap:'16 مدينة مضيفة · الولايات المتحدة · كندا · المكسيك',matchesByLoc:'المباريات والمواقع',noMapMatches:'لا توجد مباريات متزامنة بعد.',
       biHtLbl:'الشوط الأول',biFtLbl:'الوقت الأصلي',biEtLbl:'الوقت الإضافي',biPenLbl:'ركلات الترجيح',
-      biDateLbl:'التاريخ',biTimeLbl:'التوقيت المحلي',biPathLbl:'المسار المتوقع',biOpenMatch:'فتح مركز المباراة ↗',
+      biDateLbl:'التاريخ',biTimeLbl:'التوقيت المحلي',biVenueLbl:'الموقع',biOpenMatch:'فتح مركز المباراة ↗',
       teamsMapTitle:'خريطة المنتخبات المشاركة',openTeamsMap:'فتح الخريطة كاملة ↗',teamsMapSub:'استكشف المنتخبات الـ48 المتأهلة — اضغط على أي دولة لقصتها الكروية ونجومها ولحظاتها المميزة.',
       next24MapTitle:'خلال 24 ساعة',next24MapCap:'خلال 24 ساعة · مواقع المباريات',next24Empty:'لا توجد مباريات خلال الـ24 ساعة القادمة.'
     }
@@ -7291,18 +7290,9 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .host-next24-tip .n24-empty{padding:6px 2px;color:rgba(255,255,255,.72);font-weight:700}
 
 /* (1) Participating Teams Map card — dark navy, cohesive with the map inside */
-.layout .card.teams-map-card{
-    color:#EAF4FF !important;
-    background:
-        radial-gradient(circle at 100% 0%, rgba(14,99,230,.22), transparent 36%),
-        linear-gradient(135deg,#061A36 0%,#08254D 58%,#0A3A76 100%) !important;
-    border:1px solid rgba(168,231,255,.20) !important;
-    box-shadow:0 28px 70px rgba(0,0,0,.30) !important;
-}
-.teams-map-card .map-title{color:#FFFFFF !important}
-.teams-map-card .map-dot{background:#7EF4AE !important;box-shadow:0 0 16px rgba(126,244,174,.8) !important}
-.teams-map-card .match-link.soft{color:#A8E7FF !important}
-.teams-map-sub{color:rgba(234,244,255,.82);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
+/* Participating Teams Map card — inherit the same background/border/shadow,
+   title, dot and fonts as the other dashboard cards (.layout .card). */
+.teams-map-sub{color:rgba(255,255,255,.72);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
 .teams-map-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:radial-gradient(120% 120% at 50% 0%,#123a6b 0%,#0a1f3e 55%,#06152c 100%);height:560px}
 .teams-map-frame{width:100%;height:100%;border:0;display:block}
 .teams-map-leaflet{width:100%;height:100%;z-index:1}
