@@ -7238,7 +7238,23 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .host-next24-tip .n24-city{color:rgba(168,231,255,.75);font-size:10px;font-weight:700}
 .host-next24-tip .n24-empty{padding:6px 2px;color:rgba(255,255,255,.72);font-weight:700}
 
-/* (1) Participating Teams Map card */
+/* Teams Map card adopts the dark theme like the other map cards (base .card is white) */
+.teams-map-card{
+    border:0 !important;
+    color:#fff !important;
+    background:
+        radial-gradient(circle at 80% 18%, rgba(85,183,255,.26), transparent 30%),
+        radial-gradient(circle at 20% 82%, rgba(17,163,106,.18), transparent 30%),
+        linear-gradient(135deg,#071A35,#0B2C55 58%,#0E63E6) !important;
+    overflow:hidden;
+    position:relative;
+}
+.teams-map-card .map-title{color:#fff}
+html[data-theme="saudi"] .teams-map-card{
+    background:
+        radial-gradient(circle at 80% 0%, rgba(245,200,91,.16), transparent 42%),
+        linear-gradient(135deg,#06291a,#0a3f27 58%,#0e6a3e) !important;
+}
 .teams-map-sub{color:rgba(255,255,255,.72);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
 .teams-map-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:#0a1b30;height:560px}
 .teams-map-frame{width:100%;height:100%;border:0;display:block}
