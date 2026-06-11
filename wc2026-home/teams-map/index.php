@@ -199,7 +199,12 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         .p-name{font-size:24px;font-weight:900;margin:0 0 6px;color:#fff}
         .p-confed{display:inline-block;font-size:12px;font-weight:800;color:var(--deep);background:var(--accent);border-radius:999px;padding:3px 12px;margin-bottom:14px}
         html[data-theme="saudi"] .p-confed{color:#06371f}
-        .p-story{font-size:14px;line-height:1.7;color:rgba(255,255,255,.88);font-weight:600;margin:0 0 18px}
+        .p-story{font-size:14px;line-height:1.7;color:rgba(255,255,255,.88);font-weight:600;margin:0 0 16px}
+        .p-wc{display:flex;align-items:center;gap:11px;margin:0 0 18px;padding:11px 14px;border-radius:14px;
+            background:rgba(245,200,91,.10);border:1px solid rgba(245,200,91,.28);font-size:13px;font-weight:800;color:#fff;line-height:1.5}
+        html[data-theme="saudi"] .p-wc{background:rgba(255,225,154,.10);border-color:rgba(255,225,154,.30)}
+        .p-wc-ico{font-size:22px;flex:none}
+        .p-wc-lbl{display:block;font-size:11px;font-weight:900;color:var(--gold);letter-spacing:.02em;margin-bottom:2px}
         .p-sec{margin:0 0 18px}
         .p-lbl{display:block;font-size:13px;font-weight:900;color:var(--gold);margin-bottom:8px}
         .p-chips{display:flex;flex-wrap:wrap;gap:7px}
@@ -295,7 +300,7 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         themeCatrion:'CATRION', themeSaudi:'Saudi', filterAll:'All',
         confUEFA:'Europe', confCONMEBOL:'South America', confCONCACAF:'N. & C. America', confCAF:'Africa', confAFC:'Asia', confOFC:'Oceania',
         hintTitle:'Tap any country', hintText:"Explore the nations of the 2026 World Cup — each team's football story, key players and standout moments.",
-        stars:'★ Key players', moments:'🏆 Key moments', fixtures:'View fixtures →', soon:'Full team profile coming soon.',
+        stars:'★ Key players', moments:'🏆 Key moments', wcRecord:'World Cup record', didyouknow:'💡 Did you know?', fixtures:'View fixtures →', soon:'Full team profile coming soon.',
         group:'Group', host:'Host'
       },
       ar:{
@@ -304,7 +309,7 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         themeCatrion:'CATRION', themeSaudi:'السعودية', filterAll:'الكل',
         confUEFA:'أوروبا', confCONMEBOL:'أمريكا الجنوبية', confCONCACAF:'أمريكا الشمالية والوسطى', confCAF:'أفريقيا', confAFC:'آسيا', confOFC:'أوقيانوسيا',
         hintTitle:'اضغط على أي دولة', hintText:'استكشف منتخبات كأس العالم 2026 — قصة كل منتخب الكروية، وأبرز نجومه، ولحظاته المميزة.',
-        stars:'★ أبرز النجوم', moments:'🏆 لحظات مميزة', fixtures:'عرض المباريات ←', soon:'سيتوفر ملف هذا المنتخب قريباً.',
+        stars:'★ أبرز النجوم', moments:'🏆 لحظات مميزة', wcRecord:'سجل كأس العالم', didyouknow:'💡 هل تعلم؟', fixtures:'عرض المباريات ←', soon:'سيتوفر ملف هذا المنتخب قريباً.',
         group:'المجموعة', host:'مستضيف'
       }
     };
@@ -363,6 +368,8 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         h+='<h2 class="p-name">'+esc(nmOf(n))+'</h2>';
         if(meta.length) h+='<span class="p-confed">'+meta.join(' · ')+'</span>';
         h+='<p class="p-story">'+esc(story||tr('soon'))+'</p>';
+        var wcRec=ar ? (n.wcAr || n.wc) : (n.wc || n.wcAr);
+        if(wcRec){ h+='<div class="p-wc"><span class="p-wc-ico">🏆</span><div><span class="p-wc-lbl">'+tr('wcRecord')+'</span>'+esc(wcRec)+'</div></div>'; }
         if(n.stars && n.stars.length){
             h+='<div class="p-sec"><span class="p-lbl">'+tr('stars')+'</span><div class="p-chips">';
             n.stars.forEach(function(s){ h+='<span class="p-chip">'+esc(s)+'</span>'; });
@@ -371,6 +378,12 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         if(n.moments && n.moments.length){
             h+='<div class="p-sec"><span class="p-lbl">'+tr('moments')+'</span><ul class="p-list">';
             n.moments.forEach(function(s){ h+='<li>'+esc(s)+'</li>'; });
+            h+='</ul></div>';
+        }
+        var fcts=ar ? (n.factsAr && n.factsAr.length ? n.factsAr : n.facts) : (n.facts && n.facts.length ? n.facts : n.factsAr);
+        if(fcts && fcts.length){
+            h+='<div class="p-sec"><span class="p-lbl">'+tr('didyouknow')+'</span><ul class="p-list">';
+            fcts.forEach(function(s){ h+='<li>'+esc(s)+'</li>'; });
             h+='</ul></div>';
         }
         h+='<a class="p-fixtures" href="/WC2026/matches?q='+encodeURIComponent(n.name)+'">'+tr('fixtures')+'</a>';

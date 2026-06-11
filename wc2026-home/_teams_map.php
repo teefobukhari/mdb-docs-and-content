@@ -20,6 +20,17 @@ if (!function_exists('wc_team_meta')) {
     function wc_team_meta(string $code = ''): array { return []; }
 }
 
+/* Optional facts dataset (World Cup record + football-history facts). Guarded
+ * the same way: if teams_facts.php isn't deployed the map just omits that
+ * extra section. */
+$wcTeamsFactsFile = __DIR__ . '/teams_facts.php';
+if (is_file($wcTeamsFactsFile)) {
+    require_once $wcTeamsFactsFile;
+}
+if (!function_exists('wc_team_facts')) {
+    function wc_team_facts(string $code = ''): array { return []; }
+}
+
 if (!function_exists('wc_tm_country_code')) {
     function wc_tm_country_code(string $name): string {
         $name = strtolower(trim($name));
@@ -92,12 +103,17 @@ if (!function_exists('wc_tm_all_nations')) {
             $ll = wc_tm_latlng($code);
             if (!$ll) continue;
             $meta = wc_team_meta($code);
+            $facts = wc_team_facts($code);
             $out[] = [
                 'name'    => $name,
                 'code'    => $code,
                 'lat'     => $ll[0],
                 'lng'     => $ll[1],
                 'confed'  => $meta['confed']  ?? '',
+                'wc'      => $facts['wc']      ?? '',
+                'wcAr'    => $facts['wcAr']    ?? '',
+                'facts'   => $facts['facts']  ?? [],
+                'factsAr' => $facts['factsAr']?? [],
                 'story'   => $meta['story']   ?? '',
                 'storyAr' => $meta['story_ar']?? '',
                 'stars'   => $meta['stars']   ?? [],
@@ -127,6 +143,7 @@ if (!function_exists('wc_countries_nations')) {
             $ll   = $c['coords'] ?? wc_tm_latlng($code);
             if (!$ll || !isset($ll[0], $ll[1])) continue;
             $meta = wc_team_meta($code);
+            $facts = wc_team_facts($code);
             $out[] = [
                 'name'    => (string)($c['name_en'] ?? wc_tm_name($code)),
                 'nameAr'  => (string)($c['name_ar'] ?? ''),
@@ -140,6 +157,10 @@ if (!function_exists('wc_countries_nations')) {
                 'storyAr' => $meta['story_ar'] ?? '',
                 'stars'   => $meta['stars']    ?? [],
                 'moments' => $meta['moments']  ?? [],
+                'wc'      => $facts['wc']      ?? '',
+                'wcAr'    => $facts['wcAr']    ?? '',
+                'facts'   => $facts['facts']   ?? [],
+                'factsAr' => $facts['factsAr'] ?? [],
             ];
         }
         usort($out, fn($a,$b)=>strcmp($a['name'],$b['name']));
@@ -171,6 +192,7 @@ if (!function_exists('wc_teams_map_nations')) {
             if (isset($seen[$code])) continue;
             $seen[$code] = true;
             $meta = wc_team_meta($code);
+            $facts = wc_team_facts($code);
             $out[] = [
                 'name'    => $nm,
                 'code'    => $code,
@@ -181,6 +203,10 @@ if (!function_exists('wc_teams_map_nations')) {
                 'storyAr' => $meta['story_ar']?? '',
                 'stars'   => $meta['stars']   ?? [],
                 'moments' => $meta['moments'] ?? [],
+                'wc'      => $facts['wc']      ?? '',
+                'wcAr'    => $facts['wcAr']    ?? '',
+                'facts'   => $facts['facts']   ?? [],
+                'factsAr' => $facts['factsAr'] ?? [],
             ];
         }
         return $out;
