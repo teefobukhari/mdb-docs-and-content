@@ -4809,6 +4809,43 @@ body:before{
     $wcHostCitiesJson = json_encode(array_map(function($hc){
         return ['name'=>$hc[0],'lat'=>$hc[1],'lng'=>$hc[2],'country'=>$hc[3]];
     }, $wcHostCities), JSON_UNESCAPED_UNICODE);
+
+    /* Next-24h matches resolved to their host-city coordinates, grouped by city,
+       so the Live World Cup Map plots ONLY the next-24h fixtures by location. */
+    $wcCityCoords = [];
+    foreach ($wcHostCities as $hc) { $wcCityCoords[mb_strtolower($hc[0])] = [$hc[1], $hc[2], $hc[3]]; }
+    $wcResolveCity = function (string $city) use ($wcCityCoords): ?array {
+        $c = mb_strtolower(trim($city));
+        if ($c === '') return null;
+        if (isset($wcCityCoords[$c])) return $wcCityCoords[$c];
+        foreach ($wcCityCoords as $name => $ll) {
+            if (mb_strpos($c, $name) !== false || mb_strpos($name, $c) !== false) return $ll;
+        }
+        return null;
+    };
+    $next24MapPoints = [];
+    foreach ($next24Matches as $m) {
+        $ll = $wcResolveCity((string)($m['city'] ?? ''));
+        if (!$ll) continue;
+        $key = $ll[0] . ',' . $ll[1];
+        if (!isset($next24MapPoints[$key])) {
+            $next24MapPoints[$key] = ['city' => (string)($m['city'] ?? ''), 'lat' => $ll[0], 'lng' => $ll[1], 'country' => $ll[2], 'matches' => []];
+        }
+        $st = wc_match_status_label($m);
+        $sc = ($st === 'Live' || $st === 'Finished')
+            ? ((is_null($m['home_score']) ? '-' : (int)$m['home_score']) . ' - ' . (is_null($m['away_score']) ? '-' : (int)$m['away_score']))
+            : 'VS';
+        $next24MapPoints[$key]['matches'][] = [
+            'time'   => date('d M · h:i A', strtotime((string)$m['match_datetime'])),
+            'home'   => wc_safe_team($m['home_team']),
+            'away'   => wc_safe_team($m['away_team']),
+            'venue'  => trim((string)($m['stadium'] ?? '')),
+            'status' => $st,
+            'score'  => $sc,
+        ];
+    }
+    $next24MapPoints = array_values($next24MapPoints);
+    $next24MapPointsJson = json_encode($next24MapPoints, JSON_UNESCAPED_UNICODE);
     ?>
     <section class="card live-map-card hostmap-card">
         <div class="map-head">
@@ -4823,17 +4860,17 @@ body:before{
         <div class="hostmap-stage">
             <div class="hostmap">
                 <div id="hostLeafletMap" class="hostmap-leaflet" aria-label="2026 host cities interactive map"></div>
-                <div class="hostmap-cap">📍 <span data-i18n="hostCitiesCap">16 Host Cities · United States · Canada · Mexico</span></div>
+                <div class="hostmap-cap">📍 <span data-i18n="next24MapCap">Next 24 hours · match locations</span></div>
             </div>
 
             <aside class="hostmap-side">
                 <div class="hostmap-side-head">
-                    <span data-i18n="matchesByLoc">Matches &amp; Locations</span>
+                    <span data-i18n="next24MapTitle">Next 24 hours</span>
                     <a href="/WC2026/matches" class="match-link soft" data-i18n="viewFullMatches">View Full Matches</a>
                 </div>
                 <div class="map-pins hostmap-list">
-                    <?php if (!empty($mapMatches)): ?>
-                        <?php foreach ($mapMatches as $mp): ?>
+                    <?php if (!empty($next24Matches)): ?>
+                        <?php foreach ($next24Matches as $mp): ?>
                             <?php
                                 $mpStatus = wc_match_status_label($mp);
                                 $mpScore = ($mpStatus === 'Live' || $mpStatus === 'Finished')
@@ -4859,7 +4896,7 @@ body:before{
                             </div>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <div class="bracket-empty" data-i18n="noMapMatches">No synced matches available yet.</div>
+                        <div class="bracket-empty" data-i18n="next24Empty">No matches in the next 24 hours.</div>
                     <?php endif; ?>
                 </div>
             </aside>
@@ -6757,7 +6794,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       biHtLbl:'Half-time',biFtLbl:'Full-time',biEtLbl:'Extra time',biPenLbl:'Penalties',
       biDateLbl:'Date',biTimeLbl:'Local Time',biPathLbl:'Projected Path',biOpenMatch:'Open Match Center ↗',
       teamsMapTitle:'Participating Teams Map',openTeamsMap:'Open Full Map ↗',teamsMapSub:'Explore all 48 qualified nations — tap any country for its football story, stars and key moments.',
-      next24MapTitle:'Next 24 hours',next24Empty:'No matches in the next 24 hours.'
+      next24MapTitle:'Next 24 hours',next24MapCap:'Next 24 hours · match locations',next24Empty:'No matches in the next 24 hours.'
     },
     ar:{
       brandSub:'دوري التوقعات • تحدي الأهداف اليومي',themeCatrion:'كاتريون',themeSaudi:'السعودية',
@@ -6821,7 +6858,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       biHtLbl:'الشوط الأول',biFtLbl:'الوقت الأصلي',biEtLbl:'الوقت الإضافي',biPenLbl:'ركلات الترجيح',
       biDateLbl:'التاريخ',biTimeLbl:'التوقيت المحلي',biPathLbl:'المسار المتوقع',biOpenMatch:'فتح مركز المباراة ↗',
       teamsMapTitle:'خريطة المنتخبات المشاركة',openTeamsMap:'فتح الخريطة كاملة ↗',teamsMapSub:'استكشف المنتخبات الـ48 المتأهلة — اضغط على أي دولة لقصتها الكروية ونجومها ولحظاتها المميزة.',
-      next24MapTitle:'خلال 24 ساعة',next24Empty:'لا توجد مباريات خلال الـ24 ساعة القادمة.'
+      next24MapTitle:'خلال 24 ساعة',next24MapCap:'خلال 24 ساعة · مواقع المباريات',next24Empty:'لا توجد مباريات خلال الـ24 ساعة القادمة.'
     }
   };
   var lang = (function(){ try{ return localStorage.getItem('wc_lang')||'en'; }catch(e){ return 'en'; } })();
@@ -7231,6 +7268,7 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .host-pin{position:relative}
 .host-pin .host-pin-dot{position:absolute;top:50%;left:50%;width:9px;height:9px;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(255,255,255,.9),0 2px 6px rgba(0,0,0,.5)}
 .host-pin .host-pin-ring{position:absolute;top:50%;left:50%;width:18px;height:18px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--pc,#3A8BF6);opacity:.65;animation:hostPinPulse 2s ease-out infinite}
+.host-pin .host-pin-badge{position:absolute;top:-9px;left:11px;min-width:16px;height:16px;padding:0 4px;border-radius:9px;background:#F5C85B;color:#06202e;font-size:10px;font-weight:900;line-height:16px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.4)}
 @keyframes hostPinPulse{0%{transform:translate(-50%,-50%) scale(.7);opacity:.8}100%{transform:translate(-50%,-50%) scale(1.9);opacity:0}}
 /* Next-24h hover table on map pins */
 .leaflet-tooltip.host-next24-tip{background:#0B2C55;border:1px solid rgba(168,231,255,.28);color:#fff;border-radius:14px;padding:12px 12px 8px;box-shadow:0 16px 36px rgba(0,0,0,.45);font-weight:700;white-space:normal}
@@ -7523,61 +7561,49 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
-/* (A1) Live World Cup Map — real Leaflet map of the 16 host cities */
+/* (A1) Live World Cup Map — plots ONLY the next-24h fixtures by their location */
 (function(){
   var el=document.getElementById('hostLeafletMap');
   if(!el || typeof L==='undefined') return;
-  var cities=<?= $wcHostCitiesJson ?>;
+  var points=<?= $next24MapPointsJson ?>;
   var colors={usa:'#3A8BF6',can:'#E94747',mex:'#1FB573'};
-
-  /* Upcoming matches within the next 24 hours (shown on pin hover) */
-  var next24=<?= json_encode(array_map(function($m){
-      return [
-        'time'   => date('d M · h:i A', strtotime((string)$m['match_datetime'])),
-        'home'   => wc_safe_team($m['home_team']),
-        'away'   => wc_safe_team($m['away_team']),
-        'city'   => trim((string)($m['city'] ?? '') . (!empty($m['stadium']) ? ' • ' . $m['stadium'] : '')),
-      ];
-  }, $next24Matches), JSON_UNESCAPED_UNICODE) ?>;
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function tt(k,fb){ return (window.wcTr ? window.wcTr(k) : null) || fb; }
-  function next24Html(){
-    var rows;
-    if(!next24.length){
-      rows='<tr><td class="n24-empty" colspan="2">⏳ '+esc(tt('next24Empty','No matches in the next 24 hours.'))+'</td></tr>';
-    } else {
-      rows=next24.map(function(m){
-        return '<tr><td class="n24-time">'+esc(m.time)+'</td>'+
-               '<td><span class="n24-team">'+esc(m.home)+'</span><span class="n24-vs">vs</span><span class="n24-team">'+esc(m.away)+'</span>'+
-               (m.city?'<div class="n24-city">📍 '+esc(m.city)+'</div>':'')+'</td></tr>';
-      }).join('');
-    }
-    return '<h6>⏱ '+esc(tt('next24MapTitle','Next 24 hours'))+'</h6><table>'+rows+'</table>';
+  function rowsHtml(p){
+    return p.matches.map(function(m){
+      var mid = (m.status==='Live'||m.status==='Finished') ? esc(m.score) : '<span class="n24-vs">vs</span>';
+      return '<tr><td class="n24-time">'+esc(m.time)+'</td>'+
+             '<td><span class="n24-team">'+esc(m.home)+'</span>'+mid+'<span class="n24-team">'+esc(m.away)+'</span>'+
+             (m.venue?'<div class="n24-city">📍 '+esc(m.venue)+'</div>':'')+'</td></tr>';
+    }).join('');
   }
 
   var map=L.map(el,{zoomControl:true,scrollWheelZoom:false,attributionControl:true})
            .setView([39.5,-96.0],3);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
     maxZoom:11,minZoom:2,
+    errorTileUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==',
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
   }).addTo(map);
 
   var byCity={}, bounds=[];
-  cities.forEach(function(c){
-    var col=colors[c.country]||'#3A8BF6';
+  points.forEach(function(p){
+    var col=colors[p.country]||'#3A8BF6';
+    var badge=p.matches.length>1 ? '<span class="host-pin-badge">'+p.matches.length+'</span>' : '';
     var icon=L.divIcon({
       className:'host-pin',
-      html:'<span class="host-pin-ring" style="--pc:'+col+'"></span><span class="host-pin-dot" style="background:'+col+'"></span>',
+      html:'<span class="host-pin-ring" style="--pc:'+col+'"></span><span class="host-pin-dot" style="background:'+col+'"></span>'+badge,
       iconSize:[18,18], iconAnchor:[9,9]
     });
-    var m=L.marker([c.lat,c.lng],{icon:icon,title:c.name}).addTo(map);
-    m.bindPopup('<strong>'+esc(c.name)+'</strong><br><span style="color:'+col+';font-weight:800">'+esc(c.country.toUpperCase())+'</span>');
-    // Hover shows the next-24h matches table
-    m.bindTooltip(next24Html(), {direction:'top', sticky:true, opacity:1, className:'host-next24-tip', maxWidth:300, offset:[0,-6]});
-    byCity[c.name.toLowerCase()]=m;
-    bounds.push([c.lat,c.lng]);
+    var m=L.marker([p.lat,p.lng],{icon:icon,title:p.city}).addTo(map);
+    var tbl='<h6>📍 '+esc(p.city)+'</h6><table>'+rowsHtml(p)+'</table>';
+    m.bindPopup('<div class="host-next24-pop">'+tbl+'</div>',{maxWidth:300});
+    m.bindTooltip(tbl, {direction:'top', sticky:true, opacity:1, className:'host-next24-tip', maxWidth:300, offset:[0,-6]});
+    byCity[p.city.toLowerCase()]=m;
+    bounds.push([p.lat,p.lng]);
   });
-  if(bounds.length) map.fitBounds(bounds,{padding:[34,34]});
+  if(bounds.length){ map.fitBounds(bounds,{padding:[40,40],maxZoom:6}); }
+  else { map.setView([39.5,-96.0],3); }
   setTimeout(function(){ map.invalidateSize(); }, 250);
   window.addEventListener('resize', function(){ map.invalidateSize(); });
 

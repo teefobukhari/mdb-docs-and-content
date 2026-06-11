@@ -5,14 +5,43 @@
  * صفحة قائمة بذاتها: تعرض خريطة عالم تفاعلية بعلامات الدول المتأهلة،
  * والضغط على أي دولة يفتح لوحة جانبية بقصتها الكروية وأبرز نجومها ولحظاتها المميزة.
  *
- * تعتمد على المصدر المشترك ../_teams_map.php (الذي يضم ../teams_data.php)،
- * فلا حاجة لقاعدة بيانات ولا لملفات assets خارجية.
+ * تعتمد على المصدر المشترك ../_teams_map.php (الذي يضم ../teams_data.php).
+ * تُجلب المنتخبات المتأهلة فعلياً من قاعدة البيانات (wc_fixtures) عند توفّرها،
+ * مع الرجوع إلى القائمة الكاملة لضمان عمل الصفحة دائماً.
  */
 
 declare(strict_types=1);
 require_once __DIR__ . '/../_teams_map.php';
 
-$nations = wc_tm_all_nations();
+/* Same minimal query helper used by the main pages (defined here so the
+   standalone Teams-Map page can talk to the DB without pulling in auth). */
+if (!function_exists('wc_rows')) {
+    function wc_rows(mysqli $conn, string $sql, string $types = '', array $params = []): array {
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) return [];
+        if ($types && $params) $stmt->bind_param($types, ...$params);
+        if (!$stmt->execute()) return [];
+        $res = $stmt->get_result();
+        return $res ? ($res->fetch_all(MYSQLI_ASSOC) ?: []) : [];
+    }
+}
+
+/* Link to real tournament data: the actual qualified teams from wc_fixtures,
+   enriched with their story/stars/moments. Falls back to the full static
+   dataset if the DB is unavailable or empty, so the page always renders. */
+$nations = [];
+$wcCfg = __DIR__ . '/../connections/config.php';
+if (is_file($wcCfg)) {
+    try {
+        require_once $wcCfg; // expected to define $conn (mysqli)
+        if (isset($conn) && $conn instanceof mysqli) {
+            $nations = wc_teams_map_nations($conn);
+        }
+    } catch (Throwable $e) {
+        $nations = [];
+    }
+}
+if (!$nations) { $nations = wc_tm_all_nations(); }
 
 $confedNames = [
     'UEFA'     => 'أوروبا',
