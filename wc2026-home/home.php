@@ -893,6 +893,10 @@ $ffSelectedCountry = $ffCountries[0] ?? null;
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
+<!-- Leaflet (real interactive Live World Cup Map) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+
 <style>
 :root{
     --navy:#071A35;
@@ -2222,6 +2226,61 @@ body{
     0%{opacity:0;transform:scale(.86) translateY(8px)}
     100%{opacity:1;transform:scale(1) translateY(0)}
 }
+
+/* ===== Scratch & Win card (replaces the food roll) ===== */
+.scratch-win-machine{
+    padding:18px;
+    border-radius:26px;
+    background:
+        radial-gradient(circle at 20% 0%, rgba(245,200,91,.28), transparent 30%),
+        linear-gradient(135deg,#071A35,#0B2C55);
+    border:1px solid rgba(255,255,255,.14);
+    box-shadow:0 22px 50px rgba(7,42,85,.25);
+}
+.scratch-card{
+    position:relative;
+    height:230px;
+    border-radius:24px;
+    overflow:hidden;
+    background:#fff;
+    border:3px solid rgba(245,200,91,.85);
+    box-shadow:inset 0 -10px 18px rgba(7,42,85,.08),0 16px 26px rgba(0,0,0,.18);
+    user-select:none;
+    -webkit-user-select:none;
+    touch-action:none;
+}
+.scratch-prize{
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    color:#071A35;
+    background:
+        radial-gradient(circle at 50% 12%, rgba(245,200,91,.42), transparent 34%),
+        linear-gradient(135deg,#FFF8D7,#FFFFFF);
+}
+.scratch-prize-icon{font-size:66px;line-height:1;}
+.scratch-prize-title{margin-top:10px;font-size:30px;font-weight:900;letter-spacing:-.8px;}
+.scratch-prize-points{margin-top:8px;font-size:28px;font-weight:900;color:var(--green);}
+#scratchCanvas{position:absolute;inset:0;width:100%;height:100%;cursor:grab;}
+#scratchCanvas:active{cursor:grabbing;}
+.scratch-result{
+    display:none;
+    margin-top:16px;
+    padding:14px 16px;
+    border-radius:18px;
+    text-align:center;
+    color:#071A35;
+    font-weight:900;
+    background:#EFFFF7;
+    border:1px solid rgba(17,163,106,.25);
+    animation:rollResultPop .45s ease;
+}
+.scratch-result.active{display:block;}
+.scratch-result strong{display:block;margin-top:5px;font-size:30px;color:var(--green);}
 
 @keyframes goldenPulse{
     0%,100%{transform:translateX(-50%) scale(1)}
@@ -4697,14 +4756,18 @@ body:before{
 
     <?php
     // 2026 host cities (USA / Canada / Mexico) plotted on a stylized North-America board
+    // Real host-city coordinates [name, lat, lng, country] for the interactive map.
     $wcHostCities = [
-        ['Seattle',108,180,'usa'],['San Francisco',96,255,'usa'],['Los Angeles',124,312,'usa'],
-        ['Kansas City',300,300,'usa'],['Dallas',285,360,'usa'],['Houston',305,392,'usa'],
-        ['Atlanta',400,392,'usa'],['Miami',448,452,'usa'],['Philadelphia',462,252,'usa'],
-        ['New York',478,232,'usa'],['Boston',495,210,'usa'],
-        ['Vancouver',98,150,'can'],['Toronto',440,200,'can'],
-        ['Monterrey',270,420,'mex'],['Guadalajara',245,455,'mex'],['Mexico City',295,478,'mex'],
+        ['Seattle',47.5952,-122.3316,'usa'],['San Francisco Bay',37.4030,-121.9700,'usa'],['Los Angeles',33.9535,-118.3392,'usa'],
+        ['Kansas City',39.0489,-94.4839,'usa'],['Dallas',32.7473,-97.0945,'usa'],['Houston',29.6847,-95.4107,'usa'],
+        ['Atlanta',33.7554,-84.4008,'usa'],['Miami',25.9580,-80.2389,'usa'],['Philadelphia',39.9008,-75.1675,'usa'],
+        ['New York New Jersey',40.8135,-74.0745,'usa'],['Boston',42.0909,-71.2643,'usa'],
+        ['Vancouver',49.2768,-123.1119,'can'],['Toronto',43.6332,-79.4185,'can'],
+        ['Monterrey',25.6694,-100.2444,'mex'],['Guadalajara',20.6814,-103.4632,'mex'],['Mexico City',19.3029,-99.1505,'mex'],
     ];
+    $wcHostCitiesJson = json_encode(array_map(function($hc){
+        return ['name'=>$hc[0],'lat'=>$hc[1],'lng'=>$hc[2],'country'=>$hc[3]];
+    }, $wcHostCities), JSON_UNESCAPED_UNICODE);
     ?>
     <section class="card live-map-card hostmap-card">
         <div class="map-head">
@@ -4718,69 +4781,7 @@ body:before{
 
         <div class="hostmap-stage">
             <div class="hostmap">
-                <svg viewBox="0 0 640 520" class="hostmap-svg" preserveAspectRatio="xMidYMid meet" aria-label="2026 host cities">
-                    <defs>
-                        <linearGradient id="naFill" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0" stop-color="#2E7D52"/>
-                            <stop offset="0.55" stop-color="#246A45"/>
-                            <stop offset="1" stop-color="#1B5236"/>
-                        </linearGradient>
-                        <radialGradient id="naOcean" cx="50%" cy="42%" r="75%">
-                            <stop offset="0" stop-color="#0a3a6b"/>
-                            <stop offset="0.6" stop-color="#07294f"/>
-                            <stop offset="1" stop-color="#041b39"/>
-                        </radialGradient>
-                    </defs>
-                    <rect class="hostmap-ocean" x="-20" y="-20" width="680" height="560" fill="url(#naOcean)"></rect>
-                    <!-- Detailed North-America silhouette (Canada • USA • Mexico) -->
-                    <path class="hostmap-land" d="M74,148
-                        C70,168 70,196 78,224
-                        C70,236 70,254 82,262
-                        C86,284 98,300 112,310
-                        C122,318 134,322 150,328
-                        C188,342 214,346 236,350
-                        C234,372 226,392 224,410
-                        C222,432 230,446 240,458
-                        C250,478 270,492 286,492
-                        C300,492 306,476 302,460
-                        C314,452 322,438 320,420
-                        C318,406 322,398 332,398
-                        C356,402 384,400 408,400
-                        C420,402 432,406 440,416
-                        C446,426 446,442 442,456
-                        C440,466 448,470 454,462
-                        C462,448 464,430 462,412
-                        C476,404 488,388 494,366
-                        C504,330 508,288 502,252
-                        C500,228 494,210 482,200
-                        C470,192 452,190 440,196
-                        C420,184 396,178 372,176
-                        C336,172 300,172 268,174
-                        C232,176 196,170 164,168
-                        C140,162 112,154 92,150
-                        C86,148 80,148 74,148 Z"/>
-                    <!-- Baja California peninsula -->
-                    <path class="hostmap-land hostmap-land2" d="M108,312 C104,338 112,372 126,398 C132,410 124,416 116,404 C100,376 96,338 108,312 Z"/>
-                    <!-- Great Lakes (water cut-outs) -->
-                    <ellipse class="hostmap-lake" cx="404" cy="206" rx="20" ry="9"></ellipse>
-                    <ellipse class="hostmap-lake" cx="430" cy="196" rx="12" ry="7"></ellipse>
-                    <ellipse class="hostmap-lake" cx="384" cy="220" rx="13" ry="6"></ellipse>
-                    <g class="hostmap-grid">
-                        <line x1="0" y1="173" x2="640" y2="173"/><line x1="0" y1="346" x2="640" y2="346"/>
-                        <line x1="213" y1="0" x2="213" y2="520"/><line x1="426" y1="0" x2="426" y2="520"/>
-                    </g>
-                    <g class="hostmap-cities">
-                        <?php foreach ($wcHostCities as $i => $hc): ?>
-                            <?php [$cName, $cx, $cy, $cClass] = $hc; $anchor = $cx > 430 ? 'end' : 'start'; $tx = $cx > 430 ? $cx - 12 : $cx + 12; ?>
-                            <g class="hc <?= $cClass ?>" data-city="<?= htmlspecialchars($cName, ENT_QUOTES, 'UTF-8') ?>">
-                                <title><?= htmlspecialchars($cName, ENT_QUOTES, 'UTF-8') ?></title>
-                                <circle class="hc-ring" cx="<?= $cx ?>" cy="<?= $cy ?>" r="9"></circle>
-                                <circle class="hc-dot" cx="<?= $cx ?>" cy="<?= $cy ?>" r="4.2"></circle>
-                                <text class="hc-label" x="<?= $tx ?>" y="<?= $cy + 3 ?>" text-anchor="<?= $anchor ?>"><?= htmlspecialchars($cName, ENT_QUOTES, 'UTF-8') ?></text>
-                            </g>
-                        <?php endforeach; ?>
-                    </g>
-                </svg>
+                <div id="hostLeafletMap" class="hostmap-leaflet" aria-label="2026 host cities interactive map"></div>
                 <div class="hostmap-cap">📍 <span data-i18n="hostCitiesCap">16 Host Cities · United States · Canada · Mexico</span></div>
             </div>
 
@@ -5216,17 +5217,19 @@ body:before{
 
 <div class="modal" id="mysteryModal">
     <div class="modal-card">
-        <div class="modal-kicker">CATRION Food Bonus Roll</div>
-        <h3>Roll the daily food bonus</h3>
-        <div class="mystery-note">Get three matching food icons for the highest bonus. Your bonus will be saved with today’s game result.</div>
-        <div class="food-roll-machine">
-            <div class="mystery-grid">
-                <div class="food-slot" id="foodSlot1">🍔</div>
-                <div class="food-slot" id="foodSlot2">🍕</div>
-                <div class="food-slot" id="foodSlot3">🍟</div>
+        <div class="modal-kicker">CATRION Scratch &amp; Win</div>
+        <h3>Scratch the daily bonus card</h3>
+        <div class="mystery-note">Scratch the silver card to reveal your bonus. Your bonus will be saved with today’s game result.</div>
+        <div class="scratch-win-machine">
+            <div class="scratch-card" id="scratchCard">
+                <div class="scratch-prize">
+                    <div class="scratch-prize-icon" id="scratchPrizeIcon">🏆</div>
+                    <div class="scratch-prize-title" id="scratchPrizeTitle">JACKPOT</div>
+                    <div class="scratch-prize-points" id="scratchPrizePoints">+100 Points</div>
+                </div>
+                <canvas id="scratchCanvas"></canvas>
             </div>
-            <button class="food-roll-btn" id="foodRollBtn" type="button">Roll Bonus</button>
-            <div class="food-roll-result" id="mysteryResult"></div>
+            <div class="scratch-result" id="mysteryResult"></div>
         </div>
     </div>
 </div>
@@ -5882,91 +5885,130 @@ function openMysteryBox(){
     mysteryChosen = false;
     mysteryModal.classList.add('active');
 
-    const foodItems = ['🍔', '🍕', '🍟', '🌭', '🥤', '🍗'];
-    const slots = [
-        document.getElementById('foodSlot1'),
-        document.getElementById('foodSlot2'),
-        document.getElementById('foodSlot3')
-    ];
-    const rollBtn = document.getElementById('foodRollBtn');
+    const scratchCard = document.getElementById('scratchCard');
+    const scratchCanvas = document.getElementById('scratchCanvas');
+    const prizeIcon = document.getElementById('scratchPrizeIcon');
+    const prizeTitle = document.getElementById('scratchPrizeTitle');
+    const prizePoints = document.getElementById('scratchPrizePoints');
 
     if (mysteryResult) {
-        mysteryResult.className = 'food-roll-result';
+        mysteryResult.className = 'scratch-result';
         mysteryResult.innerHTML = '';
     }
 
-    if (!rollBtn || slots.some(slot => !slot)) {
+    if (!scratchCard || !scratchCanvas || !prizeIcon || !prizeTitle || !prizePoints) {
         saveScore();
         return;
     }
 
-    rollBtn.disabled = false;
-    rollBtn.textContent = 'Roll Bonus';
+    const prizes = [
+        {icon:'🏆', title:'JACKPOT',      points:100, text:'🎉 JACKPOT! You revealed the top bonus'},
+        {icon:'⚽', title:'GOAL BONUS',   points:50,  text:'⚽ Great scratch! Goal bonus'},
+        {icon:'⭐', title:'STAR WIN',     points:25,  text:'⭐ Nice! Star bonus'},
+        {icon:'🎁', title:'DAILY BONUS',  points:10,  text:'🎁 Daily scratch bonus'}
+    ];
 
-    slots.forEach((slot, index) => {
-        slot.textContent = foodItems[index] || '🍔';
-        slot.classList.remove('rolling');
-    });
+    const selectedPrize = prizes[Math.floor(Math.random() * prizes.length)];
+    let scratching = false;
+    let revealed = false;
+    const ctx = scratchCanvas.getContext('2d');
 
-    rollBtn.onclick = () => {
-        if (mysteryChosen) return;
+    function resizeScratchCanvas(){
+        const rect = scratchCard.getBoundingClientRect();
+        scratchCanvas.width = Math.max(1, Math.round(rect.width));
+        scratchCanvas.height = Math.max(1, Math.round(rect.height));
+        drawScratchCover();
+    }
+
+    function drawScratchCover(){
+        ctx.globalCompositeOperation = 'source-over';
+        const gradient = ctx.createLinearGradient(0, 0, scratchCanvas.width, scratchCanvas.height);
+        gradient.addColorStop(0, '#F4F4F5');
+        gradient.addColorStop(.45, '#9CA3AF');
+        gradient.addColorStop(1, '#E5E7EB');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, scratchCanvas.width, scratchCanvas.height);
+
+        ctx.fillStyle = 'rgba(255,255,255,.25)';
+        for (let x = -scratchCanvas.height; x < scratchCanvas.width; x += 28) {
+            ctx.save();
+            ctx.translate(x, 0);
+            ctx.rotate(-0.55);
+            ctx.fillRect(0, 0, 12, scratchCanvas.height * 2);
+            ctx.restore();
+        }
+
+        ctx.fillStyle = '#071A35';
+        ctx.textAlign = 'center';
+        ctx.font = '900 25px Inter, Arial, sans-serif';
+        ctx.fillText('SCRATCH HERE', scratchCanvas.width / 2, scratchCanvas.height / 2 - 8);
+        ctx.font = '800 13px Inter, Arial, sans-serif';
+        ctx.fillText('Use mouse or finger', scratchCanvas.width / 2, scratchCanvas.height / 2 + 24);
+    }
+
+    function getScratchPos(e){
+        const rect = scratchCanvas.getBoundingClientRect();
+        const touch = e.touches ? e.touches[0] : e;
+        return {
+            x: (touch.clientX - rect.left) * (scratchCanvas.width / rect.width),
+            y: (touch.clientY - rect.top) * (scratchCanvas.height / rect.height)
+        };
+    }
+
+    function scratch(e){
+        if (!scratching || revealed || mysteryChosen) return;
+        e.preventDefault();
+        const pos = getScratchPos(e);
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, 28, 0, Math.PI * 2);
+        ctx.fill();
+        checkScratchReveal();
+    }
+
+    function checkScratchReveal(){
+        const imageData = ctx.getImageData(0, 0, scratchCanvas.width, scratchCanvas.height);
+        let clearPixels = 0;
+        for (let i = 3; i < imageData.data.length; i += 4) {
+            if (imageData.data[i] === 0) clearPixels++;
+        }
+        const percent = clearPixels / (scratchCanvas.width * scratchCanvas.height) * 100;
+        if (percent > 45) revealScratchPrize();
+    }
+
+    function revealScratchPrize(){
+        if (revealed || (mysteryChosen && mysteryBonus)) return;
+        revealed = true;
         mysteryChosen = true;
-        rollBtn.disabled = true;
-        rollBtn.textContent = 'Rolling...';
+        scratching = false;
+        ctx.clearRect(0, 0, scratchCanvas.width, scratchCanvas.height);
 
-        let ticks = 0;
-        const maxTicks = 30;
-        const finalItems = [
-            foodItems[Math.floor(Math.random() * foodItems.length)],
-            foodItems[Math.floor(Math.random() * foodItems.length)],
-            foodItems[Math.floor(Math.random() * foodItems.length)]
-        ];
+        mysteryBonus = selectedPrize.points;
+        if (mysteryResult) {
+            mysteryResult.innerHTML = selectedPrize.text + ' <strong>+' + selectedPrize.points + ' Points</strong>';
+            mysteryResult.classList.add('active');
+        }
+        updateScore();
 
-        slots.forEach(slot => slot.classList.add('rolling'));
+        setTimeout(() => {
+            mysteryModal.classList.remove('active');
+            saveScore();
+        }, 2400);
+    }
 
-        const rollTimer = setInterval(() => {
-            ticks++;
+    prizeIcon.textContent = selectedPrize.icon;
+    prizeTitle.textContent = selectedPrize.title;
+    prizePoints.textContent = '+' + selectedPrize.points + ' Points';
 
-            slots.forEach((slot) => {
-                slot.textContent = foodItems[Math.floor(Math.random() * foodItems.length)];
-            });
+    setTimeout(resizeScratchCanvas, 60);
 
-            if (ticks >= maxTicks) {
-                clearInterval(rollTimer);
+    scratchCanvas.onmousedown = (e) => { scratching = true; scratch(e); };
+    scratchCanvas.onmousemove = scratch;
+    window.addEventListener('mouseup', () => { scratching = false; });
 
-                slots.forEach((slot, index) => {
-                    slot.classList.remove('rolling');
-                    slot.textContent = finalItems[index];
-                });
-
-                const counts = {};
-                finalItems.forEach(item => {
-                    counts[item] = (counts[item] || 0) + 1;
-                });
-
-                const highestMatch = Math.max(...Object.values(counts));
-
-                if (highestMatch === 3) {
-                    mysteryBonus = 100;
-                    mysteryResult.innerHTML = '🎉 JACKPOT! Three matching meals <strong>+100 Points</strong>';
-                } else if (highestMatch === 2) {
-                    mysteryBonus = 50;
-                    mysteryResult.innerHTML = '✨ Nice Roll! Two matching meals <strong>+50 Points</strong>';
-                } else {
-                    mysteryBonus = 10;
-                    mysteryResult.innerHTML = '🍽️ Daily Roll Bonus <strong>+10 Points</strong>';
-                }
-
-                mysteryResult.classList.add('active');
-                updateScore();
-
-                setTimeout(() => {
-                    mysteryModal.classList.remove('active');
-                    saveScore();
-                }, 2200);
-            }
-        }, 85);
-    };
+    scratchCanvas.ontouchstart = (e) => { scratching = true; scratch(e); };
+    scratchCanvas.ontouchmove = scratch;
+    scratchCanvas.ontouchend = () => { scratching = false; };
 }
 
 function saveScore(){
@@ -7009,6 +7051,18 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
     background:radial-gradient(circle at 50% 26%,rgba(14,99,230,.20),transparent 60%),linear-gradient(160deg,#061A36,#08254D);
     border:1px solid rgba(168,231,255,.16)}
 .hostmap-svg{width:100%;flex:1;display:block}
+/* Leaflet Live World Cup Map */
+.hostmap-leaflet{flex:1 1 auto;width:100%;min-height:380px;z-index:1}
+.hostmap-leaflet .leaflet-container{background:#0a1b30}
+.hostmap-leaflet .leaflet-control-attribution{background:rgba(6,26,54,.7);color:rgba(255,255,255,.55)}
+.hostmap-leaflet .leaflet-control-attribution a{color:rgba(168,231,255,.8)}
+.hostmap-leaflet .leaflet-popup-content-wrapper{background:#0B2C55;color:#fff;border:1px solid rgba(168,231,255,.22);border-radius:14px}
+.hostmap-leaflet .leaflet-popup-tip{background:#0B2C55}
+.hostmap-leaflet .leaflet-popup-content{font-weight:800;font-size:13px;margin:10px 14px}
+.host-pin{position:relative}
+.host-pin .host-pin-dot{position:absolute;top:50%;left:50%;width:9px;height:9px;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(255,255,255,.9),0 2px 6px rgba(0,0,0,.5)}
+.host-pin .host-pin-ring{position:absolute;top:50%;left:50%;width:18px;height:18px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--pc,#3A8BF6);opacity:.65;animation:hostPinPulse 2s ease-out infinite}
+@keyframes hostPinPulse{0%{transform:translate(-50%,-50%) scale(.7);opacity:.8}100%{transform:translate(-50%,-50%) scale(1.9);opacity:0}}
 .hostmap-ocean{opacity:.96}
 .hostmap-land{fill:url(#naFill);stroke:rgba(255,255,255,.32);stroke-width:1.2;filter:drop-shadow(0 6px 14px rgba(0,0,0,.35))}
 .hostmap-land2{fill:#246A45;stroke:rgba(255,255,255,.3);stroke-width:1}
@@ -7238,25 +7292,54 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 })();
 </script>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
-/* (A1) host-cities map: link match cards to host-city dots */
+/* (A1) Live World Cup Map — real Leaflet map of the 16 host cities */
 (function(){
-  var hcs=[].slice.call(document.querySelectorAll('.hostmap .hc'));
-  var cards=[].slice.call(document.querySelectorAll('.hostmap-list .map-pin-card'));
-  if(!hcs.length) return;
-  function norm(s){ return (s||'').toLowerCase().trim(); }
-  function match(host, city){ host=norm(host); city=norm(city); return city!=='' && (host.indexOf(city)>=0 || city.indexOf(host)>=0); }
-  var matchCities=cards.map(function(c){ return norm(c.dataset.city); }).filter(Boolean);
-  var any=matchCities.length>0;
-  hcs.forEach(function(g){
-    var host=g.dataset.city, on=matchCities.some(function(c){ return match(host,c); });
-    if(any){ g.classList.toggle('active', on); g.classList.toggle('dim', !on); }
+  var el=document.getElementById('hostLeafletMap');
+  if(!el || typeof L==='undefined') return;
+  var cities=<?= $wcHostCitiesJson ?>;
+  var colors={usa:'#3A8BF6',can:'#E94747',mex:'#1FB573'};
+
+  var map=L.map(el,{zoomControl:true,scrollWheelZoom:false,attributionControl:true})
+           .setView([39.5,-96.0],3);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    maxZoom:11,minZoom:2,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  }).addTo(map);
+
+  var byCity={}, bounds=[];
+  cities.forEach(function(c){
+    var col=colors[c.country]||'#3A8BF6';
+    var icon=L.divIcon({
+      className:'host-pin',
+      html:'<span class="host-pin-ring" style="--pc:'+col+'"></span><span class="host-pin-dot" style="background:'+col+'"></span>',
+      iconSize:[18,18], iconAnchor:[9,9]
+    });
+    var m=L.marker([c.lat,c.lng],{icon:icon,title:c.name}).addTo(map);
+    m.bindPopup('<strong>'+c.name+'</strong><br><span style="color:'+col+';font-weight:800">'+c.country.toUpperCase()+'</span>');
+    byCity[c.name.toLowerCase()]=m;
+    bounds.push([c.lat,c.lng]);
   });
+  if(bounds.length) map.fitBounds(bounds,{padding:[34,34]});
+  setTimeout(function(){ map.invalidateSize(); }, 250);
+  window.addEventListener('resize', function(){ map.invalidateSize(); });
+
+  /* link the side match cards to map pins */
+  var cards=[].slice.call(document.querySelectorAll('.hostmap-list .map-pin-card'));
+  function norm(s){ return (s||'').toLowerCase().trim(); }
+  function findMarker(city){
+    city=norm(city); if(!city) return null;
+    var keys=Object.keys(byCity);
+    for(var i=0;i<keys.length;i++){ if(keys[i].indexOf(city)>=0 || city.indexOf(keys[i])>=0) return byCity[keys[i]]; }
+    return null;
+  }
   cards.forEach(function(c){
     c.addEventListener('click', function(){
       cards.forEach(function(x){ x.classList.remove('hl'); }); c.classList.add('hl');
-      var city=c.dataset.city;
-      hcs.forEach(function(g){ var on=match(g.dataset.city, city); g.classList.toggle('active', on); g.classList.toggle('dim', !on); });
+      var mk=findMarker(c.dataset.city);
+      if(mk){ map.setView(mk.getLatLng(), 5, {animate:true}); mk.openPopup(); }
     });
   });
 })();
@@ -7288,12 +7371,13 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
   .nav-backdrop{position:fixed;inset:0;z-index:1990;background:rgba(4,12,28,.55);opacity:0;visibility:hidden;transition:.25s}
   .nav-backdrop.show{opacity:1;visibility:visible}
 
-  /* (E) Knockout bracket — responsive on mobile (swipe through rounds) */
-  #knockoutBracketCard .bracket-shell{overflow-x:auto !important;-webkit-overflow-scrolling:touch;padding:14px !important}
-  #knockoutBracketCard .bracket-grid{grid-auto-columns:minmax(200px,78vw) !important;gap:18px !important;min-width:max-content !important}
-  #knockoutBracketCard .bracket-stage-title{font-size:11px !important}
-  #knockoutBracketCard .bracket-match{min-height:auto !important;padding:10px !important}
+  /* (E) Knockout bracket — collapsed flags fit the whole screen, no swipe needed */
+  #knockoutBracketCard .bracket-shell{overflow-x:hidden !important;padding:10px !important}
+  #knockoutBracketCard .bracket-grid{grid-auto-columns:1fr !important;gap:6px !important;min-width:0 !important;width:100% !important}
+  #knockoutBracketCard .bracket-stage-title{font-size:9px !important;padding:4px 3px !important}
+  #knockoutBracketCard .bracket-match{min-height:auto !important;padding:7px 4px !important}
   #knockoutBracketCard .bracket-row{font-size:11px !important}
+  #knockoutBracketCard .bracket-team img,#knockoutBracketCard .bracket-team-fallback{width:24px !important;height:24px !important}
   #knockoutBracketCard .bracket-head-actions{width:100%;justify-content:space-between;flex-wrap:wrap;gap:10px}
   #knockoutBracketCard.bracket-preview-mode{max-height:none !important}
   #knockoutBracketCard.bracket-preview-mode .bracket-shell{max-height:440px !important}
@@ -7323,6 +7407,17 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 #knockoutBracketCard .bracket-match.is-finished{border-color:rgba(126,244,174,.42) !important}
 #knockoutBracketCard .bracket-match.is-live{border-color:rgba(233,71,71,.55) !important;box-shadow:0 0 0 1px rgba(233,71,71,.4)}
 #knockoutBracketCard .bracket-grid .bracket-svg{position:absolute;left:0;top:0;pointer-events:none;z-index:0}
+
+/* (1b) Full-width collapsed bracket — flags only, names hidden, fits the screen (no horizontal scroll) */
+#knockoutBracketCard .bracket-shell{overflow-x:hidden !important}
+#knockoutBracketCard .bracket-grid{grid-auto-flow:column !important;grid-auto-columns:1fr !important;grid-template-columns:none !important;min-width:0 !important;width:100% !important;gap:10px !important}
+#knockoutBracketCard .bracket-team > span:not(.bracket-team-fallback){display:none !important}   /* collapse team names → flags only */
+#knockoutBracketCard .bracket-team{gap:0 !important;justify-content:center !important;min-width:0}
+#knockoutBracketCard .bracket-row{justify-content:center !important;gap:9px !important}
+#knockoutBracketCard .bracket-team img,#knockoutBracketCard .bracket-team-fallback{width:30px !important;height:30px !important;flex:0 0 auto}
+#knockoutBracketCard .bracket-match{padding:9px 7px !important}
+#knockoutBracketCard .bracket-score{font-size:14px !important}
+#knockoutBracketCard .bracket-stage-title{font-size:10px !important;padding:5px 6px !important;text-align:center}
 
 /* keep the top-actions / nav above page layers whenever they're showing */
 .nav{position:relative;z-index:30}
