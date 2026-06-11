@@ -190,8 +190,8 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         /* ===== Detail panel ===== */
         .panel{position:absolute;inset-inline-end:0;top:0;height:100%;width:min(390px,92vw);background:var(--surface);
             border-inline-start:1px solid var(--line);box-shadow:-24px 0 60px rgba(0,0,0,.5);z-index:1200;
-            transform:translateX(-105%);transition:transform .3s ease;overflow-y:auto;padding:22px}
-        html[dir="rtl"] .panel{transform:translateX(105%)}
+            transform:translateX(105%);transition:transform .3s ease;overflow-y:auto;padding:22px}
+        html[dir="rtl"] .panel{transform:translateX(-105%)}
         .panel.open{transform:none !important}
         .panel-close{position:absolute;top:14px;inset-inline-start:14px;width:36px;height:36px;border-radius:50%;
             border:1px solid var(--line);background:rgba(255,255,255,.08);color:#fff;font-size:22px;line-height:1;cursor:pointer}
