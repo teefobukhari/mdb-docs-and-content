@@ -4414,7 +4414,6 @@ body:before{
             </div>
             <div>
                 <div class="brand-title">CATRION FIFA World Cup 2026 Challenge</div>
-                <div class="brand-sub" data-i18n="brandSub">Prediction League • Daily Goal Rush</div>
             </div>
         </div>
 
@@ -4452,10 +4451,6 @@ body:before{
         <div>
             <div class="badge"><i></i> <span data-i18n="heroBadge">CATRION FIFA WORLD CUP 2026</span></div>
             <h1 data-i18n-html="heroTitle">Cheer with <span>CATRION</span></h1>
-            <p>
-                <span data-i18n="heroWelcome">Welcome,</span> <b><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></b>.
-                <span data-i18n="heroIntro">Play the daily 30-second challenge, predict real World Cup matches, collect points, and climb the CATRION leaderboard.</span>
-            </p>
         </div>
 
         <!-- (2) Challenge Hub card temporarily hidden -->
@@ -4475,6 +4470,14 @@ body:before{
 </header>
 
 <main class="container">
+
+<!-- Welcome line (moved out of the banner, above Next Matches) -->
+<section class="welcome-bar">
+    <p>
+        <span data-i18n="heroWelcome">Welcome,</span> <b><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></b>.
+        <span data-i18n="heroIntro">Play the daily 30-second challenge, predict real World Cup matches, collect points, and climb the CATRION leaderboard.</span>
+    </p>
+</section>
 
 <!-- (3) Next World Cup matches within 24 hours — inside main so the container offset can't overlap it -->
 <?php $n24 = !empty($next24Matches) ? $next24Matches : $next24Fallback; ?>
@@ -4689,7 +4692,10 @@ body:before{
                             <stop offset="1" stop-color="rgba(14,99,230,.12)"/>
                         </linearGradient>
                     </defs>
-                    <path class="hostmap-land" d="M120,70 C90,80 80,118 100,140 C70,162 82,208 112,214 C96,258 122,308 152,320 C166,360 208,360 232,440 C248,470 300,476 306,452 C332,428 320,394 300,380 C420,420 470,410 500,380 C540,350 530,300 510,260 C540,240 540,200 510,186 C520,150 482,150 470,176 C442,150 430,110 400,110 C360,80 250,80 200,112 C176,70 146,68 120,70 Z"/>
+                    <path class="hostmap-land" d="M78,170 C72,150 80,126 100,120 C124,116 146,134 168,150 C220,146 280,146 330,156 C372,160 414,168 452,178 C476,170 500,176 506,198 C512,236 512,276 498,306 C486,330 470,344 452,352 C462,372 460,398 440,402 C398,398 352,402 314,388 C318,420 306,440 296,460 C292,484 262,470 246,438 C226,408 236,372 226,344 C188,330 150,316 122,300 C110,286 98,262 94,238 C88,215 84,192 78,170 Z"/>
+                    <!-- Florida peninsula + Baja for a more realistic silhouette -->
+                    <path class="hostmap-land hostmap-land2" d="M452,352 C470,360 476,392 462,420 C456,432 448,430 448,414 C449,392 444,372 452,352 Z"/>
+                    <path class="hostmap-land hostmap-land2" d="M120,300 C112,326 120,360 132,388 C138,402 130,406 122,396 C108,372 104,332 120,300 Z"/>
                     <g class="hostmap-grid">
                         <line x1="0" y1="173" x2="640" y2="173"/><line x1="0" y1="346" x2="640" y2="346"/>
                         <line x1="213" y1="0" x2="213" y2="520"/><line x1="426" y1="0" x2="426" y2="520"/>
@@ -6808,7 +6814,8 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
     background:radial-gradient(circle at 50% 26%,rgba(14,99,230,.20),transparent 60%),linear-gradient(160deg,#061A36,#08254D);
     border:1px solid rgba(168,231,255,.16)}
 .hostmap-svg{width:100%;flex:1;display:block}
-.hostmap-land{fill:url(#naFill);stroke:rgba(168,231,255,.5);stroke-width:1.6;filter:drop-shadow(0 0 14px rgba(85,183,255,.25))}
+.hostmap-land{fill:url(#naFill);stroke:rgba(168,231,255,.5);stroke-width:1.4;filter:drop-shadow(0 0 14px rgba(85,183,255,.25))}
+.hostmap-land2{fill:rgba(85,183,255,.16);stroke:rgba(168,231,255,.4);stroke-width:1.2}
 .hostmap-grid line{stroke:rgba(168,231,255,.08);stroke-width:1}
 .hc-label{fill:rgba(255,255,255,.85);font:800 11px Inter,sans-serif;paint-order:stroke;stroke:rgba(6,26,54,.72);stroke-width:2.6}
 .hc-dot{fill:#fff}
@@ -6820,12 +6827,24 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .hc.dim{opacity:.3}
 .hc.active .hc-dot{fill:#FFE19A}.hc.active .hc-ring{stroke:#FFE19A;animation-duration:1.3s}.hc.active .hc-label{fill:#FFE19A}
 .hostmap-cap{padding:10px 14px;color:rgba(255,255,255,.7);font-size:12px;font-weight:800;border-top:1px solid rgba(168,231,255,.12);text-align:center}
-.hostmap-side{display:flex;flex-direction:column;min-width:0}
-.hostmap-side-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;color:#fff;font-weight:900;font-size:14px;flex-wrap:wrap}
-.hostmap-list{position:static !important;display:flex !important;flex-direction:column;gap:10px;max-height:400px;overflow:auto;min-height:0}
+/* (4) Matches & Locations list fills the same height as the map card */
+.hostmap-side{display:flex;flex-direction:column;min-width:0;height:100%;min-height:0}
+.hostmap-side-head{flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;color:#fff;font-weight:900;font-size:14px;flex-wrap:wrap}
+.hostmap-list{position:static !important;display:flex !important;flex-direction:column;gap:10px;flex:1 1 auto;max-height:none;overflow:auto;min-height:0}
 .hostmap-list .map-pin-card{position:static !important;inset:auto !important;left:auto !important;right:auto !important;top:auto !important;bottom:auto !important;width:auto !important;cursor:pointer}
 .hostmap-list .map-pin-card.hl{border-color:#FFE19A !important;box-shadow:0 0 0 1px #FFE19A,0 18px 40px rgba(0,0,0,.32) !important}
-@media(max-width:900px){.hostmap-stage{grid-template-columns:1fr}.hostmap{min-height:300px}.hostmap-list{max-height:none}}
+@media(max-width:900px){.hostmap-stage{grid-template-columns:1fr}.hostmap{min-height:300px}.hostmap-side{height:auto}.hostmap-list{flex:none}}
+
+/* welcome line (moved below the banner) */
+.welcome-bar{margin:0 0 18px}
+.welcome-bar p{margin:0;color:rgba(255,255,255,.82);font-size:15px;font-weight:700;line-height:1.7}
+.welcome-bar p b{color:#fff;font-weight:900}
+
+/* (5) Knockout bracket match cards — cleaner, consistent cards */
+.bracket-match{padding:12px 12px 11px !important;min-height:108px !important;display:flex;flex-direction:column;justify-content:center;gap:2px}
+.bracket-match .bracket-row{padding:5px 0 !important}
+.bracket-match .bracket-status{margin-top:8px !important;align-self:flex-start;padding:4px 9px !important;border-radius:999px !important;background:rgba(255,255,255,.07) !important;border-top:0 !important;font-size:10px !important}
+.bracket-match .bracket-status.upcoming{color:#A8E7FF !important}
 </style>
 
 <script>
