@@ -119,6 +119,7 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
             --chip:#7EF4AE;--pin:#06291a;--btn:#1FB573;
         }
         *{box-sizing:border-box}
+        html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
         body{margin:0;font-family:'Inter','Cairo',system-ui,sans-serif;min-height:100vh;color:var(--ink);overflow-x:hidden;
             display:flex;flex-direction:column;
             background:radial-gradient(circle at 100% 0%,rgba(14,99,230,.18),transparent 38%),linear-gradient(135deg,var(--bg1),var(--bg2) 58%,var(--bg3))}
@@ -253,6 +254,36 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         .hint-emoji{font-size:40px}
         .hint-card h2{margin:8px 0 6px;font-size:22px;color:#fff}
         .hint-card p{margin:0;font-size:14px;color:rgba(255,255,255,.78);line-height:1.7;font-weight:600}
+
+        /* ===== Mobile-friendly typography ===== */
+        @media(max-width:560px){
+            /* 16px search input avoids iOS auto-zoom on focus */
+            #search{font-size:16px;padding:10px 14px}
+            .chip{font-size:12px;padding:6px 12px}
+            .chip small{font-size:11px}
+            .top-link{font-size:13px}
+            .theme-btn,.lang-btn{font-size:12px}
+            /* detail panel — scale down the larger headings/text */
+            .panel{padding:18px;width:min(360px,94vw)}
+            .p-flag{width:80px;height:53px}
+            .p-name{font-size:20px}
+            .p-confed{font-size:11px}
+            .p-story{font-size:13px;line-height:1.65}
+            .p-wc{font-size:12.5px;padding:10px 12px}
+            .p-wc-ico{font-size:20px}
+            .p-lbl{font-size:12px}
+            .p-chip{font-size:12px}
+            .p-list{font-size:12.5px;line-height:1.75}
+            .p-fixtures{font-size:12.5px;padding:9px 16px}
+            /* welcome hint */
+            .hint-card{padding:20px 22px;max-width:340px}
+            .hint-emoji{font-size:34px}
+            .hint-card h2{font-size:18px}
+            .hint-card p{font-size:13px;line-height:1.6}
+            /* footer */
+            .tm-footer b{font-size:11.5px}
+            .tm-footer .tm-foot-note{font-size:11px}
+        }
     </style>
 </head>
 <body>
