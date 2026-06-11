@@ -3,13 +3,78 @@ declare(strict_types=1);
 
 /*
 |--------------------------------------------------------------------------
-| World Cup 2026 Fan Agent - AR / EN  (Improved UI)
+| World Cup 2026 Fan Agent — AR / EN  (now with live API-Football data)
 |--------------------------------------------------------------------------
-| Path: /var/www/html/AI-Gateway/worldcup_agent.php
-| Calls existing AI Gateway endpoints. Sends `text` (required by _common.php).
-| Improvements: CATRION/Saudi theme toggle, glass UI, animated hero,
-| chat-style output, quick skills, bilingual (EN/AR + RTL), persisted prefs.
+| Calls the AI Gateway endpoints AND pulls live football data directly from
+| API-Football (api-sports.io) through a secure same-origin proxy so the API
+| key never leaves the server. Team/league logos come from media.api-sports.io.
 */
+
+/* ---- API-Football (api-sports.io) configuration ----
+   Set your key in the APISPORTS_KEY environment variable (preferred) or hardcode
+   it below. The key is ONLY used server-side — never exposed to the browser. */
+if (!defined('APISPORTS_KEY'))   define('APISPORTS_KEY',   getenv('APISPORTS_KEY') ?: '');     // <-- x-apisports-key
+if (!defined('APISPORTS_BASE'))  define('APISPORTS_BASE',  'https://v3.football.api-sports.io');
+if (!defined('APISPORTS_MEDIA')) define('APISPORTS_MEDIA', 'https://media.api-sports.io');
+if (!defined('WC_LEAGUE_ID'))    define('WC_LEAGUE_ID',    1);      // FIFA World Cup league id in API-Football
+if (!defined('WC_SEASON'))       define('WC_SEASON',       2026);
+
+$wcCacheDir = sys_get_temp_dir() . '/wc_apifootball';
+
+/** GET an API-Football URL with the key header + short-lived file cache (saves quota). */
+function wc_apifootball_get(string $url, string $cacheDir, int $ttl = 60): string {
+    if (!is_dir($cacheDir)) @mkdir($cacheDir, 0775, true);
+    $cacheFile = $cacheDir . '/' . md5($url) . '.json';
+    if (is_file($cacheFile) && (time() - filemtime($cacheFile)) < $ttl) {
+        return (string)file_get_contents($cacheFile);
+    }
+    if (!function_exists('curl_init')) {
+        $ctx = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 12,
+            'header' => 'x-apisports-key: ' . APISPORTS_KEY . "\r\n"]]);
+        $res = @file_get_contents($url, false, $ctx);
+        if ($res === false) { return is_file($cacheFile) ? (string)file_get_contents($cacheFile) : json_encode(['ok'=>false,'error'=>'request failed']); }
+        @file_put_contents($cacheFile, $res);
+        return $res;
+    }
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 12,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_HTTPHEADER     => ['x-apisports-key: ' . APISPORTS_KEY],
+    ]);
+    $res  = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err  = curl_error($ch);
+    curl_close($ch);
+    if ($res === false || $code >= 400) {
+        if (is_file($cacheFile)) return (string)file_get_contents($cacheFile); // serve stale on error
+        return json_encode(['ok'=>false,'error'=>'API request failed'.($err ? ': '.$err : ''), 'http'=>$code]);
+    }
+    @file_put_contents($cacheFile, $res);
+    return $res;
+}
+
+/* ---- Secure same-origin proxy: worldcup_agent.php?api=<endpoint>&<params...> ----
+   Keeps the API key on the server. Only GET + an allow-list of endpoints. */
+if (isset($_GET['api'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+    $ep = (string)$_GET['api'];
+    $allow = ['status','fixtures','standings','teams','leagues','predictions','countries','timezone'];
+    if (!in_array($ep, $allow, true)) {
+        http_response_code(400); echo json_encode(['ok'=>false,'error'=>'Endpoint not allowed.']); exit;
+    }
+    if (APISPORTS_KEY === '') {
+        http_response_code(503); echo json_encode(['ok'=>false,'error'=>'API key not configured. Set the APISPORTS_KEY environment variable on the server.']); exit;
+    }
+    $ttlMap = ['status'=>30,'fixtures'=>30,'predictions'=>1800,'standings'=>300,'teams'=>3600,'leagues'=>3600,'countries'=>86400,'timezone'=>86400];
+    $params = $_GET; unset($params['api']);
+    $qs  = http_build_query($params);
+    $url = APISPORTS_BASE . '/' . $ep . ($qs !== '' ? ('?' . $qs) : '');
+    echo wc_apifootball_get($url, $wcCacheDir, $ttlMap[$ep] ?? 60);
+    exit;
+}
 ?>
 <!doctype html>
 <html lang="en" dir="ltr" data-theme="catrion">
@@ -91,6 +156,44 @@ html[dir="rtl"] .msg.bot{border-bottom-left-radius:16px;border-bottom-right-radi
 .raw pre{background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:14px;padding:12px;overflow:auto;max-height:240px;font-size:11px;direction:ltr;text-align:left}
 @media(max-width:960px){.grid{grid-template-columns:1fr}.cards{grid-template-columns:1fr 1fr}.hero{flex-direction:column}.hero-r{align-items:flex-start;flex-direction:row;flex-wrap:wrap}}
 @media(max-width:600px){.app{padding:14px}.cards{grid-template-columns:1fr}.btn-row{grid-template-columns:1fr}}
+
+/* ---- Powered-by badge + live API-Football panel ---- */
+.api-badge{display:inline-flex;align-items:center;gap:7px;margin-top:14px;padding:7px 12px;border-radius:999px;
+  background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:11px;font-weight:800;text-decoration:none}
+.api-badge b{color:var(--accent)}
+.api-badge .dot{width:8px;height:8px;border-radius:50%;background:#9aa7b8;box-shadow:0 0 10px rgba(154,167,184,.6)}
+.api-badge .dot.live{background:var(--good);box-shadow:0 0 12px rgba(34,197,94,.85)}
+.api-badge .dot.off{background:#E94747;box-shadow:0 0 12px rgba(233,71,71,.7)}
+.live{margin-top:18px}
+.live .panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.live-tabs{display:flex;gap:6px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:5px}
+.live-tabs button{border:0;border-radius:999px;padding:8px 13px;background:transparent;color:#fff;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit}
+.live-tabs button.active{background:#fff;color:var(--brand)}
+.live-status{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid var(--line);font-size:12px;font-weight:800}
+.chip span{color:var(--muted);font-weight:700}
+.fx-list{display:grid;gap:10px}
+.fx{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;padding:12px 14px;border-radius:14px;
+  background:rgba(255,255,255,.05);border:1px solid var(--line);cursor:pointer;transition:.16s}
+.fx:hover{border-color:var(--accent);background:rgba(245,200,91,.06)}
+.fx-team{display:flex;align-items:center;gap:10px;min-width:0}
+.fx-team.away{justify-content:flex-end}
+.fx-team img{width:30px;height:30px;object-fit:contain;flex:none}
+.fx-team span{font-weight:800;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fx-mid{text-align:center;min-width:96px}
+.fx-score{font-weight:900;font-size:17px;color:#fff}
+.fx-time{font-size:10.5px;color:var(--muted);font-weight:700;margin-top:2px}
+.stbl{width:100%;border-collapse:collapse;font-size:13px}
+.stbl th,.stbl td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:start;white-space:nowrap}
+.stbl th{color:var(--muted);font-size:10.5px;text-transform:uppercase;font-weight:900}
+.stbl td{font-weight:700}
+.stbl .tm{display:flex;align-items:center;gap:9px}
+.stbl .tm img{width:22px;height:22px;object-fit:contain}
+.stbl .pts{color:var(--accent);font-weight:900}
+.live-empty{color:var(--muted);font-weight:700;text-align:center;padding:26px;font-size:13px}
+.live-controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.live-controls input{border:1px solid var(--line);border-radius:11px;padding:9px 11px;background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:12px;font-weight:700;width:120px}
+.live-controls .btn{width:auto;min-height:38px;padding:0 16px}
 </style>
 </head>
 <body>
@@ -99,6 +202,9 @@ html[dir="rtl"] .msg.bot{border-bottom-left-radius:16px;border-bottom-right-radi
     <div class="hero-l">
       <h1 data-i18n-html="title">World Cup 2026 <b>Fan Agent</b></h1>
       <p data-i18n="subtitle">AI-powered fan assistant connected to API-Football and Azure OpenAI through your central AI Gateway.</p>
+      <a class="api-badge" id="apiBadge" href="https://www.api-football.com" target="_blank" rel="noopener">
+        <span class="dot" id="apiDot"></span>⚽ <span>Powered by</span> <b>API-Football</b>
+      </a>
     </div>
     <div class="hero-r">
       <div class="switch" aria-label="Theme">
@@ -159,9 +265,36 @@ html[dir="rtl"] .msg.bot{border-bottom-left-radius:16px;border-bottom-right-radi
       </div>
     </section>
   </div>
+
+  <!-- ===== Live API-Football data ===== -->
+  <section class="panel live">
+    <div class="panel-head">
+      <div>
+        <h2 data-i18n="liveTitle">Live Football Data</h2>
+        <p data-i18n="liveSub">Fixtures, standings and connection status — live from API-Football, with official team & league logos.</p>
+      </div>
+      <div class="live-tabs" id="liveTabs">
+        <button type="button" data-live="fixtures" class="active" data-i18n="tabFixtures">Fixtures</button>
+        <button type="button" data-live="standings" data-i18n="tabStandings">Standings</button>
+        <button type="button" data-live="status" data-i18n="tabStatus">API status</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="live-controls" id="liveControls">
+        <input id="wcLeague" type="number" value="<?= (int)WC_LEAGUE_ID ?>" title="League ID">
+        <input id="wcSeason" type="number" value="<?= (int)WC_SEASON ?>" title="Season">
+        <button class="btn" type="button" id="liveRefresh" data-i18n="refresh">Refresh</button>
+      </div>
+      <div id="liveBox"><div class="live-empty" data-i18n="liveLoading">Loading…</div></div>
+    </div>
+  </section>
 </div>
 
 <script>
+const APISPORTS_MEDIA='https://media.api-sports.io';
+const teamLogo   = id => `${APISPORTS_MEDIA}/football/teams/${id}.png`;
+const leagueLogo = id => `${APISPORTS_MEDIA}/football/leagues/${id}.png`;
+const countryFlag= c  => `${APISPORTS_MEDIA}/flags/${(c||'').toLowerCase()}.svg`;
 const endpointMap={
   fan:'/AI-Gateway/api/wc_ai_fan_assistant.php',
   predict:'/AI-Gateway/api/wc_ai_predict.php',
@@ -179,6 +312,7 @@ const i18n={
   running:'Running agent…',failed:'Failed',done:'Done',error:'Error',nonJson:'Failed: non-JSON response',greeting:'Welcome! Pick a skill, set the details, and run the agent.',
   fan:'Fan Assistant',predict:'Match Predictor',tactical:'Tactical Analyst',summary:'Match Summary',command:'Command Center',
   quickText:{daily:'What should Saudi fans watch today?',predict:'Predict this fixture and explain confidence clearly.',tactical:'Analyze the tactical strengths, weaknesses, and key matchups.',summary:'Summarize this match for social media and fans.',command:'Give executive dashboard insights for today.'},
+  liveTitle:'Live Football Data',liveSub:'Fixtures, standings and connection status — live from API-Football, with official team & league logos.',tabFixtures:'Fixtures',tabStandings:'Standings',tabStatus:'API status',refresh:'Refresh',liveLoading:'Loading…',noFixtures:'No fixtures found for this league/season. Adjust the League ID / Season.',noStandings:'No standings available for this league/season.',apiErr:'API error',plan:'Plan',quota:'Daily quota',account:'Account',team:'Team',
   aiInstruction:'Respond in English. Use clear fan-friendly wording. If live data is missing, say what is missing.'},
  ar:{title:'وكيل جماهير <b>كأس العالم 2026</b>',subtitle:'مساعد ذكي للجماهير مرتبط ببيانات API-Football و Azure OpenAI عبر بوابة الذكاء الاصطناعي المركزية.',
   themeCatrion:'كاتريون',themeSaudi:'السعودية',cardModule:'الوحدة',cardModeLabel:'النمط',cardDateLabel:'التاريخ',cardFixtureLabel:'المباراة',cardTeamLabel:'الفريق',
@@ -188,6 +322,7 @@ const i18n={
   ready:'جاهز.',outputTitle:'مخرجات الوكيل',outputSub:'استجابة من Azure OpenAI باستخدام سياق API-Football.',rawJson:'JSON الخام',running:'جاري التشغيل…',failed:'فشل',done:'تم',error:'خطأ',nonJson:'فشل: الاستجابة ليست JSON',greeting:'مرحبًا! اختر مهارة، حدّد التفاصيل، ثم شغّل الوكيل.',
   fan:'مساعد الجماهير',predict:'متوقّع المباراة',tactical:'محلل تكتيكي',summary:'ملخص المباراة',command:'مركز القيادة',
   quickText:{daily:'ما أهم ما يتابعه المشجع السعودي اليوم؟',predict:'توقّع نتيجة هذه المباراة واشرح مستوى الثقة بوضوح.',tactical:'حلل نقاط القوة والضعف التكتيكية والمواجهات المهمة.',summary:'لخص هذه المباراة للجماهير ووسائل التواصل.',command:'أعطني رؤى تنفيذية ولوحة قيادة لليوم.'},
+  liveTitle:'بيانات كرة القدم الحية',liveSub:'المباريات والترتيب وحالة الاتصال — مباشرة من API-Football مع شعارات الفرق والبطولات الرسمية.',tabFixtures:'المباريات',tabStandings:'الترتيب',tabStatus:'حالة API',refresh:'تحديث',liveLoading:'جارٍ التحميل…',noFixtures:'لا توجد مباريات لهذه البطولة/الموسم. عدّل رقم البطولة/الموسم.',noStandings:'لا يوجد ترتيب متاح لهذه البطولة/الموسم.',apiErr:'خطأ في API',plan:'الباقة',quota:'الحصة اليومية',account:'الحساب',team:'الفريق',
   aiInstruction:'أجب بالعربية بأسلوب واضح ومناسب للجماهير. إذا كانت البيانات الحية غير متوفرة فاذكر ذلك بوضوح.'}
 };
 let lang=localStorage.getItem('wc_agent_lang')||'en';
@@ -231,7 +366,92 @@ document.querySelectorAll('[data-quick]').forEach(b=>b.addEventListener('click',
 $('runBtn').addEventListener('click',runAgent);
 $('clearBtn').addEventListener('click',clearOutput);
 ['mode','date','fixture','team'].forEach(id=>$(id).addEventListener('change',syncCards));
+
+/* ===== Live API-Football data (via the secure same-origin proxy) ===== */
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+let liveTab='fixtures';
+async function apiGet(ep,params){
+  const qs=new URLSearchParams(Object.assign({api:ep},params||{})).toString();
+  const res=await fetch('worldcup_agent.php?'+qs,{headers:{'Accept':'application/json'}});
+  return res.json();
+}
+function setApiDot(state){const d=$('apiDot');if(d)d.className='dot'+(state==='live'?' live':state==='off'?' off':'');}
+function wcLeague(){return $('wcLeague').value||'<?= (int)WC_LEAGUE_ID ?>';}
+function wcSeason(){return $('wcSeason').value||'<?= (int)WC_SEASON ?>';}
+
+async function pingStatus(){
+  try{const d=await apiGet('status');
+    const sub=(d&&d.response&&d.response.subscription)||{};
+    setApiDot((d&&d.ok===false)?'off':(sub.active?'live':'off'));
+  }catch(_){setApiDot('off');}
+}
+async function loadStatus(){
+  const box=$('liveBox');box.innerHTML='<div class="live-empty">'+t('liveLoading')+'</div>';
+  try{
+    const d=await apiGet('status');
+    if(d&&d.ok===false){setApiDot('off');box.innerHTML='<div class="live-empty">'+esc(d.error||t('apiErr'))+'</div>';return;}
+    const acc=(d&&d.response)||{},sub=acc.subscription||{},req=acc.requests||{},a=acc.account||{};
+    setApiDot(sub.active?'live':'off');
+    box.innerHTML='<div class="live-status">'
+      +'<div class="chip"><span>'+t('plan')+':</span> '+esc(sub.plan||'-')+'</div>'
+      +'<div class="chip"><span>'+t('quota')+':</span> '+esc((req.current!=null?req.current:'-')+' / '+(req.limit_day!=null?req.limit_day:'-'))+'</div>'
+      +'<div class="chip"><span>'+t('account')+':</span> '+esc(((a.firstname||'')+' '+(a.lastname||'')).trim()||'-')+'</div>'
+      +'</div>';
+  }catch(e){setApiDot('off');box.innerHTML='<div class="live-empty">'+esc(e.message)+'</div>';}
+}
+async function loadFixtures(){
+  const box=$('liveBox');box.innerHTML='<div class="live-empty">'+t('liveLoading')+'</div>';
+  try{
+    const d=await apiGet('fixtures',{league:wcLeague(),season:wcSeason(),next:20});
+    if(d&&d.ok===false){box.innerHTML='<div class="live-empty">'+esc(d.error||t('apiErr'))+'</div>';return;}
+    const r=(d&&d.response)||[];
+    if(!r.length){box.innerHTML='<div class="live-empty">'+t('noFixtures')+'</div>';return;}
+    box.innerHTML='<div class="fx-list">'+r.map(f=>{
+      const h=f.teams.home,a=f.teams.away,fx=f.fixture;
+      const gh=(f.goals.home==null?'-':f.goals.home),ga=(f.goals.away==null?'-':f.goals.away);
+      let when='';try{when=new Date(fx.date).toLocaleString(lang==='ar'?'ar':'en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});}catch(_){when=fx.date||'';}
+      return '<div class="fx" data-fid="'+fx.id+'" title="'+t('fixtureLabel')+': '+fx.id+'">'
+        +'<div class="fx-team"><img src="'+teamLogo(h.id)+'" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'"><span>'+esc(h.name)+'</span></div>'
+        +'<div class="fx-mid"><div class="fx-score">'+esc(gh)+' : '+esc(ga)+'</div><div class="fx-time">'+esc((fx.status&&fx.status.short)||'')+' · '+esc(when)+'</div></div>'
+        +'<div class="fx-team away"><span>'+esc(a.name)+'</span><img src="'+teamLogo(a.id)+'" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'"></div>'
+        +'</div>';
+    }).join('')+'</div>';
+    box.querySelectorAll('.fx').forEach(el=>el.addEventListener('click',()=>{
+      $('fixture').value=el.getAttribute('data-fid');syncCards();
+      $('fixture').scrollIntoView({behavior:'smooth',block:'center'});
+    }));
+  }catch(e){box.innerHTML='<div class="live-empty">'+esc(e.message)+'</div>';}
+}
+async function loadStandings(){
+  const box=$('liveBox');box.innerHTML='<div class="live-empty">'+t('liveLoading')+'</div>';
+  try{
+    const d=await apiGet('standings',{league:wcLeague(),season:wcSeason()});
+    if(d&&d.ok===false){box.innerHTML='<div class="live-empty">'+esc(d.error||t('apiErr'))+'</div>';return;}
+    const lg=(d&&d.response&&d.response[0]&&d.response[0].league)||null;
+    const groups=(lg&&lg.standings)||[];
+    if(!groups.length){box.innerHTML='<div class="live-empty">'+t('noStandings')+'</div>';return;}
+    box.innerHTML=groups.map(rows=>{
+      const grp=(rows[0]&&rows[0].group)?('<h3 style="margin:14px 0 8px;font-size:13px;color:var(--accent)">'+esc(rows[0].group)+'</h3>'):'';
+      return grp+'<table class="stbl"><thead><tr><th>#</th><th>'+t('team')+'</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr></thead><tbody>'
+        +rows.map(s=>{const al=s.all||{};
+          return '<tr><td>'+esc(s.rank)+'</td><td><div class="tm"><img src="'+teamLogo(s.team.id)+'" alt="" loading="lazy" onerror="this.style.visibility=\'hidden\'">'+esc(s.team.name)+'</div></td>'
+            +'<td>'+esc(al.played)+'</td><td>'+esc(al.win)+'</td><td>'+esc(al.draw)+'</td><td>'+esc(al.lose)+'</td>'
+            +'<td>'+esc(s.goalsDiff)+'</td><td class="pts">'+esc(s.points)+'</td></tr>';
+        }).join('')+'</tbody></table>';
+    }).join('');
+  }catch(e){box.innerHTML='<div class="live-empty">'+esc(e.message)+'</div>';}
+}
+function loadLive(){if(liveTab==='status')loadStatus();else if(liveTab==='standings')loadStandings();else loadFixtures();}
+document.querySelectorAll('#liveTabs button').forEach(b=>b.addEventListener('click',()=>{
+  liveTab=b.dataset.live;
+  document.querySelectorAll('#liveTabs button').forEach(x=>x.classList.toggle('active',x===b));
+  $('liveControls').style.display=(liveTab==='status')?'none':'flex';
+  loadLive();
+}));
+$('liveRefresh').addEventListener('click',loadLive);
+
 setTheme(theme);applyLang(lang);
+pingStatus();loadLive();
 </script>
 </body>
 </html>
