@@ -4445,7 +4445,7 @@ body:before{
     <div class="hero-content hero-single">
         <div>
             <div class="badge"><i></i> <span data-i18n="heroBadge">CATRION FIFA WORLD CUP 2026</span></div>
-            <h1 data-i18n-html="heroTitle">Score Goals.<br><span>Predict Matches.</span></h1>
+            <h1 data-i18n-html="heroTitle">Cheer with <span>CATRION</span></h1>
             <p>
                 <span data-i18n="heroWelcome">Welcome,</span> <b><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></b>.
                 <span data-i18n="heroIntro">Play the daily 30-second challenge, predict real World Cup matches, collect points, and climb the CATRION leaderboard.</span>
@@ -4821,8 +4821,21 @@ body:before{
                                     <?php
                                         $bmStatus = wc_match_status_label($bm);
                                         $bmUpcomingClass = $bmStatus === 'Upcoming' ? 'upcoming' : '';
+                                        $bmVenue = trim((string)($bm['stadium'] ?? '') . (!empty($bm['city']) ? ' • ' . $bm['city'] : ''));
+                                        $bmWhen  = date('D, d M Y • h:i A', strtotime((string)$bm['match_datetime']));
                                     ?>
                                     <div class="bracket-match">
+                                        <button type="button" class="bracket-info" aria-label="Match details"
+                                            data-round="<?= htmlspecialchars($stageName, ENT_QUOTES, 'UTF-8') ?>"
+                                            data-home="<?= htmlspecialchars(wc_safe_team($bm['home_team']), ENT_QUOTES, 'UTF-8') ?>"
+                                            data-away="<?= htmlspecialchars(wc_safe_team($bm['away_team']), ENT_QUOTES, 'UTF-8') ?>"
+                                            data-hlogo="<?= htmlspecialchars((string)($bm['home_logo'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                            data-alogo="<?= htmlspecialchars((string)($bm['away_logo'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                            data-hs="<?= is_null($bm['home_score']) ? '-' : (int)$bm['home_score'] ?>"
+                                            data-as="<?= is_null($bm['away_score']) ? '-' : (int)$bm['away_score'] ?>"
+                                            data-status="<?= htmlspecialchars($bmStatus, ENT_QUOTES, 'UTF-8') ?>"
+                                            data-when="<?= htmlspecialchars($bmWhen, ENT_QUOTES, 'UTF-8') ?>"
+                                            data-venue="<?= htmlspecialchars($bmVenue, ENT_QUOTES, 'UTF-8') ?>">i</button>
                                         <div class="bracket-row">
                                             <div class="bracket-team">
                                                 <?php if (!empty($bm['home_logo'])): ?>
@@ -5138,6 +5151,30 @@ body:before{
             </div>
         </div>
         <?php endif; ?>
+    </div>
+</div>
+
+<!-- Knockout bracket — per-game details pop-up -->
+<div class="modal" id="bracketInfoModal">
+    <div class="modal-card bracket-info-card">
+        <div class="modal-kicker" id="biRound">Match</div>
+        <div class="bi-teams">
+            <div class="bi-team">
+                <div class="bi-logo" id="biHomeLogo"></div>
+                <div class="bi-name" id="biHome">—</div>
+            </div>
+            <div class="bi-score"><span id="biHomeScore">-</span><i>:</i><span id="biAwayScore">-</span></div>
+            <div class="bi-team">
+                <div class="bi-logo" id="biAwayLogo"></div>
+                <div class="bi-name" id="biAway">—</div>
+            </div>
+        </div>
+        <div class="bi-meta">
+            <div class="bi-row"><span>Status</span><b id="biStatus">—</b></div>
+            <div class="bi-row"><span>Kickoff</span><b id="biWhen">—</b></div>
+            <div class="bi-row" id="biVenueRow"><span>Venue</span><b id="biVenue">—</b></div>
+        </div>
+        <button class="primary-btn" type="button" id="biClose" data-i18n="close">Close</button>
     </div>
 </div>
 
@@ -5754,6 +5791,38 @@ document.addEventListener('DOMContentLoaded', function(){
 
     if (moreBtn) moreBtn.addEventListener('click', toggleBracket);
     if (showFullBtn) showFullBtn.addEventListener('click', toggleBracket);
+
+    /* per-game details pop-up */
+    var biModal = document.getElementById('bracketInfoModal');
+    function setLogo(el, src, name){
+        if(!el) return;
+        el.innerHTML = src ? '<img src="'+src+'" alt="">' : (name||'?').trim().charAt(0);
+    }
+    function openInfo(btn){
+        if(!biModal) return;
+        var ds = btn.dataset;
+        document.getElementById('biRound').textContent = ds.round || 'Match';
+        document.getElementById('biHome').textContent = ds.home || '—';
+        document.getElementById('biAway').textContent = ds.away || '—';
+        document.getElementById('biHomeScore').textContent = ds.hs || '-';
+        document.getElementById('biAwayScore').textContent = ds.as || '-';
+        document.getElementById('biStatus').textContent = ds.status || '—';
+        document.getElementById('biWhen').textContent = ds.when || '—';
+        var venueRow = document.getElementById('biVenueRow');
+        if(ds.venue){ document.getElementById('biVenue').textContent = ds.venue; venueRow.style.display=''; }
+        else { venueRow.style.display='none'; }
+        setLogo(document.getElementById('biHomeLogo'), ds.hlogo, ds.home);
+        setLogo(document.getElementById('biAwayLogo'), ds.alogo, ds.away);
+        biModal.classList.add('active');
+    }
+    function closeInfo(){ if(biModal) biModal.classList.remove('active'); }
+    document.querySelectorAll('.bracket-info').forEach(function(btn){
+        btn.addEventListener('click', function(e){ e.stopPropagation(); openInfo(btn); });
+    });
+    var biClose = document.getElementById('biClose');
+    if(biClose) biClose.addEventListener('click', closeInfo);
+    if(biModal) biModal.addEventListener('click', function(e){ if(e.target===biModal) closeInfo(); });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeInfo(); });
 })();
 </script>
 
@@ -6084,7 +6153,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       brandSub:'Prediction League • Daily Goal Rush',themeCatrion:'CATRION',themeSaudi:'Saudi',
       navHome:'Home',navMatches:'Matches',navLogout:'Logout',
       heroBadge:'CATRION FIFA WORLD CUP 2026',
-      heroTitle:'Score Goals.<br><span>Predict Matches.</span>',
+      heroTitle:'Cheer with <span>CATRION</span>',
       heroWelcome:'Welcome,',
       heroIntro:'Play the daily 30-second challenge, predict real World Cup matches, collect points, and climb the CATRION leaderboard.',
       dailyTitle:'Challenge Hub',
@@ -6132,7 +6201,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       brandSub:'دوري التوقعات • تحدي الأهداف اليومي',themeCatrion:'كاتريون',themeSaudi:'السعودية',
       navHome:'الرئيسية',navMatches:'المباريات',navLogout:'خروج',
       heroBadge:'كاتريون · كأس العالم 2026',
-      heroTitle:'سجّل الأهداف.<br><span>توقّع المباريات.</span>',
+      heroTitle:'شجّع مع <span>كاتريون</span>',
       heroWelcome:'مرحبًا،',
       heroIntro:'العب تحدي الـ30 ثانية اليومي، وتوقّع مباريات كأس العالم الحقيقية، واجمع النقاط، وتصدّر لوحة كاتريون.',
       dailyTitle:'مركز التحدي',
@@ -6253,10 +6322,12 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
 
 <!-- ===================== v4 FEATURES (banner, next24, online, social, fan-filter, profile, audit) ===================== -->
 <style>
-/* (1) top background banner layer (Key Visual) */
-.hero-banner-layer{position:absolute;inset:0;z-index:0;background:url('<?= htmlspecialchars($bannerPath, ENT_QUOTES, 'UTF-8') ?>') center top/cover no-repeat;opacity:.55;pointer-events:none}
-/* dark overlay so hero text stays readable over the KV */
-.hero-banner-layer::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(4,20,43,.72),rgba(8,37,77,.55) 55%,rgba(14,99,230,.45))}
+/* (1) top background banner layer (Key Visual) — full-bleed, edge to edge */
+.hero{overflow:hidden}
+.hero-banner-layer{position:absolute;top:0;left:0;right:0;bottom:0;width:100%;z-index:0;
+    background:url('<?= htmlspecialchars($bannerPath, ENT_QUOTES, 'UTF-8') ?>') center center/cover no-repeat;opacity:.92;pointer-events:none}
+/* light gradient overlay so hero text stays readable over the KV */
+.hero-banner-layer::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(4,20,43,.62),rgba(8,37,77,.38) 55%,rgba(14,99,230,.30))}
 /* (2) hide Challenge Hub + single-column hero */
 .daily-card{display:none !important}
 .hero-content.hero-single{grid-template-columns:1fr !important;max-width:860px !important}
@@ -6483,6 +6554,31 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
     .fan-notify-track{order:3;flex-basis:100%}
 }
 @media(max-width:480px){.next24-grid{grid-template-columns:1fr}.map-pins{grid-template-columns:1fr !important}}
+
+/* ===== bracket info marks + popup, tighter formatting ===== */
+.bracket-match{padding:12px 12px 10px !important}
+.bracket-info{position:absolute;top:8px;inset-inline-end:8px;z-index:3;width:20px;height:20px;border-radius:50%;
+    border:1px solid rgba(168,231,255,.45);background:rgba(255,255,255,.12);color:#fff;font:900 12px Georgia,serif;font-style:italic;
+    line-height:1;cursor:pointer;display:grid;place-items:center;transition:.18s ease}
+.bracket-info:hover{background:#F5C85B;color:#06202e;border-color:#F5C85B;transform:scale(1.1)}
+.bracket-row{padding-inline-end:6px !important}
+.bracket-status{margin-top:8px !important;padding-top:8px !important}
+
+/* bracket details pop-up card (base .modal-card is white -> force dark + readable) */
+#bracketInfoModal .modal-card{background:linear-gradient(150deg,#0B2C55,#071A35) !important;border:1px solid rgba(168,231,255,.2) !important;color:#fff;max-width:440px}
+#bracketInfoModal .modal-kicker{color:var(--cyan) !important;text-align:center}
+.bi-teams{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;margin:6px 0 18px}
+.bi-team{text-align:center;min-width:0}
+.bi-logo{width:58px;height:58px;margin:0 auto 8px;border-radius:16px;background:rgba(255,255,255,.92);display:grid;place-items:center;overflow:hidden;color:#0B2C55;font-weight:900;font-size:20px}
+.bi-logo img{width:42px;height:42px;object-fit:contain}
+.bi-name{color:#fff;font-weight:900;font-size:14px;line-height:1.3}
+.bi-score{display:flex;align-items:center;gap:6px;font-size:30px;font-weight:900;color:#FFE19A}
+.bi-score i{color:rgba(255,255,255,.5);font-style:normal}
+.bi-meta{border-top:1px solid rgba(168,231,255,.16);padding-top:6px;margin-bottom:18px}
+.bi-row{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid rgba(168,231,255,.12);font-size:14px}
+.bi-row:last-child{border-bottom:0}
+.bi-row span{color:rgba(255,255,255,.66);font-weight:700}.bi-row b{color:#fff;font-weight:900;text-align:end}
+#bracketInfoModal .primary-btn{width:100%}
 </style>
 
 <script>
