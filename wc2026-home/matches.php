@@ -344,6 +344,18 @@ foreach ($matches as $gm) {
 $globeNations = array_values($globeNations);
 $globeCount   = count($globeNations);
 
+/* ---- Profile stats (for the My Profile pop-up, mirrors home.php) ---- */
+$overallScore = (int)wc_scalar($conn, "SELECT COALESCE(SUM(total_points),0) FROM WC2026_Game_Sessions WHERE user_id=?", "i", [$userId]);
+$weeklyScore  = (int)wc_scalar($conn, "SELECT COALESCE(SUM(total_points),0) FROM WC2026_Game_Sessions WHERE user_id=? AND YEARWEEK(play_date,3)=YEARWEEK(CURDATE(),3)", "i", [$userId]);
+$playedDays   = (int)wc_scalar($conn, "SELECT COUNT(DISTINCT play_date) FROM WC2026_Game_Sessions WHERE user_id=?", "i", [$userId]);
+$myRank = '--';
+$rankRows = wc_rows($conn, "
+    SELECT rank_no FROM (
+        SELECT user_id, DENSE_RANK() OVER (ORDER BY COALESCE(SUM(total_points),0) DESC) AS rank_no
+        FROM WC2026_Game_Sessions GROUP BY user_id
+    ) r WHERE user_id=? LIMIT 1", "i", [$userId]);
+if ($rankRows) $myRank = '#' . (int)$rankRows[0]['rank_no'];
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1483,21 +1495,36 @@ body{
             </div>
         </div>
 
-        <div class="nav-actions">
-            <a href="/WC2026/" class="nav-link">Home</a>
-            <a href="/WC2026/matches" class="nav-link active">Matches</a>
+        <div class="nav-actions top-actions">
+            <div class="theme-switch" role="group" aria-label="Theme">
+                <button type="button" class="theme-btn" data-theme-set="catrion">CATRION</button>
+                <button type="button" class="theme-btn" data-theme-set="saudi">Saudi</button>
+            </div>
+            <div class="lang-switch" role="group" aria-label="Language">
+                <button type="button" class="lang-btn" data-lang-set="en">EN</button>
+                <button type="button" class="lang-btn" data-lang-set="ar">عربي</button>
+            </div>
+            <a href="/WC2026/" class="nav-link" data-i18n="navHome">Home</a>
+            <a href="/WC2026/matches" class="nav-link active" data-i18n="navMatches">Matches</a>
+            <button type="button" class="nav-link icon-link" id="openFanFilterBtn" title="Fan Filter Studio">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6h0a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                <span data-i18n="navFanFilter">Fan Filter</span>
+            </button>
+            <button type="button" class="nav-link" id="openProfileBtn" data-i18n="navProfile">My Profile</button>
+            <button type="button" class="nav-link" id="howToBtn" data-i18n="navHowTo">How to Use</button>
+            <button type="button" class="nav-link" id="pointsBtn" data-i18n="navPoints">Points</button>
             <form method="POST" action="/WC2026/" style="margin:0;">
                 <input type="hidden" name="csrf" value="<?= h($csrf) ?>">
                 <input type="hidden" name="action" value="logout">
-                <button type="submit" class="logout">Logout</button>
+                <button type="submit" class="logout" data-i18n="navLogout">Logout</button>
             </form>
         </div>
     </div>
 
     <div class="hero-content">
-        <div class="badge"><i></i> Reading from Database</div>
-        <h1>Real Matches.<br><span>Real Results.</span></h1>
-        <p>
+        <div class="badge"><i></i> <span data-i18n="heroBadge">Reading from Database</span></div>
+        <h1 data-i18n-html="heroTitle">Real Matches.<br><span>Real Results.</span></h1>
+        <p data-i18n="heroIntro">
             Browse the official World Cup 2026 match list, live status, upcoming fixtures,
             and final results. Submit predictions before kickoff and climb the leaderboard.
         </p>
@@ -1508,27 +1535,27 @@ body{
 
     <section class="stats">
         <div class="stat">
-            <div class="stat-label">Total Matches</div>
+            <div class="stat-label" data-i18n="statTotal">Total Matches</div>
             <div class="stat-value"><?= (int)$totalMatches ?></div>
-            <div class="stat-note">Synced fixtures</div>
+            <div class="stat-note" data-i18n="statTotalNote">Synced fixtures</div>
         </div>
 
         <div class="stat">
-            <div class="stat-label">Upcoming</div>
+            <div class="stat-label" data-i18n="statUpcoming">Upcoming</div>
             <div class="stat-value"><?= (int)$upcomingMatches ?></div>
-            <div class="stat-note">Open for predictions</div>
+            <div class="stat-note" data-i18n="statUpcomingNote">Open for predictions</div>
         </div>
 
         <div class="stat">
-            <div class="stat-label">Live Now</div>
+            <div class="stat-label" data-i18n="statLive">Live Now</div>
             <div class="stat-value"><?= (int)$liveMatches ?></div>
-            <div class="stat-note">Currently playing</div>
+            <div class="stat-note" data-i18n="statLiveNote">Currently playing</div>
         </div>
 
         <div class="stat">
-            <div class="stat-label">Finished</div>
+            <div class="stat-label" data-i18n="statFinished">Finished</div>
             <div class="stat-value"><?= (int)$finishedMatches ?></div>
-            <div class="stat-note">Results available</div>
+            <div class="stat-note" data-i18n="statFinishedNote">Results available</div>
         </div>
     </section>
 
@@ -1595,27 +1622,27 @@ body{
         </div>
 
         <div class="globe-caption">
-            <span class="globe-kicker">🌍 WORLD CUP 2026</span>
-            <h2>Nations on the Pitch</h2>
-            <p>Tap a nation to jump to its fixtures.</p>
+            <span class="globe-kicker">🌍 <span data-i18n="globeKicker">WORLD CUP 2026</span></span>
+            <h2 data-i18n="globeTitle">Nations on the Pitch</h2>
+            <p data-i18n="globeP">Tap a nation to jump to its fixtures.</p>
         </div>
     </section>
 
     <section class="card">
         <div class="toolbar">
             <div class="tabs">
-                <a class="tab <?= $view === 'all' ? 'active' : '' ?>" href="/WC2026/matches">All</a>
-                <a class="tab <?= $view === 'upcoming' ? 'active' : '' ?>" href="/WC2026/matches?view=upcoming">Upcoming</a>
-                <a class="tab <?= $view === 'live' ? 'active' : '' ?>" href="/WC2026/matches?view=live">Live</a>
-                <a class="tab <?= $view === 'finished' ? 'active' : '' ?>" href="/WC2026/matches?view=finished">Finished</a>
+                <a class="tab <?= $view === 'all' ? 'active' : '' ?>" href="/WC2026/matches" data-i18n="tabAll">All</a>
+                <a class="tab <?= $view === 'upcoming' ? 'active' : '' ?>" href="/WC2026/matches?view=upcoming" data-i18n="tabUpcoming">Upcoming</a>
+                <a class="tab <?= $view === 'live' ? 'active' : '' ?>" href="/WC2026/matches?view=live" data-i18n="tabLive">Live</a>
+                <a class="tab <?= $view === 'finished' ? 'active' : '' ?>" href="/WC2026/matches?view=finished" data-i18n="tabFinished">Finished</a>
             </div>
 
             <form class="search" method="GET" action="/WC2026/matches">
                 <?php if ($view !== 'all'): ?>
                     <input type="hidden" name="view" value="<?= h($view) ?>">
                 <?php endif; ?>
-                <input type="text" name="q" placeholder="Search team or round..." value="<?= h($search) ?>">
-                <button type="submit">Search</button>
+                <input type="text" name="q" data-i18n-ph="searchPh" placeholder="Search team or round..." value="<?= h($search) ?>">
+                <button type="submit" data-i18n="searchBtn">Search</button>
             </form>
         </div>
 
@@ -1733,7 +1760,7 @@ body{
 
 <footer class="wc-footer">
     <div class="wc-foot-inner">
-        <b>Developed by CATRION &copy; IT Digital &amp; Transformation</b>
+        <b data-i18n="footerDev">Developed by CATRION &copy; IT Digital &amp; Transformation</b>
         <span>CATRION FIFA World Cup 2026 Challenge</span>
     </div>
 </footer>
@@ -1843,6 +1870,189 @@ body{
             spawnSparks(e.clientX, e.clientY);
         });
     });
+})();
+</script>
+
+<!-- ===================== home-style nav chrome (toggles, modals) ===================== -->
+<style>
+.top-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.theme-switch,.lang-switch{display:inline-flex;gap:4px;padding:4px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22)}
+.theme-btn,.lang-btn{border:0;border-radius:999px;padding:8px 12px;background:transparent;color:#fff;font-weight:900;font-size:12px;cursor:pointer;font-family:inherit;line-height:1;transition:.2s}
+.theme-btn.active,.lang-btn.active{background:#fff;color:var(--deep)}
+html[data-theme="saudi"] .theme-btn.active,html[data-theme="saudi"] .lang-btn.active{color:#06371f}
+.nav-link.icon-link{display:inline-flex;align-items:center;gap:6px}
+.nav-link.icon-link svg{width:16px;height:16px}
+button.nav-link{font-family:inherit}
+
+/* modals */
+.wc-modal{position:fixed;inset:0;z-index:500;background:rgba(4,18,40,.78);display:none;align-items:center;justify-content:center;padding:22px;backdrop-filter:blur(8px)}
+.wc-modal.active{display:flex}
+.wc-modal-card{width:100%;max-width:560px;background:linear-gradient(150deg,#0B2C55,#071A35);border:1px solid rgba(168,231,255,.2);border-radius:24px;padding:26px;color:#fff;box-shadow:0 30px 80px rgba(0,0,0,.5);max-height:88vh;overflow:auto}
+.wc-modal-kicker{color:var(--cyan);font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.wc-modal-card h3{margin:0 0 16px;font-size:24px;color:#fff}
+.wc-primary-btn{width:100%;border:0;border-radius:14px;padding:12px 18px;font-weight:900;cursor:pointer;background:linear-gradient(135deg,#F5C85B,#FFE19A);color:#071A35}
+.wc-profile-line{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid rgba(168,231,255,.14);font-size:14px}
+.wc-profile-line:last-of-type{border-bottom:0}
+.wc-profile-line span:first-child{color:rgba(255,255,255,.72);font-weight:700}
+.wc-profile-line span:last-child{color:#fff;font-weight:900}
+.help-list{list-style:none;margin:6px 0 18px;padding:0;display:flex;flex-direction:column;gap:12px}
+.help-item{display:flex;gap:12px;align-items:flex-start}
+.help-num{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:13px;color:#06202e;background:linear-gradient(135deg,#F5C85B,#FFE19A)}
+.help-item b{display:block;color:#fff;font-size:14px;margin-bottom:2px}
+.help-item span{color:rgba(255,255,255,.72);font-size:13px;line-height:1.55}
+.pts-table{width:100%;border-collapse:collapse;margin:6px 0 16px}
+.pts-table th,.pts-table td{text-align:start;padding:10px 8px;border-bottom:1px solid rgba(168,231,255,.14);font-size:13px}
+.pts-table th{color:rgba(255,255,255,.6);font-weight:800;text-transform:uppercase;font-size:11px;letter-spacing:.4px}
+.pts-table td{color:#fff;font-weight:700}.pts-table td b{color:#FFE19A;font-weight:900}
+.pts-note{color:rgba(255,255,255,.66);font-size:12px;line-height:1.6;margin:0 0 16px}
+.ff-frame-wrap{border-radius:18px;overflow:hidden;border:1px solid rgba(168,231,255,.18);background:#05162F;height:74vh}
+.ff-frame-wrap iframe{width:100%;height:100%;border:0;display:block}
+.wc-modal-card.wide{max-width:min(960px,96vw)}
+.wc-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.wc-x{width:34px;height:34px;border:0;border-radius:10px;cursor:pointer;background:rgba(255,255,255,.12);color:#fff;font-size:15px;font-weight:900}
+
+/* Saudi theme (matches home) */
+html[data-theme="saudi"] body{background:radial-gradient(circle at 8% 8%,rgba(34,197,94,.18),transparent 30%),radial-gradient(circle at 92% 8%,rgba(17,163,106,.3),transparent 34%),linear-gradient(180deg,#03190f 0%,#06371f 45%,#03190f 100%) !important}
+html[data-theme="saudi"] .hero{background:radial-gradient(circle at 72% 18%,rgba(17,163,106,.4),transparent 32%),linear-gradient(135deg,#03190f 0%,#0a5a32 48%,#0e7c43 100%) !important}
+html[data-theme="saudi"] .hero h1 span{color:#FFE19A}
+html[data-theme="saudi"] .card,html[data-theme="saudi"] .match-card{background:linear-gradient(135deg,#06291a,#0a3f27 58%,#0e6a3e) !important}
+html[data-theme="saudi"] .globe-stage{background:linear-gradient(180deg,#06291a,#0a3f27 60%,#06291a) !important}
+html[dir="rtl"] .nav-actions{direction:rtl}
+</style>
+
+<!-- Fan Filter pop-up (iframe) -->
+<div class="wc-modal" id="ffModal">
+    <div class="wc-modal-card wide">
+        <div class="wc-modal-head">
+            <div class="wc-modal-kicker" data-i18n="navFanFilter">Fan Filter</div>
+            <button type="button" class="wc-x" data-close="ffModal" aria-label="Close">✕</button>
+        </div>
+        <div class="ff-frame-wrap"><iframe id="ffFrame" data-src="/WC/fan_filter.php" title="Fan Filter Studio" referrerpolicy="same-origin"></iframe></div>
+    </div>
+</div>
+
+<!-- My Profile pop-up -->
+<div class="wc-modal" id="profileModal">
+    <div class="wc-modal-card">
+        <div class="wc-modal-kicker" data-i18n="navProfile">My Profile</div>
+        <h3><?= h($name) ?></h3>
+        <div class="wc-profile-line"><span data-i18n="pfType">User Type</span><span><?= h($type) ?></span></div>
+        <div class="wc-profile-line"><span data-i18n="statOverall">Overall Score</span><span><?= (int)$overallScore ?></span></div>
+        <div class="wc-profile-line"><span data-i18n="statWeekly">Weekly Score</span><span><?= (int)$weeklyScore ?></span></div>
+        <div class="wc-profile-line"><span data-i18n="statRank">My Rank</span><span><?= h($myRank) ?></span></div>
+        <div class="wc-profile-line"><span data-i18n="pfDays">Days Played</span><span><?= (int)$playedDays ?></span></div>
+        <br><button type="button" class="wc-primary-btn" data-close="profileModal" data-i18n="close">Close</button>
+    </div>
+</div>
+
+<!-- How to Use pop-up -->
+<div class="wc-modal" id="howToModal">
+    <div class="wc-modal-card">
+        <div class="wc-modal-kicker" data-i18n="navHowTo">How to Use</div>
+        <h3 data-i18n="howToTitle">Get started in 5 steps</h3>
+        <ul class="help-list">
+            <li class="help-item"><span class="help-num">1</span><div><b data-i18n="howStep1t">Play the Daily Goal Rush</b><span data-i18n="howStep1d">Tap the ball (or press Space) to shoot, beat the goalkeeper, and score in 30 seconds — once per day.</span></div></li>
+            <li class="help-item"><span class="help-num">2</span><div><b data-i18n="howStep2t">Predict real matches</b><span data-i18n="howStep2d">Open a match and submit your score prediction before kickoff. Predictions lock when the match starts.</span></div></li>
+            <li class="help-item"><span class="help-num">3</span><div><b data-i18n="howStep3t">Create a Fan Filter photo</b><span data-i18n="howStep3d">Pick your country and a frame, snap a selfie or upload a photo, then save & download it.</span></div></li>
+            <li class="help-item"><span class="help-num">4</span><div><b data-i18n="howStep4t">Join the Fan Wall</b><span data-i18n="howStep4d">Post your moment, like and comment on others.</span></div></li>
+            <li class="help-item"><span class="help-num">5</span><div><b data-i18n="howStep5t">Climb the leaderboard</b><span data-i18n="howStep5d">Collect points from games, predictions and your daily photo to rise up the rankings.</span></div></li>
+        </ul>
+        <button type="button" class="wc-primary-btn" data-close="howToModal" data-i18n="close">Close</button>
+    </div>
+</div>
+
+<!-- Points pop-up -->
+<div class="wc-modal" id="pointsModal">
+    <div class="wc-modal-card">
+        <div class="wc-modal-kicker" data-i18n="navPoints">Points</div>
+        <h3 data-i18n="pointsTitle">How to collect points</h3>
+        <table class="pts-table">
+            <thead><tr><th data-i18n="ptsAction">Action</th><th data-i18n="ptsReward">Reward</th></tr></thead>
+            <tbody>
+                <tr><td data-i18n="ptsGoal">Daily game — score a goal (by zone)</td><td><b>+10 / +20 / +30</b></td></tr>
+                <tr><td data-i18n="ptsGolden">Golden ball goal (bonus)</td><td><b>+50</b></td></tr>
+                <tr><td data-i18n="ptsPredWin">Predict the match winner</td><td><b>+3</b></td></tr>
+                <tr><td data-i18n="ptsPredScore">Predict the correct score</td><td><b>+5</b></td></tr>
+                <tr><td data-i18n="ptsChampion">Predict the champion (Final only)</td><td><b>+15</b></td></tr>
+                <tr><td data-i18n="ptsPhoto">Fan Filter photo (once per day)</td><td><b>+10</b></td></tr>
+            </tbody>
+        </table>
+        <p class="pts-note" data-i18n="ptsNote">Submit predictions before kickoff — points are awarded automatically once the official result is synced. Save your daily Fan Filter photo for the photo bonus.</p>
+        <button type="button" class="wc-primary-btn" data-close="pointsModal" data-i18n="close">Close</button>
+    </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var d=document, root=document.documentElement;
+
+  /* ---- theme ---- */
+  var theme=(function(){ try{ return localStorage.getItem('wc_theme')||'catrion'; }catch(e){ return 'catrion'; } })();
+  function applyTheme(t){ theme=(t==='saudi')?'saudi':'catrion'; root.setAttribute('data-theme',theme);
+    d.querySelectorAll('.theme-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-theme-set')===theme); });
+    try{ localStorage.setItem('wc_theme',theme); }catch(e){} }
+  d.querySelectorAll('.theme-btn').forEach(function(b){ b.addEventListener('click', function(){ applyTheme(b.getAttribute('data-theme-set')); }); });
+
+  /* ---- language (chrome only) ---- */
+  var T={
+    en:{navHome:'Home',navMatches:'Matches',navFanFilter:'Fan Filter',navProfile:'My Profile',navHowTo:'How to Use',navPoints:'Points',navLogout:'Logout',
+      heroBadge:'Reading from Database',heroTitle:'Real Matches.<br><span>Real Results.</span>',
+      heroIntro:'Browse the official World Cup 2026 match list, live status, upcoming fixtures, and final results. Submit predictions before kickoff and climb the leaderboard.',
+      statTotal:'Total Matches',statTotalNote:'Synced fixtures',statUpcoming:'Upcoming',statUpcomingNote:'Open for predictions',statLive:'Live Now',statLiveNote:'Currently playing',statFinished:'Finished',statFinishedNote:'Results available',
+      tabAll:'All',tabUpcoming:'Upcoming',tabLive:'Live',tabFinished:'Finished',searchPh:'Search team or round...',searchBtn:'Search',
+      globeKicker:'WORLD CUP 2026',globeTitle:'Nations on the Pitch',globeP:'Tap a nation to jump to its fixtures.',
+      footerDev:'Developed by CATRION © IT Digital & Transformation',close:'Close',
+      pfType:'User Type',pfDays:'Days Played',statOverall:'Overall Score',statWeekly:'Weekly Score',statRank:'My Rank',
+      howToTitle:'Get started in 5 steps',howStep1t:'Play the Daily Goal Rush',howStep1d:'Tap the ball (or press Space) to shoot, beat the goalkeeper, and score in 30 seconds — once per day.',
+      howStep2t:'Predict real matches',howStep2d:'Open a match and submit your score prediction before kickoff. Predictions lock when the match starts.',
+      howStep3t:'Create a Fan Filter photo',howStep3d:'Pick your country and a frame, snap a selfie or upload a photo, then save & download it.',
+      howStep4t:'Join the Fan Wall',howStep4d:'Post your moment, like and comment on others.',
+      howStep5t:'Climb the leaderboard',howStep5d:'Collect points from games, predictions and your daily photo to rise up the rankings.',
+      pointsTitle:'How to collect points',ptsAction:'Action',ptsReward:'Reward',ptsGoal:'Daily game — score a goal (by zone)',ptsGolden:'Golden ball goal (bonus)',ptsPredWin:'Predict the match winner',ptsPredScore:'Predict the correct score',ptsChampion:'Predict the champion (Final only)',ptsPhoto:'Fan Filter photo (once per day)',
+      ptsNote:'Submit predictions before kickoff — points are awarded automatically once the official result is synced. Save your daily Fan Filter photo for the photo bonus.'},
+    ar:{navHome:'الرئيسية',navMatches:'المباريات',navFanFilter:'فلتر المشجع',navProfile:'ملفي',navHowTo:'طريقة الاستخدام',navPoints:'النقاط',navLogout:'خروج',
+      heroBadge:'القراءة من قاعدة البيانات',heroTitle:'مباريات حقيقية.<br><span>نتائج حقيقية.</span>',
+      heroIntro:'تصفّح قائمة مباريات كأس العالم 2026 الرسمية، والحالة المباشرة، والمباريات القادمة والنتائج النهائية. أرسل توقعاتك قبل انطلاق المباراة وتصدّر لوحة الصدارة.',
+      statTotal:'إجمالي المباريات',statTotalNote:'مباريات متزامنة',statUpcoming:'القادمة',statUpcomingNote:'مفتوحة للتوقع',statLive:'مباشر الآن',statLiveNote:'تُلعب حاليًا',statFinished:'منتهية',statFinishedNote:'النتائج متاحة',
+      tabAll:'الكل',tabUpcoming:'القادمة',tabLive:'مباشر',tabFinished:'منتهية',searchPh:'ابحث عن فريق أو دور...',searchBtn:'بحث',
+      globeKicker:'كأس العالم 2026',globeTitle:'المنتخبات في الملعب',globeP:'انقر منتخبًا للانتقال إلى مبارياته.',
+      footerDev:'تطوير كاتريون © تقنية المعلومات والتحول الرقمي',close:'إغلاق',
+      pfType:'نوع المستخدم',pfDays:'أيام اللعب',statOverall:'النقاط الإجمالية',statWeekly:'نقاط الأسبوع',statRank:'ترتيبي',
+      howToTitle:'ابدأ في 5 خطوات',howStep1t:'العب تحدي الأهداف اليومي',howStep1d:'انقر الكرة (أو اضغط مسافة) للتسديد، تجاوز الحارس، وسجّل خلال 30 ثانية — مرة واحدة يوميًا.',
+      howStep2t:'توقّع المباريات الحقيقية',howStep2d:'افتح مباراة وأرسل توقع النتيجة قبل انطلاقها. تُقفل التوقعات عند بدء المباراة.',
+      howStep3t:'أنشئ صورة فلتر المشجع',howStep3d:'اختر دولتك وإطارًا، التقط صورة أو ارفع واحدة، ثم احفظها ونزّلها.',
+      howStep4t:'انضم إلى جدار المشجعين',howStep4d:'انشر لحظتك وتفاعل وعلّق على الآخرين.',
+      howStep5t:'تصدّر لوحة الصدارة',howStep5d:'اجمع النقاط من الألعاب والتوقعات وصورتك اليومية لترتقي في التصنيف.',
+      pointsTitle:'كيف تجمع النقاط',ptsAction:'الإجراء',ptsReward:'المكافأة',ptsGoal:'اللعبة اليومية — تسجيل هدف (حسب المنطقة)',ptsGolden:'هدف الكرة الذهبية (مكافأة)',ptsPredWin:'توقّع الفائز بالمباراة',ptsPredScore:'توقّع النتيجة الصحيحة',ptsChampion:'توقّع البطل (النهائي فقط)',ptsPhoto:'صورة فلتر المشجع (مرة يوميًا)',
+      ptsNote:'أرسل التوقعات قبل انطلاق المباراة — تُمنح النقاط تلقائيًا بعد مزامنة النتيجة الرسمية. احفظ صورة فلتر المشجع اليومية للحصول على مكافأة الصورة.'}
+  };
+  var lang=(function(){ try{ return localStorage.getItem('wc_lang')||'en'; }catch(e){ return 'en'; } })();
+  function tr(k){ return (T[lang]&&T[lang][k]!=null)?T[lang][k]:(T.en[k]!=null?T.en[k]:k); }
+  function known(k){ return T.en[k]!=null; }
+  function applyLang(l){
+    lang=(l==='ar')?'ar':'en'; root.lang=lang; root.dir=(lang==='ar')?'rtl':'ltr';
+    d.querySelectorAll('[data-i18n]').forEach(function(el){ var k=el.getAttribute('data-i18n'); if(known(k)) el.textContent=tr(k); });
+    d.querySelectorAll('[data-i18n-html]').forEach(function(el){ var k=el.getAttribute('data-i18n-html'); if(known(k)) el.innerHTML=tr(k); });
+    d.querySelectorAll('[data-i18n-ph]').forEach(function(el){ var k=el.getAttribute('data-i18n-ph'); if(known(k)) el.setAttribute('placeholder',tr(k)); });
+    d.querySelectorAll('.lang-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-lang-set')===lang); });
+    try{ localStorage.setItem('wc_lang',lang); }catch(e){}
+  }
+  d.querySelectorAll('.lang-btn').forEach(function(b){ b.addEventListener('click', function(){ applyLang(b.getAttribute('data-lang-set')); }); });
+
+  /* ---- modals ---- */
+  function open(id){ var m=d.getElementById(id); if(m) m.classList.add('active'); }
+  function close(id){ var m=d.getElementById(id); if(m) m.classList.remove('active'); }
+  var ffFrame=d.getElementById('ffFrame');
+  var oFF=d.getElementById('openFanFilterBtn'); if(oFF) oFF.addEventListener('click', function(){ if(ffFrame&&!ffFrame.src) ffFrame.src=ffFrame.dataset.src; open('ffModal'); });
+  var oP=d.getElementById('openProfileBtn'); if(oP) oP.addEventListener('click', function(){ open('profileModal'); });
+  var oH=d.getElementById('howToBtn'); if(oH) oH.addEventListener('click', function(){ open('howToModal'); });
+  var oPt=d.getElementById('pointsBtn'); if(oPt) oPt.addEventListener('click', function(){ open('pointsModal'); });
+  d.querySelectorAll('[data-close]').forEach(function(b){ b.addEventListener('click', function(){ close(b.getAttribute('data-close')); }); });
+  d.querySelectorAll('.wc-modal').forEach(function(m){ m.addEventListener('click', function(e){ if(e.target===m) m.classList.remove('active'); }); });
+  d.addEventListener('keydown', function(e){ if(e.key==='Escape') d.querySelectorAll('.wc-modal.active').forEach(function(m){ m.classList.remove('active'); }); });
+
+  applyTheme(theme); applyLang(lang);
 })();
 </script>
 
