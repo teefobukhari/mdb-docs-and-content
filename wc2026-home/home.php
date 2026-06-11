@@ -7692,7 +7692,9 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
   /* Mobile nav drawer — these must beat the later unconditional
      ".nav/.top-actions" z-index rules, so they use !important. */
   .nav{flex-wrap:wrap;position:relative;z-index:2002 !important}
-  .nav-burger{display:inline-flex !important;position:relative;z-index:2005}
+  .brand{min-width:0}
+  /* Burger pinned to the inline-end → right in LTR, left in RTL. */
+  .nav-burger{display:inline-flex !important;position:relative;z-index:2005;margin-inline-start:auto}
   /* Hide the burger once the drawer is open (close via the dimmed backdrop or Esc). */
   html.wc-nav-open .nav-burger{display:none !important}
   .top-actions{position:fixed !important;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(82vw,300px);z-index:2000 !important;
@@ -7822,7 +7824,7 @@ html[dir="rtl"] .wc-agent-panel{inset-inline-end:auto;inset-inline-start:24px}
   document.addEventListener('keydown', function(e){ if(e.key==='Escape') setOpen(false); });
   a.querySelectorAll('a, button').forEach(function(el){
     if(el.classList.contains('theme-btn')||el.classList.contains('lang-btn')) return;
-    el.addEventListener('click', function(){ if(window.matchMedia('(max-width:768px)').matches) setOpen(false); });
+    el.addEventListener('click', function(){ setOpen(false); });
   });
 })();
 </script>
