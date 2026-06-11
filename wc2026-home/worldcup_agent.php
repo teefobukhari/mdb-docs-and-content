@@ -329,7 +329,7 @@ const i18n={
   fan:'Fan Assistant',predict:'Match Predictor',tactical:'Tactical Analyst',summary:'Match Summary',command:'Command Center',
   quickText:{daily:'What should Saudi fans watch today?',predict:'Predict this fixture and explain confidence clearly.',tactical:'Analyze the tactical strengths, weaknesses, and key matchups.',summary:'Summarize this match for social media and fans.',command:'Give executive dashboard insights for today.'},
   liveTitle:'Live Football Data',liveSub:'Fixtures, standings and connection status — live from API-Football, with official team & league logos.',tabFixtures:'Fixtures',tabStandings:'Standings',tabStatus:'API status',refresh:'Refresh',liveLoading:'Loading…',noFixtures:'No fixtures found for this league/season. Adjust the League ID / Season.',noStandings:'No standings available for this league/season.',apiErr:'API error',plan:'Plan',quota:'Daily quota',account:'Account',team:'Team',
-  aiInstruction:'Respond in English. Use clear fan-friendly wording. If live data is missing, say what is missing.'},
+  aiInstruction:'Respond in English with clear, fan-friendly wording. Treat the "LIVE API-FOOTBALL MATCH DATA" section below as ground truth and base your lineups, formations, scorers, stats and prediction analysis on it. Only say a detail is unavailable if it is genuinely absent from that data.'},
  ar:{title:'وكيل جماهير <b>كأس العالم 2026</b>',subtitle:'مساعد ذكي للجماهير مرتبط ببيانات API-Football و Azure OpenAI عبر بوابة الذكاء الاصطناعي المركزية.',
   themeCatrion:'كاتريون',themeSaudi:'السعودية',cardModule:'الوحدة',cardModeLabel:'النمط',cardDateLabel:'التاريخ',cardFixtureLabel:'المباراة',cardTeamLabel:'الفريق',
   controlTitle:'لوحة التحكم',controlSub:'اختر وظيفة الذكاء الاصطناعي وأدخل التاريخ أو رقم المباراة أو رقم الفريق أو السؤال.',
@@ -339,7 +339,7 @@ const i18n={
   fan:'مساعد الجماهير',predict:'متوقّع المباراة',tactical:'محلل تكتيكي',summary:'ملخص المباراة',command:'مركز القيادة',
   quickText:{daily:'ما أهم ما يتابعه المشجع السعودي اليوم؟',predict:'توقّع نتيجة هذه المباراة واشرح مستوى الثقة بوضوح.',tactical:'حلل نقاط القوة والضعف التكتيكية والمواجهات المهمة.',summary:'لخص هذه المباراة للجماهير ووسائل التواصل.',command:'أعطني رؤى تنفيذية ولوحة قيادة لليوم.'},
   liveTitle:'بيانات كرة القدم الحية',liveSub:'المباريات والترتيب وحالة الاتصال — مباشرة من API-Football مع شعارات الفرق والبطولات الرسمية.',tabFixtures:'المباريات',tabStandings:'الترتيب',tabStatus:'حالة API',refresh:'تحديث',liveLoading:'جارٍ التحميل…',noFixtures:'لا توجد مباريات لهذه البطولة/الموسم. عدّل رقم البطولة/الموسم.',noStandings:'لا يوجد ترتيب متاح لهذه البطولة/الموسم.',apiErr:'خطأ في API',plan:'الباقة',quota:'الحصة اليومية',account:'الحساب',team:'الفريق',
-  aiInstruction:'أجب بالعربية بأسلوب واضح ومناسب للجماهير. إذا كانت البيانات الحية غير متوفرة فاذكر ذلك بوضوح.'}
+  aiInstruction:'أجب بالعربية بأسلوب واضح ومناسب للجماهير. اعتبر قسم "LIVE API-FOOTBALL MATCH DATA" أدناه مصدراً موثوقاً، وابنِ تحليلك للتشكيلات والخطط والأهداف والإحصاءات والتوقعات عليه. لا تقل إن معلومة غير متوفرة إلا إذا كانت غائبة فعلاً عن تلك البيانات.'}
 };
 let lang=localStorage.getItem('wc_agent_lang')||'en';
 let theme=localStorage.getItem('wc_agent_theme')||'catrion';
@@ -357,16 +357,54 @@ function modeLabel(m){return t(m)||m;}
 function addMsg(text,who){const m=document.createElement('div');m.className='msg '+who;m.textContent=text;$('chat').appendChild(m);$('chat').scrollTop=$('chat').scrollHeight;return m;}
 function syncCards(){$('cardMode').textContent=modeLabel($('mode').value);$('cardDate').textContent=$('date').value||'-';$('cardFixture').textContent=$('fixture').value||'-';$('cardTeam').textContent=$('team').value||'-';}
 function clearOutput(){$('chat').innerHTML='';$('rawJson').textContent='{}';$('status').textContent=t('ready');addMsg(t('greeting'),'bot');}
+/* Build a ground-truth match-data context from API-Football for one fixture. */
+function fmtEvents(ev){return (ev||[]).slice(0,45).map(e=>{const m=(e.time&&e.time.elapsed!=null?e.time.elapsed+"'":'')+(e.time&&e.time.extra?'+'+e.time.extra:'');return m+' '+((e.team&&e.team.name)||'')+' — '+e.type+(e.detail?' ('+e.detail+')':'')+': '+((e.player&&e.player.name)||'')+((e.assist&&e.assist.name)?' (assist '+e.assist.name+')':'');}).join('\n');}
+function fmtLineups(lu){return (lu||[]).map(l=>{const xi=(l.startXI||[]).map(p=>'#'+(p.player.number||'')+' '+p.player.name+(p.player.pos?' ('+p.player.pos+')':'')).join(', ');const subs=(l.substitutes||[]).map(p=>p.player.name).join(', ');return ((l.team&&l.team.name)||'')+' — formation '+(l.formation||'?')+', coach '+((l.coach&&l.coach.name)||'?')+'\n  XI: '+xi+'\n  Subs: '+subs;}).join('\n\n');}
+function fmtStats(st){return (st||[]).map(s=>((s.team&&s.team.name)||'')+': '+(s.statistics||[]).map(x=>x.type+' '+(x.value==null?'-':x.value)).join(', ')).join('\n');}
+function fmtPred(p){if(!p)return '';const pr=p.predictions||{},pc=pr.percent||{};return 'winner '+((pr.winner&&pr.winner.name)||'-')+', win-or-draw '+pr.win_or_draw+', under/over '+(pr.under_over||'-')+', advice: '+(pr.advice||'-')+', % H/D/A '+(pc.home||'-')+'/'+(pc.draw||'-')+'/'+(pc.away||'-');}
+function fmtInj(inj){return (inj||[]).slice(0,45).map(i=>(((i.team&&i.team.name)||'')+': '+((i.player&&i.player.name)||'')+' — '+((i.player&&i.player.type)||'')+' '+((i.player&&i.player.reason)||'')).trim()).join('\n');}
+async function buildFixtureContext(fid){
+  const [fxR,prR,injR]=await Promise.all([
+    apiGet('fixtures',{id:fid}),
+    apiGet('predictions',{fixture:fid}).catch(()=>null),
+    apiGet('injuries',{fixture:fid}).catch(()=>null)
+  ]);
+  const f=(fxR&&fxR.response&&fxR.response[0])||null;
+  if(!f) return {summary:'',raw:null};
+  const pr=(prR&&prR.response&&prR.response[0])||null;
+  const injuries=(injR&&injR.response)||[];
+  const sc=f.score||{},ht=sc.halftime||{};
+  const P=[];
+  P.push('FIXTURE: '+f.teams.home.name+' vs '+f.teams.away.name+' — '+((f.fixture.status&&f.fixture.status.long)||'')+' | '+f.fixture.date);
+  P.push('VENUE: '+((f.fixture.venue&&f.fixture.venue.name)||'-')+((f.fixture.venue&&f.fixture.venue.city)?(', '+f.fixture.venue.city):'')+' | REFEREE: '+(f.fixture.referee||'-'));
+  P.push('SCORE: '+(f.goals.home==null?'-':f.goals.home)+'-'+(f.goals.away==null?'-':f.goals.away)+' (HT '+(ht.home==null?'-':ht.home)+'-'+(ht.away==null?'-':ht.away)+')');
+  if(f.events&&f.events.length)      P.push('GOALS / CARDS / SUBS (events):\n'+fmtEvents(f.events));
+  if(f.lineups&&f.lineups.length)    P.push('LINEUPS & FORMATIONS:\n'+fmtLineups(f.lineups));
+  if(f.statistics&&f.statistics.length) P.push('TEAM STATISTICS (shots, possession, passes…):\n'+fmtStats(f.statistics));
+  if(pr)                             P.push('MODEL PREDICTION: '+fmtPred(pr));
+  if(injuries.length)                P.push('INJURIES / SIDELINED:\n'+fmtInj(injuries));
+  const lean=Object.assign({},f); delete lean.players; // drop the huge per-player array
+  return {summary:P.join('\n\n'), raw:{fixture:lean, predictions:pr, injuries}};
+}
+
 async function runAgent(){
   syncCards();
   const mode=$('mode').value,endpoint=endpointMap[mode];
   const q=$('question').value||'';
   addMsg(q||modeLabel(mode),'user');
-  const payload={module:'WORLDCUP',lang,date:$('date').value,text:t('aiInstruction')+"\n\nUser request:\n"+q};
-  if($('fixture').value) payload.fixture=parseInt($('fixture').value,10);
-  if($('team').value) payload.team=parseInt($('team').value,10);
   $('status').textContent=t('running');
   const typing=document.createElement('div');typing.className='typing';typing.innerHTML='<i></i><i></i><i></i>';$('chat').appendChild(typing);$('chat').scrollTop=$('chat').scrollHeight;
+  let ctxText='', apifootball=null;
+  if($('fixture').value){
+    try{
+      const c=await buildFixtureContext($('fixture').value);
+      if(c.summary){ ctxText='\n\n=== LIVE API-FOOTBALL MATCH DATA (ground truth) ===\n'+c.summary; apifootball=c.raw; }
+    }catch(e){}
+  }
+  const payload={module:'WORLDCUP',lang,date:$('date').value,text:t('aiInstruction')+"\n\nUser request:\n"+q+ctxText};
+  if($('fixture').value) payload.fixture=parseInt($('fixture').value,10);
+  if($('team').value) payload.team=parseInt($('team').value,10);
+  if(apifootball) payload.apifootball=apifootball;
   try{
     const res=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const raw=await res.text();typing.remove();
