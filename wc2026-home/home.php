@@ -4460,6 +4460,7 @@ body:before{
             </div>
             <a href="/WC2026/" class="top-link active" data-i18n="navHome">Home</a>
             <a href="/WC2026/matches" class="top-link" data-i18n="navMatches">Matches</a>
+            <a href="/WC2026/teams-map/" class="top-link" data-i18n="navTeamsMap">Teams Map</a>
             <button type="button" class="top-link icon-link" id="openFanFilterBtn" title="Fan Filter Studio">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6h0a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
                 <span data-i18n="navFanFilter">Fan Filter</span>
@@ -6496,7 +6497,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
   var T = {
     en:{
       brandSub:'Prediction League • Daily Goal Rush',themeCatrion:'CATRION',themeSaudi:'Saudi',
-      navHome:'Home',navMatches:'Matches',navLogout:'Logout',
+      navHome:'Home',navMatches:'Matches',navTeamsMap:'Teams Map',navLogout:'Logout',
       heroBadge:'CATRION FIFA WORLD CUP 2026',
       heroTitle:'Cheer with <span>CATRION</span>',
       heroWelcome:'Welcome,',
@@ -6556,7 +6557,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
     },
     ar:{
       brandSub:'دوري التوقعات • تحدي الأهداف اليومي',themeCatrion:'كاتريون',themeSaudi:'السعودية',
-      navHome:'الرئيسية',navMatches:'المباريات',navLogout:'خروج',
+      navHome:'الرئيسية',navMatches:'المباريات',navTeamsMap:'خريطة المنتخبات',navLogout:'خروج',
       heroBadge:'كاتريون · كأس العالم 2026',
       heroTitle:'شجّع مع <span>كاتريون</span>',
       heroWelcome:'مرحبًا،',
@@ -7322,6 +7323,16 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 #knockoutBracketCard .bracket-match.is-finished{border-color:rgba(126,244,174,.42) !important}
 #knockoutBracketCard .bracket-match.is-live{border-color:rgba(233,71,71,.55) !important;box-shadow:0 0 0 1px rgba(233,71,71,.4)}
 #knockoutBracketCard .bracket-grid .bracket-svg{position:absolute;left:0;top:0;pointer-events:none;z-index:0}
+
+/* keep the top-actions / nav above page layers whenever they're showing */
+.nav{position:relative;z-index:30}
+.top-actions{position:relative;z-index:31}
+
+/* smaller footer */
+.wc-footer{padding:12px var(--wide-pad,28px) !important;margin-top:12px !important}
+.wc-footer-inner{gap:10px !important}
+.wc-foot-by b{font-size:12px !important}
+.wc-foot-note{font-size:11px !important}
 
 /* (2) bracket info pop-up — result badge + extra rows */
 .bi-result{margin:0 0 14px;text-align:center}

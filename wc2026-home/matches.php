@@ -746,22 +746,22 @@ body{
 
 /* Footer (consistent CATRION credit) */
 .wc-footer{
-    margin-top:10px;
-    padding:24px 38px;
+    margin-top:12px;
+    padding:12px 38px;
     background:linear-gradient(135deg,#071A35,#0B2C55);
     color:#fff;
 }
 .wc-foot-inner{
-    max-width:1220px;
+    max-width:1680px;
     margin:0 auto;
     display:flex;
     align-items:center;
     justify-content:space-between;
-    gap:16px;
+    gap:12px;
     flex-wrap:wrap;
 }
-.wc-foot-inner b{font-size:14px;font-weight:900}
-.wc-foot-inner span{font-size:12px;font-weight:700;color:rgba(255,255,255,.7)}
+.wc-foot-inner b{font-size:12px;font-weight:900}
+.wc-foot-inner span{font-size:11px;font-weight:700;color:rgba(255,255,255,.7)}
 .empty{
     padding:24px;
     border-radius:22px;
@@ -1540,6 +1540,7 @@ body{
             </div>
             <a href="/WC2026/" class="nav-link" data-i18n="navHome">Home</a>
             <a href="/WC2026/matches" class="nav-link active" data-i18n="navMatches">Matches</a>
+            <a href="/WC2026/teams-map/" class="nav-link" data-i18n="navTeamsMap">Teams Map</a>
             <button type="button" class="nav-link icon-link" id="openFanFilterBtn" title="Fan Filter Studio">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6h0a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
                 <span data-i18n="navFanFilter">Fan Filter</span>
@@ -1911,7 +1912,8 @@ body{
 
 <!-- ===================== home-style nav chrome (toggles, modals) ===================== -->
 <style>
-.top-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.top-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:relative;z-index:31}
+.nav{position:relative;z-index:30}
 .theme-switch,.lang-switch{display:inline-flex;gap:4px;padding:4px;border-radius:999px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.22)}
 .theme-btn,.lang-btn{border:0;border-radius:999px;padding:8px 12px;background:transparent;color:#fff;font-weight:900;font-size:12px;cursor:pointer;font-family:inherit;line-height:1;transition:.2s}
 .theme-btn.active,.lang-btn.active{background:#fff;color:var(--deep)}
@@ -2032,7 +2034,7 @@ html[dir="rtl"] .nav-actions{direction:rtl}
 
   /* ---- language (chrome only) ---- */
   var T={
-    en:{navHome:'Home',navMatches:'Matches',navFanFilter:'Fan Filter',navProfile:'My Profile',navHowTo:'How to Use',navPoints:'Points',navLogout:'Logout',
+    en:{navHome:'Home',navMatches:'Matches',navTeamsMap:'Teams Map',navFanFilter:'Fan Filter',navProfile:'My Profile',navHowTo:'How to Use',navPoints:'Points',navLogout:'Logout',
       heroBadge:'Reading from Database',heroTitle:'Real Matches.<br><span>Real Results.</span>',
       heroIntro:'Browse the official World Cup 2026 match list, live status, upcoming fixtures, and final results. Submit predictions before kickoff and climb the leaderboard.',
       statTotal:'Total Matches',statTotalNote:'Synced fixtures',statUpcoming:'Upcoming',statUpcomingNote:'Open for predictions',statLive:'Live Now',statLiveNote:'Currently playing',statFinished:'Finished',statFinishedNote:'Results available',
@@ -2048,7 +2050,7 @@ html[dir="rtl"] .nav-actions{direction:rtl}
       howStep5t:'Climb the leaderboard',howStep5d:'Collect points from games, predictions and your daily photo to rise up the rankings.',
       pointsTitle:'How to collect points',ptsAction:'Action',ptsReward:'Reward',ptsGoal:'Daily game — score a goal (by zone)',ptsGolden:'Golden ball goal (bonus)',ptsPredWin:'Predict the match winner',ptsPredScore:'Predict the correct score',ptsChampion:'Predict the champion (Final only)',ptsPhoto:'Fan Filter photo (once per day)',
       ptsNote:'Submit predictions before kickoff — points are awarded automatically once the official result is synced. Save your daily Fan Filter photo for the photo bonus.'},
-    ar:{navHome:'الرئيسية',navMatches:'المباريات',navFanFilter:'فلتر المشجع',navProfile:'ملفي',navHowTo:'طريقة الاستخدام',navPoints:'النقاط',navLogout:'خروج',
+    ar:{navHome:'الرئيسية',navMatches:'المباريات',navTeamsMap:'خريطة المنتخبات',navFanFilter:'فلتر المشجع',navProfile:'ملفي',navHowTo:'طريقة الاستخدام',navPoints:'النقاط',navLogout:'خروج',
       heroBadge:'القراءة من قاعدة البيانات',heroTitle:'مباريات حقيقية.<br><span>نتائج حقيقية.</span>',
       heroIntro:'تصفّح قائمة مباريات كأس العالم 2026 الرسمية، والحالة المباشرة، والمباريات القادمة والنتائج النهائية. أرسل توقعاتك قبل انطلاق المباراة وتصدّر لوحة الصدارة.',
       statTotal:'إجمالي المباريات',statTotalNote:'مباريات متزامنة',statUpcoming:'القادمة',statUpcomingNote:'مفتوحة للتوقع',statLive:'مباشر الآن',statLiveNote:'تُلعب حاليًا',statFinished:'منتهية',statFinishedNote:'النتائج متاحة',
