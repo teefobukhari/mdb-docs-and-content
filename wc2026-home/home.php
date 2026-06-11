@@ -4413,7 +4413,7 @@ body:before{
                 <img src="<?= htmlspecialchars($logoPath, ENT_QUOTES, 'UTF-8') ?>" alt="CATRION">
             </div>
             <div>
-                <div class="brand-title">FIFA World Cup 2026 Challenge</div>
+                <div class="brand-title">CATRION FIFA World Cup 2026 Challenge</div>
                 <div class="brand-sub" data-i18n="brandSub">Prediction League • Daily Goal Rush</div>
             </div>
         </div>
@@ -5130,6 +5130,7 @@ body:before{
 
             <div class="ff-pane">
                 <div class="ff-label" data-i18n="ffChooseCountry">Choose Country</div>
+                <input type="text" id="ffCountrySearch" class="ff-search" data-i18n-ph="ffSearchCountry" placeholder="Search country…" autocomplete="off">
                 <div class="ff-countries" id="ffCountries">
                     <?php foreach ($ffCountries as $i => $c): ?>
                         <button type="button" class="ff-chip <?= $i === 0 ? 'active' : '' ?>"
@@ -5235,7 +5236,7 @@ body:before{
             </div>
         </div>
         <div class="wc-foot-note" data-i18n="footerNote">
-            FIFA World Cup 2026 Challenge • Prediction League &amp; Daily Goal Rush
+            CATRION FIFA World Cup 2026 Challenge • Prediction League &amp; Daily Goal Rush
         </div>
     </div>
 </footer>
@@ -6219,7 +6220,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       tapToShoot:'Tap the ball to shoot!',tapHintSub:'Use the moving target line and avoid the goalkeeper',
       startGame:'Start Daily Game',shoot:'Shoot',gameTip:'After start, the ball becomes your shoot button.',
       topLeaderboard:'Top Leaderboard',myProfile:'My Profile',pfName:'Name',pfMobile:'Mobile',pfType:'User Type',pfDays:'Days Played',pfParticipants:'Participants',
-      footerNote:'FIFA World Cup 2026 Challenge • Prediction League & Daily Goal Rush',
+      footerNote:'CATRION FIFA World Cup 2026 Challenge • Prediction League & Daily Goal Rush',
       agentName:'WC2026 Fan Agent',agentStatus:'Online • AI-powered',
       agentFan:'Fan Assistant',agentPredict:'Match Predictor',agentTactical:'Tactical Analyst',agentSummary:'Match Summary',agentCommand:'Command Center',
       agentPlaceholder:'Ask about today’s matches…',
@@ -6240,7 +6241,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       soonBadge:'Coming Soon',soonTitle:'Mystery Box',soonSub:'A surprise World Cup reward drop is on its way. Keep playing and predicting — this box unlocks later in the tournament.',soonCta:'Unlocks Soon',
       ffChooseCountry:'Choose Country',ffChooseFrame:'Choose Frame',ffStartCam:'Start Camera',ffUpload:'Upload Photo',ffCapture:'Capture',ffRetake:'Retake',ffSave:'Save & Download',ffReady:'Start the camera or upload a photo.',ffNeedData:'Add active countries and frames to enable the studio.',
       openWall:'Open Fan Wall',closeWall:'Minimize',ffCardSub:'Create your World Cup fan photo — pick your country, choose a frame, snap a selfie and download.',ffOpenStudio:'Open Studio',newPost:'new',
-      navHowTo:'How to Use',navPoints:'Points'
+      navHowTo:'How to Use',navPoints:'Points',ffSearchCountry:'Search country…'
     },
     ar:{
       brandSub:'دوري التوقعات • تحدي الأهداف اليومي',themeCatrion:'كاتريون',themeSaudi:'السعودية',
@@ -6289,7 +6290,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       soonBadge:'قريبًا',soonTitle:'الصندوق الغامض',soonSub:'مكافأة مفاجئة من كأس العالم في الطريق. واصل اللعب والتوقع — سيُفتح هذا الصندوق لاحقًا خلال البطولة.',soonCta:'يُفتح قريبًا',
       ffChooseCountry:'اختر الدولة',ffChooseFrame:'اختر الإطار',ffStartCam:'تشغيل الكاميرا',ffUpload:'رفع صورة',ffCapture:'التقاط',ffRetake:'إعادة',ffSave:'حفظ وتنزيل',ffReady:'شغّل الكاميرا أو ارفع صورة.',ffNeedData:'أضف دولًا وإطارات نشطة لتفعيل الاستوديو.',
       openWall:'فتح جدار المشجعين',closeWall:'تصغير',ffCardSub:'أنشئ صورتك كمشجع — اختر دولتك، اختر إطارًا، التقط صورة وحمّلها.',ffOpenStudio:'فتح الاستوديو',newPost:'جديد',
-      navHowTo:'طريقة الاستخدام',navPoints:'النقاط'
+      navHowTo:'طريقة الاستخدام',navPoints:'النقاط',ffSearchCountry:'ابحث عن دولة…'
     }
   };
   var lang = (function(){ try{ return localStorage.getItem('wc_lang')||'en'; }catch(e){ return 'en'; } })();
@@ -6657,6 +6658,12 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 
 /* (5) map pin city label */
 .map-pin-city{margin-top:5px;color:#A8E7FF;font-size:11px;font-weight:900;text-align:center;text-transform:uppercase;letter-spacing:.3px}
+
+/* (2) Fan Filter country search */
+.ff-search{width:100%;margin-bottom:10px;min-height:38px;border-radius:10px;border:1px solid rgba(168,231,255,.22);
+    background:rgba(255,255,255,.06);color:#fff;font:inherit;font-size:13px;padding:0 12px}
+.ff-search::placeholder{color:rgba(255,255,255,.5)}
+.ff-countries-empty{padding:8px 2px;color:rgba(255,255,255,.55);font-size:12px;font-weight:700}
 </style>
 
 <script>
@@ -6783,6 +6790,16 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
     }finally{ ffSaveBtn.disabled=false; ffSaveBtn.innerHTML=lbl; }
   });
   d.querySelectorAll('#ffCountries .ff-chip').forEach(function(b){ b.addEventListener('click', function(){ d.querySelectorAll('#ffCountries .ff-chip').forEach(function(x){x.classList.remove('active');}); b.classList.add('active'); }); });
+  // (2) filter countries by name/code
+  var ffSearch=d.getElementById('ffCountrySearch');
+  if(ffSearch) ffSearch.addEventListener('input', function(){
+    var q=ffSearch.value.trim().toLowerCase(), shown=0;
+    d.querySelectorAll('#ffCountries .ff-chip').forEach(function(chip){
+      var name=(chip.textContent||'').toLowerCase(), code=(chip.dataset.code||'').toLowerCase();
+      var ok = !q || name.indexOf(q)>=0 || code.indexOf(q)>=0;
+      chip.style.display = ok ? '' : 'none'; if(ok) shown++;
+    });
+  });
   d.querySelectorAll('#ffFrames .ff-frame').forEach(function(b){ b.addEventListener('click', function(){ d.querySelectorAll('#ffFrames .ff-frame').forEach(function(x){x.classList.remove('active');}); b.classList.add('active'); }); });
 
   /* (10) social wall — UI scaffold posting to /WC2026/api endpoints, degrades gracefully */

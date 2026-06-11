@@ -732,7 +732,7 @@ body{
                 <img src="<?= h($logoPath) ?>" alt="CATRION">
             </div>
             <div>
-                <div class="brand-title">FIFA World Cup 2026 Challenge</div>
+                <div class="brand-title">CATRION FIFA World Cup 2026 Challenge</div>
                 <div class="brand-sub">Real Matches Center</div>
             </div>
         </div>

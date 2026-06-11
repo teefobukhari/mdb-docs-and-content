@@ -13,6 +13,7 @@ $photoPath = null;
 if (!empty($_FILES['photo']) && (int)($_FILES['photo']['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_OK) {
     $f = $_FILES['photo'];
 
+    if (!is_uploaded_file($f['tmp_name'])) fw_fail('Invalid upload.');
     if ((int)$f['size'] > 5 * 1024 * 1024) fw_fail('Image too large (max 5MB).');
 
     $info = @getimagesize($f['tmp_name']);
@@ -27,16 +28,35 @@ if (!empty($_FILES['photo']) && (int)($_FILES['photo']['error'] ?? UPLOAD_ERR_NO
     $ext = $extByMime[$info['mime']] ?? null;
     if ($ext === null) fw_fail('Unsupported image type.');
 
-    $dir = __DIR__ . '/../uploads/fanwall';
-    if (!is_dir($dir) && !@mkdir($dir, 0775, true) && !is_dir($dir)) {
-        fw_fail('Upload directory is not available.');
+    // Resolve a writable destination. Prefer the public document-root path so the
+    // saved web URL matches; fall back to a path relative to this script.
+    $webRel  = '/WC2026/uploads/fanwall';
+    $docRoot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''), '/');
+
+    $candidates = [];
+    if ($docRoot !== '') $candidates[] = $docRoot . $webRel;
+    $candidates[] = realpath(__DIR__ . '/..') . '/uploads/fanwall';
+    $candidates[] = __DIR__ . '/../uploads/fanwall';
+
+    $dir = null;
+    foreach ($candidates as $cand) {
+        if ($cand === '' ) continue;
+        if (!is_dir($cand)) { @mkdir($cand, 0775, true); }
+        if (is_dir($cand) && is_writable($cand)) { $dir = $cand; break; }
+    }
+    if ($dir === null) {
+        fw_fail('Upload folder is not writable. Create "' . $webRel . '" under the web root and chmod it to 775.');
     }
 
     $fileName = 'fw_' . $FW_USER_ID . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
-    if (!@move_uploaded_file($f['tmp_name'], $dir . '/' . $fileName)) {
-        fw_fail('Unable to save the uploaded image.');
+    $dest = rtrim($dir, '/') . '/' . $fileName;
+
+    if (!@move_uploaded_file($f['tmp_name'], $dest) && !@copy($f['tmp_name'], $dest)) {
+        $err = error_get_last();
+        fw_fail('Unable to save the uploaded image to ' . $dir . '. ' . ($err['message'] ?? 'Check folder permissions.'));
     }
-    $photoPath = '/WC2026/uploads/fanwall/' . $fileName;
+    @chmod($dest, 0644);
+    $photoPath = $webRel . '/' . $fileName;
 }
 
 if ($body === '' && $photoPath === null) fw_fail('Nothing to post.');
