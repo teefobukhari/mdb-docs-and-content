@@ -5425,6 +5425,14 @@ body:before{
         <?php else: ?>
             <div class="studio-layout">
                 <section class="preview-card">
+                    <div class="ff-consent-card" id="ffConsentCard">
+                        <div class="ff-consent-title">📸 Photo Capture Consent</div>
+                        <p class="ff-consent-text">By proceeding, you provide explicit consent to display your photo on the internal Fan Wall during the World Cup. Images will be stored temporarily and deleted after the event. CATRION is not responsible for content shared publicly by employees.</p>
+                        <label class="ff-consent-check">
+                            <input type="checkbox" id="ffConsentCheck">
+                            <span>I agree — activate capture</span>
+                        </label>
+                    </div>
                     <div class="section-label">Photo Preview</div>
                     <div class="camera-wrap">
                         <video id="video" autoplay playsinline muted></video>
@@ -5449,7 +5457,6 @@ body:before{
 
                 <aside class="options-card">
                     <div class="option-block">
-                        <div class="section-label">Choose Platform / Size</div>
                         <div class="platform-row" id="platformList">
                             <?php foreach ($ffPlatforms as $index => $platform): ?>
                                 <?php $plogo = wc_platform_logo_path($platform['platform_code'] ?? ''); $pfb = wc_platform_logo_fallback($platform['platform_code'] ?? ''); ?>
@@ -5465,7 +5472,6 @@ body:before{
                     </div>
 
                     <div class="option-block">
-                        <div class="section-label">Choose Country</div>
                         <div class="country-picker" id="countryPicker">
                             <button type="button" class="country-trigger active" id="countryTrigger">
                                 <span class="country-selected">
@@ -5496,7 +5502,6 @@ body:before{
                     </div>
 
                     <div class="option-block">
-                        <div class="section-label">Choose Frame</div>
                         <div class="frame-row" id="frameList">
                             <?php $firstFrameSet = false; ?>
                             <?php foreach ($ffFrames as $frame): ?>
@@ -5518,15 +5523,6 @@ body:before{
                         Selected platform: <strong><?= htmlspecialchars($ffSelectedPlatform['platform_name'] ?? '-', ENT_QUOTES, 'UTF-8') ?></strong><br>
                         Selected country: <strong><?= htmlspecialchars($ffSelectedCountry['country_name'] ?? '-', ENT_QUOTES, 'UTF-8') ?></strong><br>
                         Selected frame: <strong>-</strong>
-                    </div>
-
-                    <div class="ff-consent-card" id="ffConsentCard">
-                        <div class="ff-consent-title">📸 Photo Capture Consent</div>
-                        <p class="ff-consent-text">By proceeding, you provide explicit consent to display your photo on the internal Fan Wall during the World Cup. Images will be stored temporarily and deleted after the event. CATRION is not responsible for content shared publicly by employees.</p>
-                        <label class="ff-consent-check">
-                            <input type="checkbox" id="ffConsentCheck">
-                            <span>I agree — activate capture</span>
-                        </label>
                     </div>
                 </aside>
             </div>
@@ -7016,8 +7012,8 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
 .fanfilter-modal-card{max-width:min(980px,96vw);width:100%;padding:16px}
 .fanfilter-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .fanfilter-modal-tools{display:flex;align-items:center;gap:10px}
-.ff-close{width:34px;height:34px;border:0;border-radius:10px;cursor:pointer;background:rgba(255,255,255,.12);color:#fff;font-size:15px;font-weight:900;line-height:1}
-.ff-close:hover{background:rgba(255,255,255,.2)}
+.ff-close{width:40px;height:40px;flex:none;border:1px solid rgba(255,255,255,.28);border-radius:50%;cursor:pointer;background:rgba(255,255,255,.14);color:#fff;font-size:18px;font-weight:900;line-height:1;display:inline-flex;align-items:center;justify-content:center;transition:.18s}
+.ff-close:hover{background:rgba(233,71,71,.9);border-color:rgba(233,71,71,.95);transform:scale(1.05)}
 .fanfilter-frame{border-radius:18px;overflow:hidden;border:1px solid rgba(168,231,255,.18);background:#05162F;height:74vh}
 .fanfilter-frame iframe{width:100%;height:100%;border:0;display:block}
 @media(max-width:768px){.next24-wrap{margin:16px auto}.fanfilter-frame{height:68vh}}
@@ -7697,6 +7693,8 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
      ".nav/.top-actions" z-index rules, so they use !important. */
   .nav{flex-wrap:wrap;position:relative;z-index:2002 !important}
   .nav-burger{display:inline-flex !important;position:relative;z-index:2005}
+  /* Hide the burger once the drawer is open (close via the dimmed backdrop or Esc). */
+  html.wc-nav-open .nav-burger{display:none !important}
   .top-actions{position:fixed !important;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(82vw,300px);z-index:2000 !important;
     display:flex !important;flex-direction:column;align-items:stretch;gap:10px;overflow-y:auto;-webkit-overflow-scrolling:touch;
     background:#0c1830;border-inline-start:1px solid rgba(168,231,255,.2);border-radius:0;padding:70px 14px 28px;
@@ -7937,6 +7935,11 @@ html[dir="rtl"] #fanFilterModal .ff-consent-text,html[dir="rtl"] #fanFilterModal
     const cameraWrap = document.querySelector('#fanFilterModal .camera-wrap');
     let stream=null, finalImageData='', finalImageBlob=null, currentFacingMode='user', hasCameraStarted=false;
     const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
+    /* Capture is gated behind the photo-capture consent checkbox. */
+    let ffConsentOK=false;
+    const ffConsentCheck=document.getElementById('ffConsentCheck');
+    function ffSyncCapture(){ if(captureBtn) captureBtn.disabled = !(ffConsentOK && stream); }
+    if(ffConsentCheck){ ffConsentCheck.addEventListener('change',function(){ ffConsentOK=ffConsentCheck.checked; ffSyncCapture(); }); }
     window.wcFFStop = function(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; hasCameraStarted=false; } };
     function showMessage(t,x){messageBox.className='message '+(t==='ok'?'ok':'err');messageBox.textContent=x;}
     function clearMessage(){messageBox.className='message';messageBox.textContent='';}
@@ -7963,12 +7966,12 @@ html[dir="rtl"] #fanFilterModal .ff-consent-text,html[dir="rtl"] #fanFilterModal
     function updOverlays(){updFrameOverlay();updFlagOverlay();}
     function updSummary(){const p=selPlatform(),c=selCountry(),f=selFrame();if(selectionSummary)selectionSummary.innerHTML='Selected platform: <strong>'+escapeHtml(p?p.name:'-')+'</strong><br>Selected country: <strong>'+escapeHtml(c?c.name:'-')+'</strong><br>Selected frame: <strong>'+escapeHtml(f?f.name:'-')+'</strong>';}
     function updAspect(){const p=selPlatform();if(!p||!cameraWrap)return;cameraWrap.style.aspectRatio=p.width+' / '+p.height;}
-    function filterFrames(){const p=selPlatform();if(!p)return;let first=null;document.querySelectorAll('#fanFilterModal .frame-choice').forEach(b=>{const m=String(b.dataset.platformId||'')===String(p.id);b.style.display=m?'':'none';b.classList.remove('active');if(m&&!first)first=b;});if(first)first.classList.add('active');updAspect();updSummary();finalImageData='';finalImageBlob=null;previewImage.src='';previewImage.style.display='none';saveDownloadBtn.disabled=true;retakeBtn.disabled=true;if(stream){video.style.display='block';cameraEmpty.style.display='none';captureBtn.disabled=false;}else{video.style.display='none';cameraEmpty.style.display='grid';captureBtn.disabled=true;}updOverlays();clearMessage();}
+    function filterFrames(){const p=selPlatform();if(!p)return;let first=null;document.querySelectorAll('#fanFilterModal .frame-choice').forEach(b=>{const m=String(b.dataset.platformId||'')===String(p.id);b.style.display=m?'':'none';b.classList.remove('active');if(m&&!first)first=b;});if(first)first.classList.add('active');updAspect();updSummary();finalImageData='';finalImageBlob=null;previewImage.src='';previewImage.style.display='none';saveDownloadBtn.disabled=true;retakeBtn.disabled=true;if(stream){video.style.display='block';cameraEmpty.style.display='none';captureBtn.disabled=!ffConsentOK;}else{video.style.display='none';cameraEmpty.style.display='grid';captureBtn.disabled=true;}updOverlays();clearMessage();}
     function loadImage(src){return new Promise((res,rej)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>res(i);i.onerror=()=>rej(new Error('load '+src));i.src=src;});}
     function drawCover(s,x,y,w,h){const sw=s.videoWidth||s.naturalWidth||s.width,sh=s.videoHeight||s.naturalHeight||s.height;if(!sw||!sh)throw new Error('not ready');const r=Math.max(w/sw,h/sh),nw=sw*r,nh=sh*r;ctx.drawImage(s,x+(w-nw)/2,y+(h-nh)/2,nw,nh);}
     function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
     async function compose(source){clearMessage();const p=selPlatform(),c=selCountry(),f=selFrame();if(!p||!c||!f){showMessage('err','Please choose a platform, country and frame first.');return;}canvas.width=p.width;canvas.height=p.height;ctx.clearRect(0,0,canvas.width,canvas.height);try{drawCover(source,0,0,canvas.width,canvas.height);}catch(e){showMessage('err','Camera image is not ready. Please try again.');return;}try{const fr=await loadImage(f.frame);ctx.drawImage(fr,0,0,canvas.width,canvas.height);}catch(e){showMessage('err','Frame image could not be loaded.');return;}try{const fl=await loadImage(c.flag);const flagW=Math.round(canvas.width*0.245),flagH=Math.round(flagW*0.70),mr=Math.round(canvas.width*0.070),bm=Math.round(canvas.height*0.110),tg=Math.round(canvas.height*0.028);const fx=canvas.width-flagW-mr,fy=canvas.height-flagH-bm-tg;ctx.save();ctx.shadowColor='rgba(0,0,0,.25)';ctx.shadowBlur=18;ctx.fillStyle='#fff';roundRect(ctx,fx-10,fy-10,flagW+20,flagH+20,Math.round(canvas.width*0.030));ctx.fill();ctx.restore();ctx.save();roundRect(ctx,fx,fy,flagW,flagH,Math.round(canvas.width*0.022));ctx.clip();ctx.drawImage(fl,fx,fy,flagW,flagH);ctx.restore();ctx.font='900 '+Math.round(canvas.width*0.040)+'px Inter, Arial';ctx.fillStyle='#fff';ctx.textAlign='center';ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=8;ctx.fillText(c.code,fx+flagW/2,fy+flagH+tg);ctx.shadowBlur=0;}catch(e){showMessage('err','Flag image could not be loaded.');return;}finalImageData=canvas.toDataURL('image/jpeg',0.88);finalImageBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.88));if(!finalImageBlob){showMessage('err','Unable to prepare image.');return;}previewImage.src=finalImageData;previewImage.style.display='block';if(liveFrameOverlay)liveFrameOverlay.style.display='none';if(liveFlagOverlay)liveFlagOverlay.style.display='none';canvas.style.display='none';video.style.display='none';cameraEmpty.style.display='none';saveDownloadBtn.disabled=false;retakeBtn.disabled=false;showMessage('ok','Photo created successfully.');}
-    async function startCamera(fm=currentFacingMode){clearMessage();if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){showMessage('err','Camera not supported. Please upload a photo.');return;}try{if(stream)stream.getTracks().forEach(t=>t.stop());currentFacingMode=fm;stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:currentFacingMode},width:{ideal:1080},height:{ideal:1350}},audio:false});video.srcObject=stream;video.style.display='block';updOverlays();previewImage.style.display='none';cameraEmpty.style.display='none';await video.play();captureBtn.disabled=false;retakeBtn.disabled=true;saveDownloadBtn.disabled=true;finalImageData='';finalImageBlob=null;hasCameraStarted=true;updateFlip();}catch(e){hasCameraStarted=!!stream;updateFlip();showMessage('err','Unable to open camera. Allow access or upload a photo.');}}
+    async function startCamera(fm=currentFacingMode){clearMessage();if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){showMessage('err','Camera not supported. Please upload a photo.');return;}try{if(stream)stream.getTracks().forEach(t=>t.stop());currentFacingMode=fm;stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:currentFacingMode},width:{ideal:1080},height:{ideal:1350}},audio:false});video.srcObject=stream;video.style.display='block';updOverlays();previewImage.style.display='none';cameraEmpty.style.display='none';await video.play();captureBtn.disabled=!ffConsentOK;retakeBtn.disabled=true;saveDownloadBtn.disabled=true;finalImageData='';finalImageBlob=null;hasCameraStarted=true;updateFlip();}catch(e){hasCameraStarted=!!stream;updateFlip();showMessage('err','Unable to open camera. Allow access or upload a photo.');}}
     if(countryTrigger&&countryMenu){countryTrigger.addEventListener('click',e=>{e.stopPropagation();countryMenu.classList.toggle('show');if(countryMenu.classList.contains('show')&&countrySearch)setTimeout(()=>countrySearch.focus(),60);});document.addEventListener('click',e=>{const pk=document.getElementById('countryPicker');if(pk&&!pk.contains(e.target))countryMenu.classList.remove('show');});}
     document.querySelectorAll('#fanFilterModal .platform-choice').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#fanFilterModal .platform-choice').forEach(x=>x.classList.remove('active'));b.classList.add('active');filterFrames();}));
     if(countrySearch)countrySearch.addEventListener('input',()=>{const q=countrySearch.value.trim().toLowerCase();let v=0;document.querySelectorAll('#fanFilterModal .country-choice').forEach(b=>{const ok=(b.dataset.search||'').includes(q);b.style.display=ok?'flex':'none';if(ok)v++;});if(noCountryResults)noCountryResults.style.display=v?'none':'block';});
@@ -7978,7 +7981,7 @@ html[dir="rtl"] #fanFilterModal .ff-consent-text,html[dir="rtl"] #fanFilterModal
     if(flipCameraBtn)flipCameraBtn.addEventListener('click',async()=>{if(!isMobileDevice)return;const nf=currentFacingMode==='user'?'environment':'user';flipCameraBtn.disabled=true;try{await startCamera(nf);}finally{updateFlip();}});
     captureBtn.addEventListener('click',()=>{if(!video.srcObject||!video.videoWidth){showMessage('err','Camera is not ready yet.');return;}compose(video);});
     if(uploadPhoto){uploadPhoto.addEventListener('change',()=>{const f=uploadPhoto.files&&uploadPhoto.files[0];if(!f)return;if(!f.type.startsWith('image/')){showMessage('err','Please upload an image file.');return;}const rd=new FileReader();rd.onload=()=>{const im=new Image();im.onload=()=>{if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;hasCameraStarted=false;updateFlip();}compose(im);};im.onerror=()=>showMessage('err','Unable to read photo.');im.src=rd.result;};rd.readAsDataURL(f);});}
-    retakeBtn.addEventListener('click',()=>{finalImageData='';finalImageBlob=null;previewImage.src='';previewImage.style.display='none';saveDownloadBtn.disabled=true;retakeBtn.disabled=true;if(stream){video.style.display='block';updOverlays();cameraEmpty.style.display='none';captureBtn.disabled=false;}else{video.style.display='none';cameraEmpty.style.display='grid';captureBtn.disabled=true;}clearMessage();});
+    retakeBtn.addEventListener('click',()=>{finalImageData='';finalImageBlob=null;previewImage.src='';previewImage.style.display='none';saveDownloadBtn.disabled=true;retakeBtn.disabled=true;if(stream){video.style.display='block';updOverlays();cameraEmpty.style.display='none';captureBtn.disabled=!ffConsentOK;}else{video.style.display='none';cameraEmpty.style.display='grid';captureBtn.disabled=true;}clearMessage();});
     saveDownloadBtn.addEventListener('click',async()=>{if(!finalImageData||!finalImageBlob){showMessage('err','Create your photo first.');return;}const p=selPlatform(),c=selCountry(),f=selFrame();if(!p||!c||!f){showMessage('err','Please choose a platform, country and frame first.');return;}saveDownloadBtn.disabled=true;saveDownloadBtn.textContent='Saving…';try{const fd=new FormData();fd.append('csrf',csrf);fd.append('photo',finalImageBlob,'wc2026-fan-filter.jpg');fd.append('country_id',c.id);fd.append('frame_id',f.id);fd.append('platform_id',p.id);const res=await fetch('/WC/api/save_filter_photo.php',{method:'POST',body:fd,credentials:'same-origin'});const data=await res.json();if(!data.ok)throw new Error(data.message||'Unable to save photo.');downloadFanImage();showMessage('ok','Photo saved and downloaded successfully.');}catch(e){downloadFanImage();showMessage('ok','Photo downloaded. (Server save not reachable.)');}finally{saveDownloadBtn.disabled=false;saveDownloadBtn.textContent='⚽ Save & Download';}});
     window.addEventListener('resize',()=>updFlagOverlay());
     filterFrames();updOverlays();updateFlip();
