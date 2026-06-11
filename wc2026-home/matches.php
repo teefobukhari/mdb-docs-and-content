@@ -1978,6 +1978,26 @@ html[dir="rtl"] .nav-actions{direction:rtl}
 .tm-leaflet .leaflet-popup-tip{background:#0B2C55}
 .tm-leaflet .leaflet-popup-content{font-weight:800;font-size:13px;margin:10px 14px}
 .tm-leaflet .leaflet-popup-content a{color:#A8E7FF;font-weight:900;text-decoration:none}
+/* Rich team popup — football story, stars, key moments */
+.leaflet-popup.tm-pop-wrap .leaflet-popup-content-wrapper{background:#0B2C55;border:1px solid rgba(168,231,255,.22);border-radius:16px}
+.leaflet-popup.tm-pop-wrap .leaflet-popup-tip{background:#0B2C55}
+.tm-pop{color:#fff;font-size:12.5px;line-height:1.55}
+.tm-pop-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.tm-pop-flag{width:34px;height:23px;object-fit:cover;border-radius:4px;box-shadow:0 2px 6px rgba(0,0,0,.4);flex:none}
+.tm-pop-title{display:flex;flex-direction:column;gap:2px}
+.tm-pop-title strong{font-size:15px;font-weight:900;color:#fff}
+.tm-pop-confed{font-size:10px;font-weight:800;letter-spacing:.04em;color:#06202e;background:#A8E7FF;border-radius:999px;padding:1px 8px;width:fit-content}
+.tm-pop-story{margin:0 0 9px;color:rgba(255,255,255,.86);font-weight:600}
+.tm-pop-sec{margin:0 0 8px}
+.tm-pop-lbl{display:block;font-size:11px;font-weight:900;color:#F5C85B;margin-bottom:4px;letter-spacing:.02em}
+.tm-pop-chips{display:flex;flex-wrap:wrap;gap:5px}
+.tm-pop-chip{font-size:11px;font-weight:800;color:#eaf6ff;background:rgba(168,231,255,.14);border:1px solid rgba(168,231,255,.2);border-radius:999px;padding:2px 9px}
+.tm-pop-list{margin:0;padding-inline-start:16px;color:rgba(255,255,255,.82);font-weight:600}
+.tm-pop-list li{margin:1px 0}
+.tm-pop-link{display:inline-block;margin-top:6px;color:#A8E7FF !important;font-weight:900;text-decoration:none}
+html[data-theme="saudi"] .tm-pop-confed{background:#7EF4AE}
+html[data-theme="saudi"] .tm-pop-link{color:#7EF4AE !important}
+html[data-theme="saudi"] .tm-pop-lbl{color:#7EF4AE}
 .tm-pin{border:2px solid rgba(255,255,255,.9);border-radius:50%;overflow:hidden;background:#0B2C55;box-shadow:0 3px 10px rgba(0,0,0,.5)}
 .tm-pin img{width:100%;height:100%;object-fit:cover;display:block}
 html[dir="rtl"] .tm-sub{text-align:right}
@@ -2446,6 +2466,31 @@ html[dir="rtl"] .match-social-mini,html[dir="rtl"] .match-meta{text-align:right}
   if(!el || typeof L==='undefined') return;
   var nations=<?= json_encode($teamsMapNations ?? [], JSON_UNESCAPED_UNICODE) ?>;
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function isAr(){ return document.documentElement.getAttribute('dir')==='rtl'; }
+  function popupHtml(n){
+    var ar=isAr();
+    var story=(ar && n.storyAr) ? n.storyAr : (n.story||'');
+    var L1=ar?{stars:'أبرز النجوم',moments:'لحظات بارزة',fixtures:'عرض المباريات ←',soon:'سيتوفر ملف هذا المنتخب قريباً.'}
+             :{stars:'Key players',moments:'Key moments',fixtures:'View fixtures →',soon:'Full team profile coming soon.'};
+    var h='<div class="tm-pop"'+(ar?' dir="rtl"':'')+'>';
+    h+='<div class="tm-pop-head"><img class="tm-pop-flag" src="https://flagcdn.com/w40/'+esc(n.code)+'.png" alt="">'
+      +'<div class="tm-pop-title"><strong>'+esc(n.name)+'</strong>'
+      +(n.confed?'<span class="tm-pop-confed">'+esc(n.confed)+'</span>':'')+'</div></div>';
+    h+='<p class="tm-pop-story">'+esc(story||L1.soon)+'</p>';
+    if(n.stars&&n.stars.length){
+      h+='<div class="tm-pop-sec"><span class="tm-pop-lbl">★ '+L1.stars+'</span><div class="tm-pop-chips">';
+      n.stars.forEach(function(s){ h+='<span class="tm-pop-chip">'+esc(s)+'</span>'; });
+      h+='</div></div>';
+    }
+    if(n.moments&&n.moments.length){
+      h+='<div class="tm-pop-sec"><span class="tm-pop-lbl">🏆 '+L1.moments+'</span><ul class="tm-pop-list">';
+      n.moments.forEach(function(s){ h+='<li>'+esc(s)+'</li>'; });
+      h+='</ul></div>';
+    }
+    h+='<a class="tm-pop-link" href="/WC2026/matches?q='+encodeURIComponent(n.name)+'">'+L1.fixtures+'</a>';
+    h+='</div>';
+    return h;
+  }
   var map=L.map(el,{zoomControl:true,scrollWheelZoom:false,worldCopyJump:true}).setView([25,10],2);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
     maxZoom:9,minZoom:1,
@@ -2459,7 +2504,7 @@ html[dir="rtl"] .match-social-mini,html[dir="rtl"] .match-meta{text-align:right}
       iconSize:[30,30], iconAnchor:[15,15]
     });
     var m=L.marker([n.lat,n.lng],{icon:icon,title:n.name}).addTo(map);
-    m.bindPopup('<strong>'+esc(n.name)+'</strong><br><a href="/WC2026/matches?q='+encodeURIComponent(n.name)+'">View fixtures →</a>');
+    m.bindPopup(function(){ return popupHtml(n); },{maxWidth:300,minWidth:240,className:'tm-pop-wrap'});
     bounds.push([n.lat,n.lng]);
   });
   if(bounds.length) map.fitBounds(bounds,{padding:[30,30],maxZoom:4});

@@ -4,7 +4,12 @@
  * Builds a JSON list of the nations found in wc_fixtures, each resolved to an
  * ISO flag code + capital/centroid coordinates, so the home + matches pages can
  * render a real Leaflet map of the qualified teams (no external teams-map page).
+ *
+ * Each nation is also enriched with its football story, star players and key
+ * moments (see teams_data.php) so the map popups show real detail when tapped.
  */
+
+require_once __DIR__ . '/teams_data.php';
 
 if (!function_exists('wc_tm_country_code')) {
     function wc_tm_country_code(string $name): string {
@@ -40,6 +45,50 @@ if (!function_exists('wc_tm_latlng')) {
     }
 }
 
+if (!function_exists('wc_tm_name')) {
+    /** English display name for a flag code (used by the standalone Teams-Map page). */
+    function wc_tm_name(string $code): string {
+        static $n = [
+            'us'=>'United States','ca'=>'Canada','mx'=>'Mexico','cr'=>'Costa Rica','pa'=>'Panama','jm'=>'Jamaica','hn'=>'Honduras','sv'=>'El Salvador','gt'=>'Guatemala','cw'=>'Curaçao','tt'=>'Trinidad & Tobago','ht'=>'Haiti','sr'=>'Suriname',
+            'ar'=>'Argentina','br'=>'Brazil','uy'=>'Uruguay','co'=>'Colombia','cl'=>'Chile','pe'=>'Peru','py'=>'Paraguay','ec'=>'Ecuador','ve'=>'Venezuela','bo'=>'Bolivia',
+            'fr'=>'France','es'=>'Spain','de'=>'Germany','pt'=>'Portugal','gb-eng'=>'England','gb-sct'=>'Scotland','gb-wls'=>'Wales','nl'=>'Netherlands','be'=>'Belgium','it'=>'Italy','hr'=>'Croatia','ch'=>'Switzerland','dk'=>'Denmark','se'=>'Sweden','no'=>'Norway','pl'=>'Poland','at'=>'Austria','rs'=>'Serbia','ua'=>'Ukraine','cz'=>'Czechia','tr'=>'Türkiye','gr'=>'Greece','hu'=>'Hungary','ro'=>'Romania','si'=>'Slovenia','sk'=>'Slovakia','is'=>'Iceland','ie'=>'Ireland','al'=>'Albania','ba'=>'Bosnia & Herzegovina','mk'=>'North Macedonia','ge'=>'Georgia',
+            'jp'=>'Japan','kr'=>'South Korea','au'=>'Australia','sa'=>'Saudi Arabia','qa'=>'Qatar','ir'=>'Iran','iq'=>'Iraq','ae'=>'United Arab Emirates','jo'=>'Jordan','om'=>'Oman','uz'=>'Uzbekistan','cn'=>'China','in'=>'India','id'=>'Indonesia','ps'=>'Palestine','bh'=>'Bahrain','kw'=>'Kuwait','vn'=>'Vietnam','th'=>'Thailand',
+            'ma'=>'Morocco','sn'=>'Senegal','gh'=>'Ghana','ng'=>'Nigeria','cm'=>'Cameroon','eg'=>'Egypt','dz'=>'Algeria','tn'=>'Tunisia','ci'=>'Ivory Coast','za'=>'South Africa','ml'=>'Mali','cv'=>'Cape Verde','gn'=>'Guinea','cd'=>'DR Congo','ga'=>'Gabon','ao'=>'Angola','zm'=>'Zambia','bf'=>'Burkina Faso','gq'=>'Equatorial Guinea',
+            'nz'=>'New Zealand','fj'=>'Fiji','pg'=>'Papua New Guinea','nc'=>'New Caledonia','pf'=>'Tahiti',
+        ];
+        $code = strtolower(trim($code));
+        return $n[$code] ?? strtoupper($code);
+    }
+}
+
+if (!function_exists('wc_tm_all_nations')) {
+    /**
+     * DB-independent list of every nation that has both coordinates and a story.
+     * Used by the standalone /teams-map/ page so it works without a DB connection.
+     * @return array<int,array<string,mixed>>
+     */
+    function wc_tm_all_nations(): array {
+        $out = [];
+        foreach (wc_team_meta() as $code => $meta) {
+            $ll = wc_tm_latlng($code);
+            if (!$ll) continue;
+            $out[] = [
+                'name'    => wc_tm_name($code),
+                'code'    => $code,
+                'lat'     => $ll[0],
+                'lng'     => $ll[1],
+                'confed'  => $meta['confed']  ?? '',
+                'story'   => $meta['story']   ?? '',
+                'storyAr' => $meta['story_ar']?? '',
+                'stars'   => $meta['stars']   ?? [],
+                'moments' => $meta['moments'] ?? [],
+            ];
+        }
+        usort($out, fn($a,$b)=>strcmp($a['name'],$b['name']));
+        return $out;
+    }
+}
+
 if (!function_exists('wc_teams_map_nations')) {
     /** @return array<int,array{name:string,code:string,lat:float,lng:float}> */
     function wc_teams_map_nations($conn): array {
@@ -63,7 +112,18 @@ if (!function_exists('wc_teams_map_nations')) {
             if (!$ll) continue;
             if (isset($seen[$code])) continue;
             $seen[$code] = true;
-            $out[] = ['name' => $nm, 'code' => $code, 'lat' => $ll[0], 'lng' => $ll[1]];
+            $meta = wc_team_meta($code);
+            $out[] = [
+                'name'    => $nm,
+                'code'    => $code,
+                'lat'     => $ll[0],
+                'lng'     => $ll[1],
+                'confed'  => $meta['confed']  ?? '',
+                'story'   => $meta['story']   ?? '',
+                'storyAr' => $meta['story_ar']?? '',
+                'stars'   => $meta['stars']   ?? [],
+                'moments' => $meta['moments'] ?? [],
+            ];
         }
         return $out;
     }
