@@ -4433,6 +4433,8 @@ body:before{
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6h0a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
                 <span data-i18n="navFanFilter">Fan Filter</span>
             </button>
+            <button type="button" class="top-link" id="howToBtn" data-i18n="navHowTo">How to Use</button>
+            <button type="button" class="top-link" id="pointsBtn" data-i18n="navPoints">Points</button>
             <button type="button" class="top-link" id="openProfileBtn" data-i18n="navProfile">My Profile</button>
             <form method="POST" action="/WC2026/" style="margin:0;">
                 <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
@@ -4646,6 +4648,7 @@ body:before{
                     <button type="submit" class="match-link primary" data-i18n="post">Post</button>
                 </div>
             </form>
+            <div class="social-error" id="socialError"></div>
             <div class="social-feed" id="socialFeed" data-endpoint="/WC2026/api/social_feed.php">
                 <div class="social-loading" data-i18n="socialLoading">Loading the fan wall…</div>
             </div>
@@ -4740,6 +4743,8 @@ body:before{
                                     <span><?= htmlspecialchars(mb_substr(wc_safe_team($mp['away_team']), 0, 3), ENT_QUOTES, 'UTF-8') ?></span>
                                 </div>
                             </div>
+                            <?php $mpLoc = trim((string)($mp['city'] ?? '') . (!empty($mp['stadium']) ? ' • ' . $mp['stadium'] : '')); ?>
+                            <?php if ($mpLoc !== ''): ?><div class="map-pin-city">📍 <?= htmlspecialchars($mpLoc, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
                             <div class="map-pin-time">
                                 <?= htmlspecialchars(date('d M Y - h:i A', strtotime((string)$mp['match_datetime'])), ENT_QUOTES, 'UTF-8') ?>
                             </div>
@@ -5151,6 +5156,45 @@ body:before{
             </div>
         </div>
         <?php endif; ?>
+    </div>
+</div>
+
+<!-- (3) How to Use pop-up -->
+<div class="modal" id="howToModal">
+    <div class="modal-card">
+        <div class="modal-kicker" data-i18n="navHowTo">How to Use</div>
+        <h3 data-i18n="howToTitle">Get started in 5 steps</h3>
+        <ul class="help-list">
+            <li class="help-item"><span class="help-num">1</span><div><b data-i18n="howStep1t">Play the Daily Goal Rush</b><span data-i18n="howStep1d">Tap the ball (or press Space) to shoot. Aim with the moving target line, beat the goalkeeper, and score as many goals as you can in 30 seconds — once per day.</span></div></li>
+            <li class="help-item"><span class="help-num">2</span><div><b data-i18n="howStep2t">Predict real matches</b><span data-i18n="howStep2d">Open Matches or the “Next Matches · 24h” cards, enter your score prediction, and submit before kickoff. Predictions lock the moment the match starts.</span></div></li>
+            <li class="help-item"><span class="help-num">3</span><div><b data-i18n="howStep3t">Create a Fan Filter photo</b><span data-i18n="howStep3d">Open the Fan Filter Studio, pick your country and a frame, snap a selfie or upload a photo, then save & download it.</span></div></li>
+            <li class="help-item"><span class="help-num">4</span><div><b data-i18n="howStep4t">Join the Fan Wall</b><span data-i18n="howStep4d">Post your moment, like and comment on others. New posts appear in the notification bar at the top.</span></div></li>
+            <li class="help-item"><span class="help-num">5</span><div><b data-i18n="howStep5t">Climb the leaderboard</b><span data-i18n="howStep5d">Collect points from games, predictions and your daily photo to rise up the weekly and overall rankings.</span></div></li>
+        </ul>
+        <button class="primary-btn" type="button" id="howToClose" data-i18n="close">Close</button>
+    </div>
+</div>
+
+<!-- (4) How to collect points pop-up -->
+<div class="modal" id="pointsModal">
+    <div class="modal-card">
+        <div class="modal-kicker" data-i18n="navPoints">Points</div>
+        <h3 data-i18n="pointsTitle">How to collect points</h3>
+        <table class="pts-table">
+            <thead><tr><th data-i18n="ptsAction">Action</th><th data-i18n="ptsReward">Reward</th></tr></thead>
+            <tbody>
+                <tr><td data-i18n="ptsGoal">Daily game — score a goal (by zone)</td><td><b>+10 / +20 / +30</b></td></tr>
+                <tr><td data-i18n="ptsGolden">Golden ball goal (bonus)</td><td><b>+50</b></td></tr>
+                <tr><td data-i18n="ptsCombo">Combo streak (every 3 / 5 goals)</td><td><b>+20 / +50</b></td></tr>
+                <tr><td data-i18n="ptsMystery">Daily food bonus roll</td><td><b>+10 → +100</b></td></tr>
+                <tr><td data-i18n="ptsPredWin">Predict the match winner</td><td><b>+<?= WC_PTS_PREDICT_WINNER ?></b></td></tr>
+                <tr><td data-i18n="ptsPredScore">Predict the correct score</td><td><b>+<?= WC_PTS_PREDICT_SCORE ?></b></td></tr>
+                <tr><td data-i18n="ptsChampion">Predict the champion (Final only)</td><td><b>+<?= WC_PTS_PREDICT_CHAMPION ?></b></td></tr>
+                <tr><td data-i18n="ptsPhoto">Fan Filter photo (once per day)</td><td><b>+<?= WC_PTS_PHOTO ?></b></td></tr>
+            </tbody>
+        </table>
+        <p class="pts-note" data-i18n="ptsNote">Procedure: 1) Play the daily game and bank your goal + bonus points. 2) Submit predictions before kickoff — points are awarded automatically once the official result is synced. 3) Save your daily Fan Filter photo. Weekly score resets every week; overall score is cumulative across the tournament.</p>
+        <button class="primary-btn" type="button" id="pointsClose" data-i18n="close">Close</button>
     </div>
 </div>
 
@@ -6195,7 +6239,8 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       fanFilterTitle:'Fan Filter Studio',openFull:'Open full page',
       soonBadge:'Coming Soon',soonTitle:'Mystery Box',soonSub:'A surprise World Cup reward drop is on its way. Keep playing and predicting — this box unlocks later in the tournament.',soonCta:'Unlocks Soon',
       ffChooseCountry:'Choose Country',ffChooseFrame:'Choose Frame',ffStartCam:'Start Camera',ffUpload:'Upload Photo',ffCapture:'Capture',ffRetake:'Retake',ffSave:'Save & Download',ffReady:'Start the camera or upload a photo.',ffNeedData:'Add active countries and frames to enable the studio.',
-      openWall:'Open Fan Wall',closeWall:'Minimize',ffCardSub:'Create your World Cup fan photo — pick your country, choose a frame, snap a selfie and download.',ffOpenStudio:'Open Studio',newPost:'new'
+      openWall:'Open Fan Wall',closeWall:'Minimize',ffCardSub:'Create your World Cup fan photo — pick your country, choose a frame, snap a selfie and download.',ffOpenStudio:'Open Studio',newPost:'new',
+      navHowTo:'How to Use',navPoints:'Points'
     },
     ar:{
       brandSub:'دوري التوقعات • تحدي الأهداف اليومي',themeCatrion:'كاتريون',themeSaudi:'السعودية',
@@ -6243,7 +6288,8 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       fanFilterTitle:'استوديو فلتر المشجع',openFull:'فتح الصفحة كاملة',
       soonBadge:'قريبًا',soonTitle:'الصندوق الغامض',soonSub:'مكافأة مفاجئة من كأس العالم في الطريق. واصل اللعب والتوقع — سيُفتح هذا الصندوق لاحقًا خلال البطولة.',soonCta:'يُفتح قريبًا',
       ffChooseCountry:'اختر الدولة',ffChooseFrame:'اختر الإطار',ffStartCam:'تشغيل الكاميرا',ffUpload:'رفع صورة',ffCapture:'التقاط',ffRetake:'إعادة',ffSave:'حفظ وتنزيل',ffReady:'شغّل الكاميرا أو ارفع صورة.',ffNeedData:'أضف دولًا وإطارات نشطة لتفعيل الاستوديو.',
-      openWall:'فتح جدار المشجعين',closeWall:'تصغير',ffCardSub:'أنشئ صورتك كمشجع — اختر دولتك، اختر إطارًا، التقط صورة وحمّلها.',ffOpenStudio:'فتح الاستوديو',newPost:'جديد'
+      openWall:'فتح جدار المشجعين',closeWall:'تصغير',ffCardSub:'أنشئ صورتك كمشجع — اختر دولتك، اختر إطارًا، التقط صورة وحمّلها.',ffOpenStudio:'فتح الاستوديو',newPost:'جديد',
+      navHowTo:'طريقة الاستخدام',navPoints:'النقاط'
     }
   };
   var lang = (function(){ try{ return localStorage.getItem('wc_lang')||'en'; }catch(e){ return 'en'; } })();
@@ -6253,9 +6299,10 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
   function applyLang(l){
     lang = (l==='ar')?'ar':'en';
     root.lang = lang; root.dir = (lang==='ar')?'rtl':'ltr';
-    d.querySelectorAll('[data-i18n]').forEach(function(el){ var v=tr(el.getAttribute('data-i18n')); if(v!=null) el.textContent=v; });
-    d.querySelectorAll('[data-i18n-html]').forEach(function(el){ var v=tr(el.getAttribute('data-i18n-html')); if(v!=null) el.innerHTML=v; });
-    d.querySelectorAll('[data-i18n-ph]').forEach(function(el){ var v=tr(el.getAttribute('data-i18n-ph')); if(v!=null) el.setAttribute('placeholder',v); });
+    var known=function(k){ return T.en[k]!=null; };
+    d.querySelectorAll('[data-i18n]').forEach(function(el){ var k=el.getAttribute('data-i18n'); if(known(k)) el.textContent=tr(k); });
+    d.querySelectorAll('[data-i18n-html]').forEach(function(el){ var k=el.getAttribute('data-i18n-html'); if(known(k)) el.innerHTML=tr(k); });
+    d.querySelectorAll('[data-i18n-ph]').forEach(function(el){ var k=el.getAttribute('data-i18n-ph'); if(known(k)) el.setAttribute('placeholder',tr(k)); });
     d.querySelectorAll('.lang-btn').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-lang-set')===lang); });
     try{ localStorage.setItem('wc_lang', lang); }catch(e){}
     if (typeof renderAgentGreeting==='function') renderAgentGreeting();
@@ -6579,6 +6626,37 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .bi-row:last-child{border-bottom:0}
 .bi-row span{color:rgba(255,255,255,.66);font-weight:700}.bi-row b{color:#fff;font-weight:900;text-align:end}
 #bracketInfoModal .primary-btn{width:100%}
+
+/* ===== v6 ===== */
+/* (1) stop Next Matches from overlapping the banner: drop the hero/container overlap */
+.hero{padding-bottom:44px !important}
+.container{margin-top:22px !important}
+.next24-wrap{margin-top:0 !important}
+
+/* (2) Fan Wall posting error surface */
+.social-error{display:none;margin:0 0 14px;border-radius:12px;padding:11px 13px;font-weight:800;font-size:13px;
+    background:rgba(233,71,71,.16);color:#FFB4B4;border:1px solid rgba(233,71,71,.35)}
+.social-error.show{display:block}
+
+/* (3)+(4) How-to / Points info pop-ups (base .modal-card is white -> force dark) */
+#howToModal .modal-card,#pointsModal .modal-card{background:linear-gradient(150deg,#0B2C55,#071A35) !important;border:1px solid rgba(168,231,255,.2) !important;color:#fff;max-width:580px}
+#howToModal .modal-kicker,#pointsModal .modal-kicker{color:var(--cyan) !important}
+#howToModal h3,#pointsModal h3{color:#fff !important}
+.help-list{list-style:none;margin:6px 0 18px;padding:0;display:flex;flex-direction:column;gap:12px;max-height:60vh;overflow:auto}
+.help-item{display:flex;gap:12px;align-items:flex-start}
+.help-num{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:900;font-size:13px;color:#06202e;background:linear-gradient(135deg,#F5C85B,#FFE19A)}
+.help-item b{display:block;color:#fff;font-size:14px;margin-bottom:2px}
+.help-item span{color:rgba(255,255,255,.72);font-size:13px;line-height:1.55}
+.pts-table{width:100%;border-collapse:collapse;margin:6px 0 16px}
+.pts-table th,.pts-table td{text-align:start;padding:10px 8px;border-bottom:1px solid rgba(168,231,255,.14);font-size:13px}
+.pts-table th{color:rgba(255,255,255,.6);font-weight:800;text-transform:uppercase;font-size:11px;letter-spacing:.4px}
+.pts-table td{color:#fff;font-weight:700}
+.pts-table td b{color:#FFE19A;font-weight:900}
+.pts-note{color:rgba(255,255,255,.66);font-size:12px;line-height:1.6;margin:0 0 16px}
+#howToModal .primary-btn,#pointsModal .primary-btn{width:100%}
+
+/* (5) map pin city label */
+.map-pin-city{margin-top:5px;color:#A8E7FF;font-size:11px;font-weight:900;text-align:center;text-transform:uppercase;letter-spacing:.3px}
 </style>
 
 <script>
@@ -6611,6 +6689,19 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
   var cb=d.getElementById('closeProfileBtn'); if(cb) cb.addEventListener('click', closeProfile);
   if(pModal) pModal.addEventListener('click', function(e){ if(e.target===pModal) closeProfile(); });
   d.addEventListener('keydown', function(e){ if(e.key==='Escape') closeProfile(); });
+
+  /* (3)+(4) How-to / Points pop-ups */
+  function bindModal(openId, modalId, closeId){
+    var m=d.getElementById(modalId), o=d.getElementById(openId), c=d.getElementById(closeId);
+    function open(){ if(m){ m.classList.add('active'); wcAudit('open_'+modalId); } }
+    function close(){ if(m) m.classList.remove('active'); }
+    if(o) o.addEventListener('click', open);
+    if(c) c.addEventListener('click', close);
+    if(m) m.addEventListener('click', function(e){ if(e.target===m) close(); });
+    d.addEventListener('keydown', function(e){ if(e.key==='Escape') close(); });
+  }
+  bindModal('howToBtn','howToModal','howToClose');
+  bindModal('pointsBtn','pointsModal','pointsClose');
 
   /* (3) audit prediction clicks */
   d.querySelectorAll('.next24-actions a.primary').forEach(function(a){ a.addEventListener('click', function(){ wcAudit('open_prediction', a.getAttribute('href')||''); }); });
@@ -6780,29 +6871,30 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
   }
   if(photoInput){ photoInput.addEventListener('change', function(){ photoName.textContent=(photoInput.files&&photoInput.files[0])?photoInput.files[0].name:''; }); }
   var myName='<?= htmlspecialchars($name, ENT_QUOTES, "UTF-8") ?>';
-  function afterPost(body){
-    pushNotify(myName, body);   // (7) surface in the notification bar
-    setWall(true);              // (8) reveal the wall so the user sees their post
+  var socialErr=d.getElementById('socialError');
+  function showSocialErr(msg){ if(socialErr){ socialErr.textContent=msg; socialErr.classList.add('show'); } }
+  function clearSocialErr(){ if(socialErr){ socialErr.textContent=''; socialErr.classList.remove('show'); } }
+  function afterPost(post){
+    if(feed.querySelector('.social-empty')||feed.querySelector('.social-loading')) feed.innerHTML='';
+    feed.insertBefore(renderPost(post), feed.firstChild);
+    pushNotify(post.name, post.body);   // (7) surface in the notification bar
+    setWall(true);                       // (8) reveal the wall so the user sees their post
     textArea.value=''; if(photoInput){ photoInput.value=''; photoName.textContent=''; }
   }
   if(composer){
-    composer.addEventListener('submit', function(e){ e.preventDefault();
+    composer.addEventListener('submit', function(e){ e.preventDefault(); clearSocialErr();
       var body=(textArea.value||'').trim(); var hasPhoto=photoInput && photoInput.files && photoInput.files[0];
       if(!body && !hasPhoto) return;
       var fd=new FormData(composer);
       wcAudit('social_post', body.slice(0,60));
       fetch('/WC2026/api/social_post.php',{method:'POST',body:fd,credentials:'same-origin'})
-        .then(function(r){ return r.json(); })
-        .then(function(data){
-          if(data && data.ok && data.post){ if(feed.querySelector('.social-empty')||feed.querySelector('.social-loading')) feed.innerHTML=''; feed.insertBefore(renderPost(data.post), feed.firstChild); }
-          else { /* optimistic local add */ if(feed.querySelector('.social-empty')||feed.querySelector('.social-loading')) feed.innerHTML=''; feed.insertBefore(renderPost({id:'tmp',name:myName,body:body,photo:hasPhoto?URL.createObjectURL(photoInput.files[0]):'',likes:0,liked:false,comments:[],created_at:tr('justNow')}), feed.firstChild); }
-          afterPost(body);
+        .then(function(r){ return r.text(); })
+        .then(function(txt){
+          var data; try{ data=JSON.parse(txt); }catch(e){ showSocialErr('Server did not return JSON (endpoint missing or error). Check /WC2026/api/social_post.php and run sql/wc2026_fan_wall.sql.'); return; }
+          if(data && data.ok && data.post){ afterPost(data.post); }
+          else { showSocialErr((data && data.message) ? ('Could not post: '+data.message) : 'Could not save your post. Make sure the Fan Wall tables exist (sql/wc2026_fan_wall.sql).'); }
         })
-        .catch(function(){
-          if(feed.querySelector('.social-empty')||feed.querySelector('.social-loading')) feed.innerHTML='';
-          feed.insertBefore(renderPost({id:'tmp',name:myName,body:body,photo:hasPhoto?URL.createObjectURL(photoInput.files[0]):'',likes:0,liked:false,comments:[],created_at:tr('justNow')}), feed.firstChild);
-          afterPost(body);
-        });
+        .catch(function(){ showSocialErr('Could not reach the server. Your post was not saved.'); });
     });
   }
   loadFeed();

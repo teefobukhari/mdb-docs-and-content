@@ -578,6 +578,30 @@ body.popup-mode .notice.ok{
         width:100%;
     }
 }
+/* ===== Home-style dark theme (match home.php look & feel) ===== */
+html{background:#04142B}
+body{
+    background:
+        radial-gradient(circle at 8% 8%, rgba(85,183,255,.16), transparent 30%),
+        radial-gradient(circle at 92% 8%, rgba(14,99,230,.28), transparent 34%),
+        linear-gradient(180deg,#04142B 0%,#071F42 45%,#04142B 100%) !important;
+    color:#fff !important;
+}
+body.popup-mode{background:#0c1830 !important}
+.card{background:linear-gradient(135deg,#061A36,#08254D 58%,#0A3A76) !important;border:1px solid rgba(168,231,255,.18) !important;color:#fff !important;box-shadow:0 24px 60px rgba(0,0,0,.28) !important}
+body.popup-mode .card{background:transparent !important}
+.popup-title,.form-title{color:#fff !important}
+.score-input label{color:rgba(255,255,255,.7) !important}
+.score-input input{background:rgba(255,255,255,.06) !important;border:1px solid rgba(168,231,255,.2) !important;color:#fff !important}
+.score-input input:focus{border-color:#55B7FF !important;box-shadow:0 0 0 4px rgba(85,183,255,.18) !important}
+.score-sep{color:rgba(255,255,255,.6) !important}
+.prediction-summary{background:rgba(255,255,255,.06) !important;border:1px solid rgba(168,231,255,.18) !important;color:#fff !important}
+.prediction-summary strong{color:#FFE19A}
+.btn-soft{background:rgba(255,255,255,.12) !important;color:#fff !important}
+.notice.ok{background:rgba(17,163,106,.18) !important;color:#7EF4AE !important;border-color:rgba(17,163,106,.3) !important}
+.notice.warn{background:rgba(245,200,91,.14) !important;color:#FFE19A !important;border-color:rgba(245,200,91,.3) !important}
+.notice.bad{background:rgba(233,71,71,.16) !important;color:#FFB4B4 !important;border-color:rgba(233,71,71,.3) !important}
+.match-box{border:1px solid rgba(168,231,255,.18)}
 </style>
 </head>
 

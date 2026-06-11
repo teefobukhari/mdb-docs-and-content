@@ -683,6 +683,44 @@ body{
         font-size:18px;
     }
 }
+/* ===== Home-style dark theme (match home.php look & feel) ===== */
+html{background:#04142B}
+body{
+    background:
+        radial-gradient(circle at 8% 8%, rgba(85,183,255,.16), transparent 30%),
+        radial-gradient(circle at 92% 8%, rgba(14,99,230,.28), transparent 34%),
+        linear-gradient(180deg,#04142B 0%,#071F42 45%,#04142B 100%) !important;
+    color:#fff !important;
+}
+.hero{
+    background:
+        radial-gradient(circle at 72% 18%, rgba(14,99,230,.36), transparent 32%),
+        radial-gradient(circle at 15% 28%, rgba(85,183,255,.16), transparent 30%),
+        linear-gradient(135deg,#04142B 0%,#08254D 48%,#0E63E6 100%) !important;
+}
+.nav,.hero-content,.container{max-width:1680px !important}
+.stat{background:linear-gradient(180deg,#FFFFFF,#F7FAFF) !important;box-shadow:0 18px 48px rgba(0,0,0,.18) !important}
+.card{background:linear-gradient(135deg,#061A36,#08254D 58%,#0A3A76) !important;border:1px solid rgba(168,231,255,.18) !important;color:#fff !important;box-shadow:0 24px 60px rgba(0,0,0,.28) !important}
+.card-title{color:#fff !important}
+.tab{background:rgba(255,255,255,.08) !important;color:#fff !important;border:1px solid rgba(168,231,255,.18)}
+.tab.active{background:linear-gradient(135deg,#F5C85B,#FFE19A) !important;color:#071A35 !important}
+.search input{background:rgba(255,255,255,.06) !important;border:1px solid rgba(168,231,255,.2) !important;color:#fff !important}
+.search input::placeholder{color:rgba(255,255,255,.5)}
+.search button{background:linear-gradient(135deg,#F5C85B,#FFE19A) !important;color:#071A35 !important}
+.match-card{background:linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.02)) !important;border:1px solid rgba(168,231,255,.16) !important}
+.match-card:before{display:none}
+.round{color:rgba(255,255,255,.6) !important}
+.team-name{color:#fff !important}
+.team-logo{background:rgba(255,255,255,.92) !important}
+.match-meta{color:rgba(255,255,255,.6) !important;border-top:1px solid rgba(168,231,255,.12) !important}
+.status.upcoming{background:rgba(85,183,255,.18) !important;color:#A8E7FF !important}
+.status.finished{background:rgba(255,255,255,.1) !important;color:rgba(255,255,255,.7) !important}
+.details-btn{background:rgba(255,255,255,.12) !important;color:#fff !important;border:1px solid rgba(168,231,255,.18)}
+.empty{background:rgba(245,200,91,.12) !important;border-color:rgba(245,200,91,.3) !important;color:#FFE19A !important}
+.predict-popup-card{background:#0c1830 !important}
+.predict-popup-top{background:#0c1830 !important;color:#fff !important;border-bottom:1px solid rgba(168,231,255,.14) !important}
+.predict-popup-close{background:rgba(255,255,255,.12) !important;color:#fff !important}
+.predict-popup iframe{background:#0c1830 !important}
 </style>
 </head>
 <body>
