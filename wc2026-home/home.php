@@ -5033,6 +5033,12 @@ body:before{
                     <span class="legend-item"><i class="legend-bullet live"></i> <span data-i18n="legendLive2">Live</span></span>
                 </div>
 
+                <div class="bracket-zoom" role="group" aria-label="Bracket zoom">
+                    <button type="button" class="bracket-zoom-btn" id="bracketZoomOut" aria-label="Zoom out" title="Zoom out">−</button>
+                    <button type="button" class="bracket-zoom-btn bracket-zoom-reset" id="bracketZoomReset" aria-label="Reset zoom" title="Fit">⤢</button>
+                    <button type="button" class="bracket-zoom-btn" id="bracketZoomIn" aria-label="Zoom in" title="Zoom in">+</button>
+                </div>
+
                 <button type="button" class="bracket-more-btn" id="bracketMoreBtn">
                     <span data-i18n="more">MORE</span> <span>→</span>
                 </button>
@@ -5041,7 +5047,7 @@ body:before{
 
         <div class="bracket-shell" id="bracketShell">
             <?php if ($knockoutTotal > 0): ?>
-                <div class="bracket-grid">
+                <div class="bracket-grid" id="bracketGrid">
                     <?php foreach ($knockoutStages as $stageName => $stageMatches): ?>
                         <?php if ($stageName === 'Knockout' && empty($stageMatches)) continue; ?>
                         <div class="bracket-col">
@@ -6198,6 +6204,38 @@ document.addEventListener('DOMContentLoaded', function(){
     if (moreBtn) moreBtn.addEventListener('click', toggleBracket);
     if (showFullBtn) showFullBtn.addEventListener('click', toggleBracket);
 
+    /* zoom + scroll control */
+    var bracketGrid = document.getElementById('bracketGrid');
+    var bracketZoom = 1;
+    var BZ_MIN = 1, BZ_MAX = 2.6, BZ_STEP = 0.25;
+    function applyBracketZoom(){
+        if(!bracketGrid) return;
+        var natW = bracketGrid.offsetWidth, natH = bracketGrid.offsetHeight;
+        bracketGrid.style.transformOrigin = '0 0';
+        bracketGrid.style.transform = bracketZoom === 1 ? '' : 'scale(' + bracketZoom + ')';
+        // reserve the extra scaled space so the shell actually scrolls
+        bracketGrid.style.marginRight  = bracketZoom > 1 ? ((bracketZoom - 1) * natW) + 'px' : '';
+        bracketGrid.style.marginBottom = bracketZoom > 1 ? ((bracketZoom - 1) * natH) + 'px' : '';
+        if(card) card.classList.toggle('is-zoomed', bracketZoom > 1.001);
+        setTimeout(drawConnectors, 0);
+    }
+    function setBracketZoom(z){ bracketZoom = Math.min(BZ_MAX, Math.max(BZ_MIN, Math.round(z*100)/100)); applyBracketZoom(); }
+    var zIn = document.getElementById('bracketZoomIn'),
+        zOut = document.getElementById('bracketZoomOut'),
+        zReset = document.getElementById('bracketZoomReset');
+    if(zIn)   zIn.addEventListener('click',   function(){ setBracketZoom(bracketZoom + BZ_STEP); });
+    if(zOut)  zOut.addEventListener('click',  function(){ setBracketZoom(bracketZoom - BZ_STEP); });
+    if(zReset)zReset.addEventListener('click',function(){ setBracketZoom(1); var sh=document.getElementById('bracketShell'); if(sh){ sh.scrollTop=0; sh.scrollLeft=0; } });
+    // Ctrl/⌘ + wheel to zoom over the bracket
+    var shell = document.getElementById('bracketShell');
+    if(shell){
+        shell.addEventListener('wheel', function(e){
+            if(!(e.ctrlKey || e.metaKey)) return;
+            e.preventDefault();
+            setBracketZoom(bracketZoom + (e.deltaY < 0 ? BZ_STEP : -BZ_STEP));
+        }, {passive:false});
+    }
+
     /* per-game details pop-up */
     var biModal = document.getElementById('bracketInfoModal');
     function setLogo(el, src, name){
@@ -6263,14 +6301,15 @@ document.addEventListener('DOMContentLoaded', function(){
     var grid = document.querySelector('#knockoutBracketCard .bracket-grid');
     function drawConnectors(){
         if(!grid) return;
+        grid.style.position='relative';   // anchor offset* measurements + the SVG
         grid.querySelectorAll('.bracket-svg').forEach(function(s){ s.remove(); });
         var cols = [].slice.call(grid.querySelectorAll('.bracket-col')).map(function(c){ return [].slice.call(c.querySelectorAll('.bracket-match')); });
-        var gr = grid.getBoundingClientRect();
         var W = grid.scrollWidth, H = grid.scrollHeight;
         var svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
         svg.setAttribute('class','bracket-svg'); svg.setAttribute('width',W); svg.setAttribute('height',H);
         svg.style.cssText='position:absolute;left:0;top:0;pointer-events:none;z-index:0;overflow:visible';
-        function rc(el){ var r=el.getBoundingClientRect(); return {x:r.left-gr.left+grid.scrollLeft, y:r.top-gr.top+grid.scrollTop, w:r.width, h:r.height}; }
+        // Unscaled layout metrics (offset*) so the SVG scales together with the grid transform.
+        function rc(el){ return {x:el.offsetLeft, y:el.offsetTop, w:el.offsetWidth, h:el.offsetHeight}; }
         for(var c=0;c<cols.length-1;c++){
             var A=cols[c], B=cols[c+1];
             if(!A.length || !B.length || A.length !== 2*B.length) continue; // only true halving rounds
@@ -7508,8 +7547,8 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
   .nav-backdrop{position:fixed;inset:0;z-index:1990;background:rgba(4,12,28,.55);opacity:0;visibility:hidden;transition:.25s}
   .nav-backdrop.show{opacity:1;visibility:visible}
 
-  /* (E) Knockout bracket — collapsed flags fit the whole screen, no swipe needed */
-  #knockoutBracketCard .bracket-shell{overflow-x:hidden !important;padding:10px !important}
+  /* (E) Knockout bracket — collapsed flags fit the whole screen; scroll + zoom enabled */
+  #knockoutBracketCard .bracket-shell{overflow:auto !important;padding:10px !important;max-height:480px}
   #knockoutBracketCard .bracket-grid{grid-auto-columns:1fr !important;gap:6px !important;min-width:0 !important;width:100% !important}
   #knockoutBracketCard .bracket-stage-title{font-size:9px !important;padding:4px 3px !important}
   #knockoutBracketCard .bracket-match{min-height:auto !important;padding:7px 4px !important}
@@ -7545,9 +7584,12 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
 #knockoutBracketCard .bracket-match.is-live{border-color:rgba(233,71,71,.55) !important;box-shadow:0 0 0 1px rgba(233,71,71,.4)}
 #knockoutBracketCard .bracket-grid .bracket-svg{position:absolute;left:0;top:0;pointer-events:none;z-index:0}
 
-/* (1b) Full-width collapsed bracket — flags only, names hidden, fits the screen (no horizontal scroll) */
-#knockoutBracketCard .bracket-shell{overflow-x:hidden !important}
-#knockoutBracketCard .bracket-grid{grid-auto-flow:column !important;grid-auto-columns:1fr !important;grid-template-columns:none !important;min-width:0 !important;width:100% !important;gap:10px !important}
+/* (1b) Full-width collapsed bracket — flags only, names hidden, fits the screen; scroll + zoom enabled */
+#knockoutBracketCard .bracket-shell{overflow:auto !important;max-height:560px;scrollbar-width:thin;scrollbar-color:rgba(168,231,255,.4) transparent}
+#knockoutBracketCard .bracket-shell::-webkit-scrollbar{width:9px;height:9px}
+#knockoutBracketCard .bracket-shell::-webkit-scrollbar-thumb{background:rgba(168,231,255,.32);border-radius:9px}
+#knockoutBracketCard .bracket-shell::-webkit-scrollbar-track{background:rgba(255,255,255,.04)}
+#knockoutBracketCard .bracket-grid{grid-auto-flow:column !important;grid-auto-columns:1fr !important;grid-template-columns:none !important;min-width:0 !important;width:100% !important;gap:10px !important;transform-origin:0 0}
 #knockoutBracketCard .bracket-team > span:not(.bracket-team-fallback){display:none !important}   /* collapse team names → flags only */
 #knockoutBracketCard .bracket-team{gap:0 !important;justify-content:center !important;min-width:0}
 #knockoutBracketCard .bracket-row{justify-content:center !important;gap:9px !important}
@@ -7555,6 +7597,13 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
 #knockoutBracketCard .bracket-match{padding:9px 7px !important}
 #knockoutBracketCard .bracket-score{font-size:14px !important}
 #knockoutBracketCard .bracket-stage-title{font-size:10px !important;padding:5px 6px !important;text-align:center}
+
+/* (1c) Bracket zoom control */
+.bracket-zoom{display:inline-flex;align-items:center;gap:4px;background:rgba(255,255,255,.06);border:1px solid rgba(168,231,255,.18);border-radius:999px;padding:3px}
+.bracket-zoom-btn{width:30px;height:30px;border:0;border-radius:999px;background:transparent;color:#fff;font-size:17px;font-weight:900;line-height:1;cursor:pointer;display:grid;place-items:center;transition:background .15s ease}
+.bracket-zoom-btn:hover{background:rgba(168,231,255,.18)}
+.bracket-zoom-reset{font-size:14px}
+html[data-theme="saudi"] .bracket-zoom-btn:hover{background:rgba(126,244,174,.2)}
 
 /* keep the top-actions / nav above page layers whenever they're showing */
 .nav{position:relative;z-index:30}

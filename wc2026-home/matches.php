@@ -371,6 +371,55 @@ if ($mids) {
     }
 }
 
+/* ---- Native Fan Filter Studio data (mirrors home.php; saves to /WC/api/save_filter_photo.php) ---- */
+if (!function_exists('wc_asset_path')) {
+    function wc_asset_path($path): string {
+        $path = trim((string)$path);
+        if ($path === '') return '';
+        if (preg_match('#^https?://#i', $path)) return $path;
+        if (str_starts_with($path, '/WC/') || str_starts_with($path, '/WC2026/')) return $path;
+        if (str_starts_with($path, 'WC/') || str_starts_with($path, 'WC2026/')) return '/' . $path;
+        return '/WC/' . ltrim($path, '/');
+    }
+}
+if (!function_exists('wc_platform_logo_path')) {
+    function wc_platform_logo_path($code): string {
+        $code = strtolower(trim((string)$code));
+        if (str_contains($code, 'instagram') || $code === 'insta') return '/WC/assets/filters/platforms/instagram.png';
+        if (str_contains($code, 'snapchat') || $code === 'snap') return '/WC/assets/filters/platforms/snapchat.png';
+        if (str_contains($code, 'linkedin') || str_contains($code, 'linked')) return '/WC/assets/filters/platforms/linkedin.png';
+        return '';
+    }
+}
+if (!function_exists('wc_platform_logo_fallback')) {
+    function wc_platform_logo_fallback($code): string {
+        $code = strtolower(trim((string)$code));
+        if (str_contains($code, 'instagram') || $code === 'insta') return 'IG';
+        if (str_contains($code, 'snapchat') || $code === 'snap') return 'SC';
+        if (str_contains($code, 'linkedin') || str_contains($code, 'linked')) return 'in';
+        return '•';
+    }
+}
+$ffPlatforms = wc_rows($conn, "
+    SELECT id, platform_name, platform_code, width, height
+    FROM WC2026_Filter_Platforms
+    WHERE status='Active'
+    ORDER BY sort_order ASC, id ASC
+");
+$ffSelectedPlatform = $ffPlatforms[0] ?? null;
+$ffFrames = wc_rows($conn, "
+    SELECT id, platform_id, frame_name, frame_path, preview_path
+    FROM WC2026_Filter_Frames
+    WHERE status='Active' AND platform_id IS NOT NULL
+    ORDER BY platform_id ASC, sort_order ASC, id ASC
+");
+$ffCountries = wc_rows($conn, "
+    SELECT id, country_name, country_code, flag_path
+    FROM WC2026_Filter_Countries
+    WHERE status='Active'
+    ORDER BY sort_order ASC, country_name ASC
+");
+$ffSelectedCountry = $ffCountries[0] ?? null;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1592,66 +1641,15 @@ body{
          (?q=Country), so no logic/data flow changes. The full functional
          match grid stays right below.
          ===================================================================== -->
-    <section class="globe-stage" aria-label="World Cup 2026 nations">
-        <!-- [WC2026 UI ENHANCEMENT] FIFA-style HUD frame + live stats (display only) -->
-        <span class="hud-corner tl" aria-hidden="true"></span>
-        <span class="hud-corner tr" aria-hidden="true"></span>
-        <span class="hud-corner bl" aria-hidden="true"></span>
-        <span class="hud-corner br" aria-hidden="true"></span>
-
-        <div class="hud-bar" aria-hidden="true">
-            <span class="hud-live"><i></i> LIVE GLOBE</span>
-            <div class="hud-chips">
-                <span class="hud-chip"><b><?= (int)$globeCount ?></b><span>Nations</span></span>
-                <span class="hud-chip"><b><?= (int)$totalMatches ?></b><span>Fixtures</span></span>
-                <span class="hud-chip"><b><?= (int)$liveMatches ?></b><span>Live</span></span>
-            </div>
+    <!-- [WC2026] Participating Teams Map — real interactive teams map (same as home.php) -->
+    <section class="card teams-map-card" id="teamsMapCard" aria-label="World Cup 2026 nations map">
+        <div class="tm-head">
+            <div class="tm-title"><span class="tm-dot"></span> <span data-i18n="teamsMapTitle">Participating Teams Map</span></div>
+            <a href="/WC2026/teams-map/" target="_blank" rel="noopener" class="tm-open" data-i18n="openTeamsMap">Open Full Map ↗</a>
         </div>
-
-        <div class="globe-glow"></div>
-        <div class="globe-wrap">
-            <div class="hud-ring" aria-hidden="true"></div>
-            <div class="hud-ring reverse" aria-hidden="true"></div>
-            <div class="orbit-rays" aria-hidden="true"></div>
-            <div class="orbit-ring" aria-hidden="true"></div>
-
-            <div class="globe" aria-hidden="true">
-                <div class="globe-tex"></div>
-                <div class="globe-grid"></div>
-                <div class="globe-shine"></div>
-            </div>
-
-            <?php if ($globeCount > 0): ?>
-                <?php foreach ($globeNations as $i => $gn): ?>
-                    <?php $angle = round((360 / max($globeCount, 1)) * $i, 2); ?>
-                    <a class="orbit-badge"
-                       href="/WC2026/matches?q=<?= h(urlencode($gn['name'])) ?>"
-                       style="--a:<?= $angle ?>deg;"
-                       data-globe-pick
-                       title="View <?= h($gn['name']) ?> fixtures">
-                        <span class="orbit-inner">
-                            <span class="orbit-flag">
-                                <?php if ($gn['code'] !== ''): ?>
-                                    <img src="https://flagcdn.com/w80/<?= h(strtolower($gn['code'])) ?>.png"
-                                         alt="<?= h($gn['name']) ?> flag"
-                                         loading="lazy"
-                                         onerror="this.style.display='none';this.nextElementSibling.style.display='grid';">
-                                    <span class="orbit-flag-fb" style="display:none;"><?= $gn['emoji'] !== '' ? $gn['emoji'] : '⚽' ?></span>
-                                <?php else: ?>
-                                    <span class="orbit-flag-fb">⚽</span>
-                                <?php endif; ?>
-                            </span>
-                            <span class="orbit-name"><?= h($gn['name']) ?></span>
-                        </span>
-                    </a>
-                <?php endforeach; ?>
-            <?php endif; ?>
-        </div>
-
-        <div class="globe-caption">
-            <span class="globe-kicker">🌍 <span data-i18n="globeKicker">WORLD CUP 2026</span></span>
-            <h2 data-i18n="globeTitle">Nations on the Pitch</h2>
-            <p data-i18n="globeP">Tap a nation to jump to its fixtures.</p>
+        <div class="tm-sub" data-i18n="teamsMapSub">Explore all 48 qualified nations on a real world map — tap any country for its football story, stars and key moments.</div>
+        <div class="tm-frame-wrap">
+            <iframe class="tm-frame" src="/WC2026/teams-map/" title="World Cup 2026 Teams Map" loading="lazy"></iframe>
         </div>
     </section>
 
@@ -1956,16 +1954,212 @@ html[data-theme="saudi"] .hero h1 span{color:#FFE19A}
 html[data-theme="saudi"] .card,html[data-theme="saudi"] .match-card{background:linear-gradient(135deg,#06291a,#0a3f27 58%,#0e6a3e) !important}
 html[data-theme="saudi"] .globe-stage{background:linear-gradient(180deg,#06291a,#0a3f27 60%,#06291a) !important}
 html[dir="rtl"] .nav-actions{direction:rtl}
+
+/* [WC2026] Participating Teams Map card */
+.teams-map-card{padding:22px}
+.tm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px;flex-wrap:wrap}
+.tm-title{color:#fff;font-weight:900;font-size:16px;display:flex;align-items:center;gap:8px}
+.tm-dot{width:10px;height:10px;border-radius:50%;background:#7EF4AE;box-shadow:0 0 12px #7EF4AE}
+.tm-open{color:#A8E7FF;text-decoration:none;font-weight:800;font-size:13px;white-space:nowrap}
+.tm-open:hover{text-decoration:underline}
+.tm-sub{color:rgba(255,255,255,.72);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
+.tm-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:#0a1b30;height:560px}
+.tm-frame{width:100%;height:100%;border:0;display:block}
+html[dir="rtl"] .tm-sub{text-align:right}
+html[data-theme="saudi"] .tm-frame-wrap{border-color:rgba(126,244,174,.22)}
+@media(max-width:768px){.tm-frame-wrap{height:460px}}
+
+/* ===== Native Fan Filter studio (scoped to #ffModal) ===== */
+#ffModal .wc-modal-card.ff-native{max-width:min(1080px,96vw);width:96vw;max-height:92vh;overflow:auto;background:#fff !important;color:#102033}
+#ffModal .ff-native .wc-modal-kicker{color:#0E63E6}
+#ffModal .fanfilter-modal-tools{display:flex;align-items:center;gap:10px}
+#ffModal .ff-openfull{color:#0E63E6;text-decoration:none;font-weight:800;font-size:13px;white-space:nowrap}
+#ffModal .ff-openfull:hover{text-decoration:underline}
+#ffModal .ffstudio{margin-top:6px}
+#ffModal .empty{padding:20px;border-radius:18px;background:#FFF8E7;border:1px solid #F6DEA5;color:#6C520B;font-weight:800;line-height:1.6}
+#ffModal .studio-layout{display:grid;grid-template-columns:minmax(300px,440px) 1fr;gap:18px;align-items:start}
+#ffModal .preview-card,#ffModal .options-card{min-width:0;border:1px solid #E1ECF8;background:#FBFDFF;border-radius:24px;padding:16px}
+#ffModal .section-label{font-size:12px;color:#71839A;font-weight:900;text-transform:uppercase;letter-spacing:.6px;margin:2px 0 10px}
+#ffModal .camera-wrap{width:100%;max-width:430px;margin:0 auto;border-radius:24px;background:#071A35;overflow:hidden;position:relative;box-shadow:0 18px 50px rgba(7,26,53,.25);aspect-ratio:4/5}
+#ffModal #video,#ffModal #canvas,#ffModal #previewImage,#ffModal #liveFrameOverlay{width:100%;height:100%;object-fit:cover;display:none}
+#ffModal #video,#ffModal #canvas,#ffModal #previewImage{position:relative;z-index:1}
+#ffModal #previewImage{z-index:3}
+#ffModal #liveFrameOverlay{position:absolute;inset:0;z-index:4;pointer-events:none;object-fit:fill}
+#ffModal #liveFlagOverlay{position:absolute;z-index:6;pointer-events:none;display:none;flex-direction:column;align-items:center;justify-content:flex-start}
+#ffModal #liveFlagBox{width:100%;background:#fff;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;overflow:hidden}
+#ffModal #liveFlagImage{width:100%;height:100%;object-fit:cover;display:block}
+#ffModal #liveFlagCode{display:block;color:#fff;font-weight:900;line-height:1.05;text-align:center;text-shadow:0 3px 8px rgba(0,0,0,.45);white-space:nowrap}
+#ffModal .camera-empty{position:absolute;inset:0;z-index:5;display:grid;place-items:center;color:rgba(255,255,255,.78);text-align:center;padding:22px}
+#ffModal .camera-empty b{display:block;color:#fff;font-size:22px;margin-bottom:8px}
+#ffModal .controls{margin:16px auto 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#ffModal .btn{border:0;border-radius:999px;padding:12px 16px;font-family:inherit;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;text-align:center}
+#ffModal .btn-primary{background:linear-gradient(135deg,#0E63E6,#0847B8);color:#fff}
+#ffModal .btn-gold{background:linear-gradient(135deg,#F5C85B,#E7A90C);color:#2A2105}
+#ffModal .btn-soft{background:#EEF5FC;color:#0B2C55}
+#ffModal .btn-green{background:linear-gradient(135deg,#15B97A,#0B8E5C);color:#fff}
+#ffModal .btn:disabled{opacity:.45;cursor:not-allowed}
+#ffModal .upload-input{display:none}
+#ffModal .flip-camera-btn{display:none}
+#ffModal .flip-camera-btn.show{display:inline-flex}
+#ffModal .option-block{background:#fff;border:1px solid #E8F0FA;border-radius:20px;padding:14px;box-shadow:0 10px 24px rgba(7,26,53,.05)}
+#ffModal .option-block + .option-block{margin-top:14px}
+#ffModal .platform-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#ffModal .platform-choice{border:2px solid transparent;background:#fff;border-radius:18px;padding:12px 8px;cursor:pointer;min-height:100px;box-shadow:0 10px 24px rgba(7,26,53,.06);text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px}
+#ffModal .platform-choice.active{border-color:#0E63E6;background:linear-gradient(180deg,#fff,#F7FBFF)}
+#ffModal .platform-logo{width:40px;height:40px;border-radius:12px;object-fit:contain;background:#fff;padding:5px;box-shadow:0 10px 22px rgba(7,26,53,.12)}
+#ffModal .platform-logo-fallback{width:40px;height:40px;border-radius:12px;display:none;align-items:center;justify-content:center;color:#fff;font-size:17px;font-weight:900;background:linear-gradient(135deg,#0E63E6,#0B2C55)}
+#ffModal .platform-text strong{display:block;color:#0B2C55;font-size:12px;font-weight:900}
+#ffModal .platform-text span{display:block;color:#71839A;font-size:11px;font-weight:800;margin-top:4px}
+#ffModal .country-picker{position:relative}
+#ffModal .country-trigger{width:100%;border:2px solid #E1ECF8;background:#fff;border-radius:18px;padding:11px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px}
+#ffModal .country-trigger.active{border-color:#0E63E6}
+#ffModal .country-selected{display:flex;align-items:center;gap:12px;min-width:0}
+#ffModal .country-selected img{width:50px;height:50px;object-fit:cover;border-radius:14px;background:#EEF5FC;flex:0 0 auto}
+#ffModal .country-name{display:block;color:#0B2C55;font-weight:900;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#ffModal .country-code{display:block;color:#71839A;font-size:12px;font-weight:800;margin-top:4px}
+#ffModal .country-arrow{color:#0B2C55;font-weight:900;flex:0 0 auto}
+#ffModal .country-menu{display:none;position:absolute;z-index:30;top:calc(100% + 8px);left:0;right:0;background:#fff;border:1px solid #DDE9F6;border-radius:20px;box-shadow:0 24px 60px rgba(7,26,53,.18);overflow:hidden}
+#ffModal .country-menu.show{display:block}
+#ffModal .country-search-wrap{padding:10px;border-bottom:1px solid #EDF3FA}
+#ffModal .country-search{width:100%;border:1px solid #DDE9F6;background:#F7FBFF;border-radius:14px;padding:11px 13px;font-family:inherit;font-weight:800;color:#0B2C55;outline:none;font-size:15px}
+#ffModal .country-options{max-height:280px;overflow:auto;padding:7px;-webkit-overflow-scrolling:touch}
+#ffModal .country-option{width:100%;border:0;background:#fff;border-radius:14px;padding:9px;cursor:pointer;display:flex;align-items:center;gap:12px;text-align:left}
+#ffModal .country-option:hover,#ffModal .country-option.active{background:#EEF5FC}
+#ffModal .country-option img{width:40px;height:40px;object-fit:cover;border-radius:12px;background:#EEF5FC;flex:0 0 auto}
+#ffModal .no-results{display:none;padding:16px;color:#71839A;font-weight:800;text-align:center}
+#ffModal .frame-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#ffModal .frame-choice{border:2px solid transparent;background:#fff;border-radius:18px;padding:9px;cursor:pointer;min-height:118px;box-shadow:0 10px 24px rgba(7,26,53,.06)}
+#ffModal .frame-choice.active{border-color:#0E63E6}
+#ffModal .frame-choice img{width:100%;height:76px;object-fit:cover;border-radius:13px;background:#EEF5FC}
+#ffModal .frame-choice span{display:block;margin-top:7px;font-size:12px;font-weight:900;color:#0B2C55;text-align:center}
+#ffModal .selection-summary{margin-top:14px;border-radius:18px;padding:13px;background:linear-gradient(135deg,#F7FBFF,#EEF5FC);border:1px solid #DDE9F6;color:#0B2C55;font-size:13px;font-weight:800;line-height:1.6}
+#ffModal .message{display:none;margin:14px auto 0;border-radius:16px;padding:12px 14px;font-weight:800;font-size:14px}
+#ffModal .message.ok{display:block;background:#E9FFF5;color:#08764B;border:1px solid #BDF1DA}
+#ffModal .message.err{display:block;background:#FFF1F1;color:#B42318;border:1px solid #FFD0D0}
+@media(max-width:820px){#ffModal .studio-layout{grid-template-columns:1fr}#ffModal .platform-row,#ffModal .frame-row{display:flex;overflow-x:auto;gap:10px;padding-bottom:6px}#ffModal .platform-choice{min-width:140px}#ffModal .frame-choice{min-width:140px}}
 </style>
 
-<!-- Fan Filter pop-up (iframe) -->
+<!-- Fan Filter Studio pop-up — NATIVE studio (camera + platform/country/frame), saves to /WC/api/save_filter_photo.php -->
 <div class="wc-modal" id="ffModal">
-    <div class="wc-modal-card wide">
+    <div class="wc-modal-card wide ff-native">
         <div class="wc-modal-head">
-            <div class="wc-modal-kicker" data-i18n="navFanFilter">Fan Filter</div>
-            <button type="button" class="wc-x" data-close="ffModal" aria-label="Close">✕</button>
+            <div class="wc-modal-kicker" data-i18n="navFanFilter">Fan Filter Studio</div>
+            <div class="fanfilter-modal-tools">
+                <a href="/WC/fan_filter.php" target="_blank" rel="noopener" class="ff-openfull" data-i18n="openFull">Open full page</a>
+                <button type="button" class="wc-x" data-close="ffModal" aria-label="Close">✕</button>
+            </div>
         </div>
-        <div class="ff-frame-wrap"><iframe id="ffFrame" data-src="/WC/fan_filter.php" title="Fan Filter Studio" referrerpolicy="same-origin"></iframe></div>
+
+        <div class="ffstudio">
+        <?php if (empty($ffPlatforms) || empty($ffCountries) || empty($ffFrames)): ?>
+            <div class="empty">
+                Please add active platforms, countries and frames in
+                <strong>WC2026_Filter_Platforms</strong>, <strong>WC2026_Filter_Countries</strong>
+                and <strong>WC2026_Filter_Frames</strong>.
+            </div>
+        <?php else: ?>
+            <div class="studio-layout">
+                <section class="preview-card">
+                    <div class="section-label">Photo Preview</div>
+                    <div class="camera-wrap">
+                        <video id="video" autoplay playsinline muted></video>
+                        <img id="liveFrameOverlay" alt="Frame Overlay">
+                        <div id="liveFlagOverlay" aria-hidden="true">
+                            <div id="liveFlagBox"><img id="liveFlagImage" alt=""></div>
+                            <span id="liveFlagCode"></span>
+                        </div>
+                        <canvas id="canvas" width="1080" height="1350"></canvas>
+                        <img id="previewImage" alt="Preview">
+                        <div class="camera-empty" id="cameraEmpty"><div><b>Ready to create?</b>Start the camera or upload a photo.</div></div>
+                    </div>
+                    <div class="controls">
+                        <button type="button" class="btn btn-primary" id="startCameraBtn">📷 Start Camera</button>
+                        <button type="button" class="btn btn-soft flip-camera-btn" id="flipCameraBtn">🔄 Flip Camera</button>
+                        <label class="btn btn-soft" for="uploadPhoto">⬆️ Upload Photo</label>
+                        <input class="upload-input" type="file" id="uploadPhoto" accept="image/*">
+                        <button type="button" class="btn btn-gold" id="captureBtn" disabled>⚽ Capture</button>
+                        <button type="button" class="btn btn-soft" id="retakeBtn" disabled>↩️ Retake</button>
+                        <button type="button" class="btn btn-green" id="saveDownloadBtn" disabled style="grid-column:1 / -1;">⚽ Save &amp; Download</button>
+                    </div>
+                    <div class="message" id="messageBox"></div>
+                </section>
+
+                <aside class="options-card">
+                    <div class="option-block">
+                        <div class="section-label">Choose Platform / Size</div>
+                        <div class="platform-row" id="platformList">
+                            <?php foreach ($ffPlatforms as $index => $platform): ?>
+                                <?php $plogo = wc_platform_logo_path($platform['platform_code'] ?? ''); $pfb = wc_platform_logo_fallback($platform['platform_code'] ?? ''); ?>
+                                <button type="button" class="platform-choice <?= $index === 0 ? 'active' : '' ?>"
+                                    data-platform-id="<?= (int)$platform['id'] ?>" data-platform-name="<?= h($platform['platform_name']) ?>"
+                                    data-platform-code="<?= h($platform['platform_code']) ?>" data-width="<?= (int)$platform['width'] ?>" data-height="<?= (int)$platform['height'] ?>">
+                                    <?php if ($plogo !== ''): ?><img class="platform-logo" src="<?= h($plogo) ?>" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"><?php endif; ?>
+                                    <span class="platform-logo-fallback" <?= $plogo === '' ? 'style="display:flex;"' : '' ?>><?= h($pfb) ?></span>
+                                    <span class="platform-text"><strong><?= h($platform['platform_name']) ?></strong><span><?= (int)$platform['width'] ?> × <?= (int)$platform['height'] ?></span></span>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <div class="option-block">
+                        <div class="section-label">Choose Country</div>
+                        <div class="country-picker" id="countryPicker">
+                            <button type="button" class="country-trigger active" id="countryTrigger">
+                                <span class="country-selected">
+                                    <img id="selectedCountryFlag" src="<?= h(wc_asset_path($ffSelectedCountry['flag_path'] ?? '')) ?>" alt="">
+                                    <span style="min-width:0;">
+                                        <span class="country-name" id="selectedCountryName"><?= h($ffSelectedCountry['country_name'] ?? 'Choose Country') ?></span>
+                                        <span class="country-code" id="selectedCountryCode"><?= h($ffSelectedCountry['country_code'] ?? '') ?></span>
+                                    </span>
+                                </span>
+                                <span class="country-arrow">⌄</span>
+                            </button>
+                            <div class="country-menu" id="countryMenu">
+                                <div class="country-search-wrap"><input type="text" class="country-search" id="countrySearch" placeholder="Search country..."></div>
+                                <div class="country-options" id="countryOptions">
+                                    <?php foreach ($ffCountries as $index => $country): ?>
+                                        <button type="button" class="country-option country-choice <?= $index === 0 ? 'active' : '' ?>"
+                                            data-country-id="<?= (int)$country['id'] ?>" data-country-name="<?= h($country['country_name']) ?>"
+                                            data-country-code="<?= h($country['country_code']) ?>" data-flag="<?= h(wc_asset_path($country['flag_path'])) ?>"
+                                            data-search="<?= h(strtolower($country['country_name'] . ' ' . $country['country_code'])) ?>">
+                                            <img src="<?= h(wc_asset_path($country['flag_path'])) ?>" alt="">
+                                            <span><span class="country-name"><?= h($country['country_name']) ?></span><span class="country-code"><?= h($country['country_code']) ?></span></span>
+                                        </button>
+                                    <?php endforeach; ?>
+                                    <div class="no-results" id="noCountryResults">No countries found.</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="option-block">
+                        <div class="section-label">Choose Frame</div>
+                        <div class="frame-row" id="frameList">
+                            <?php $firstFrameSet = false; ?>
+                            <?php foreach ($ffFrames as $frame): ?>
+                                <?php
+                                    $preview = $frame['preview_path'] ?: $frame['frame_path'];
+                                    $isSel = $ffSelectedPlatform && (int)$frame['platform_id'] === (int)$ffSelectedPlatform['id'];
+                                    $isActive = $isSel && !$firstFrameSet; if ($isActive) $firstFrameSet = true;
+                                ?>
+                                <button type="button" class="frame-choice <?= $isActive ? 'active' : '' ?>"
+                                    data-frame-id="<?= (int)$frame['id'] ?>" data-platform-id="<?= (int)$frame['platform_id'] ?>" data-frame-name="<?= h($frame['frame_name']) ?>"
+                                    data-frame="<?= h(wc_asset_path($frame['frame_path'])) ?>" style="<?= $isSel ? '' : 'display:none;' ?>">
+                                    <img src="<?= h(wc_asset_path($preview)) ?>" alt=""><span><?= h($frame['frame_name']) ?></span>
+                                </button>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+
+                    <div class="selection-summary" id="selectionSummary">
+                        Selected platform: <strong><?= h($ffSelectedPlatform['platform_name'] ?? '-') ?></strong><br>
+                        Selected country: <strong><?= h($ffSelectedCountry['country_name'] ?? '-') ?></strong><br>
+                        Selected frame: <strong>-</strong>
+                    </div>
+                </aside>
+            </div>
+        <?php endif; ?>
+        </div>
     </div>
 </div>
 
@@ -2041,6 +2235,7 @@ html[dir="rtl"] .nav-actions{direction:rtl}
       tabAll:'All',tabUpcoming:'Upcoming',tabLive:'Live',tabFinished:'Finished',searchPh:'Search team or round...',searchBtn:'Search',
       reactionsWord:'reactions',commentsWord:'comments',commentWord:'Comment',
       globeKicker:'WORLD CUP 2026',globeTitle:'Nations on the Pitch',globeP:'Tap a nation to jump to its fixtures.',
+      teamsMapTitle:'Participating Teams Map',openTeamsMap:'Open Full Map ↗',teamsMapSub:'Explore all 48 qualified nations on a real world map — tap any country for its football story, stars and key moments.',
       footerDev:'Developed by CATRION © IT Digital & Transformation',close:'Close',
       pfType:'User Type',pfDays:'Days Played',statOverall:'Overall Score',statWeekly:'Weekly Score',statRank:'My Rank',
       howToTitle:'Get started in 5 steps',howStep1t:'Play the Daily Goal Rush',howStep1d:'Tap the ball (or press Space) to shoot, beat the goalkeeper, and score in 30 seconds — once per day.',
@@ -2057,6 +2252,7 @@ html[dir="rtl"] .nav-actions{direction:rtl}
       tabAll:'الكل',tabUpcoming:'القادمة',tabLive:'مباشر',tabFinished:'منتهية',searchPh:'ابحث عن فريق أو دور...',searchBtn:'بحث',
       reactionsWord:'تفاعلات',commentsWord:'تعليقات',commentWord:'تعليق',
       globeKicker:'كأس العالم 2026',globeTitle:'المنتخبات في الملعب',globeP:'انقر منتخبًا للانتقال إلى مبارياته.',
+      teamsMapTitle:'خريطة المنتخبات المشاركة',openTeamsMap:'فتح الخريطة كاملة ↗',teamsMapSub:'استكشف المنتخبات الـ48 المتأهلة على خريطة عالم حقيقية — اضغط على أي دولة لقصتها الكروية ونجومها ولحظاتها المميزة.',
       footerDev:'تطوير كاتريون © تقنية المعلومات والتحول الرقمي',close:'إغلاق',
       pfType:'نوع المستخدم',pfDays:'أيام اللعب',statOverall:'النقاط الإجمالية',statWeekly:'نقاط الأسبوع',statRank:'ترتيبي',
       howToTitle:'ابدأ في 5 خطوات',howStep1t:'العب تحدي الأهداف اليومي',howStep1d:'انقر الكرة (أو اضغط مسافة) للتسديد، تجاوز الحارس، وسجّل خلال 30 ثانية — مرة واحدة يوميًا.',
@@ -2083,8 +2279,10 @@ html[dir="rtl"] .nav-actions{direction:rtl}
   /* ---- modals ---- */
   function open(id){ var m=d.getElementById(id); if(m) m.classList.add('active'); }
   function close(id){ var m=d.getElementById(id); if(m) m.classList.remove('active'); }
-  var ffFrame=d.getElementById('ffFrame');
-  var oFF=d.getElementById('openFanFilterBtn'); if(oFF) oFF.addEventListener('click', function(){ if(ffFrame&&!ffFrame.src) ffFrame.src=ffFrame.dataset.src; open('ffModal'); });
+  var oFF=d.getElementById('openFanFilterBtn'); if(oFF) oFF.addEventListener('click', function(){ open('ffModal'); });
+  // stop the camera stream whenever the studio is closed
+  d.querySelectorAll('[data-close="ffModal"]').forEach(function(b){ b.addEventListener('click', function(){ if(window.wcFFStop) window.wcFFStop(); }); });
+  var ffM=d.getElementById('ffModal'); if(ffM) ffM.addEventListener('click', function(e){ if(e.target===ffM && window.wcFFStop) window.wcFFStop(); });
   var oP=d.getElementById('openProfileBtn'); if(oP) oP.addEventListener('click', function(){ open('profileModal'); });
   var oH=d.getElementById('howToBtn'); if(oH) oH.addEventListener('click', function(){ open('howToModal'); });
   var oPt=d.getElementById('pointsBtn'); if(oPt) oPt.addEventListener('click', function(){ open('pointsModal'); });
@@ -2141,6 +2339,86 @@ html[dir="rtl"] .match-social-mini,html[dir="rtl"] .match-meta{text-align:right}
     if(el.classList.contains('theme-btn')||el.classList.contains('lang-btn')) return;
     el.addEventListener('click', function(){ if(window.matchMedia('(max-width:768px)').matches) setOpen(false); });
   });
+})();
+</script>
+
+<script>
+/* ===== Native Fan Filter studio engine (saves to /WC/api/save_filter_photo.php) ===== */
+(function(){
+    const csrf = <?= json_encode($csrf) ?>;
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    if (!video || !canvas) return;
+    const ctx = canvas.getContext('2d');
+    const previewImage = document.getElementById('previewImage');
+    const liveFrameOverlay = document.getElementById('liveFrameOverlay');
+    const liveFlagOverlay = document.getElementById('liveFlagOverlay');
+    const liveFlagBox = document.getElementById('liveFlagBox');
+    const liveFlagImage = document.getElementById('liveFlagImage');
+    const liveFlagCode = document.getElementById('liveFlagCode');
+    const cameraEmpty = document.getElementById('cameraEmpty');
+    const startCameraBtn = document.getElementById('startCameraBtn');
+    const flipCameraBtn = document.getElementById('flipCameraBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const uploadPhoto = document.getElementById('uploadPhoto');
+    const retakeBtn = document.getElementById('retakeBtn');
+    const saveDownloadBtn = document.getElementById('saveDownloadBtn');
+    const messageBox = document.getElementById('messageBox');
+    const countryTrigger = document.getElementById('countryTrigger');
+    const countryMenu = document.getElementById('countryMenu');
+    const countrySearch = document.getElementById('countrySearch');
+    const noCountryResults = document.getElementById('noCountryResults');
+    const selectedCountryFlag = document.getElementById('selectedCountryFlag');
+    const selectedCountryName = document.getElementById('selectedCountryName');
+    const selectedCountryCode = document.getElementById('selectedCountryCode');
+    const selectionSummary = document.getElementById('selectionSummary');
+    const cameraWrap = document.querySelector('#ffModal .camera-wrap');
+    let stream=null, finalImageData='', finalImageBlob=null, currentFacingMode='user', hasCameraStarted=false;
+    const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent||'');
+    window.wcFFStop = function(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; hasCameraStarted=false; } };
+    function showMessage(t,x){messageBox.className='message '+(t==='ok'?'ok':'err');messageBox.textContent=x;}
+    function clearMessage(){messageBox.className='message';messageBox.textContent='';}
+    function downloadFanImage(){
+        try{
+            var ext=(finalImageBlob&&finalImageBlob.type&&finalImageBlob.type.indexOf('png')>=0)?'png':'jpg';
+            var url=finalImageBlob?URL.createObjectURL(finalImageBlob):finalImageData;
+            var a=document.createElement('a');
+            a.download='wc2026-fan-filter.'+ext; a.href=url; a.rel='noopener'; a.style.display='none';
+            document.body.appendChild(a); a.click(); a.remove();
+            if(finalImageBlob) setTimeout(function(){ URL.revokeObjectURL(url); },4000);
+        }catch(e){
+            var a2=document.createElement('a'); a2.download='wc2026-fan-filter.jpg'; a2.href=finalImageData; a2.click();
+        }
+    }
+    function escapeHtml(s){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');}
+    function updateFlip(){ if(!flipCameraBtn) return; if(isMobileDevice&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){flipCameraBtn.classList.add('show');flipCameraBtn.disabled=!hasCameraStarted;flipCameraBtn.textContent=currentFacingMode==='user'?'🔄 Back Camera':'🔄 Front Camera';}else{flipCameraBtn.classList.remove('show');flipCameraBtn.disabled=true;} }
+    function selPlatform(){const el=document.querySelector('#ffModal .platform-choice.active');if(!el)return null;return{id:el.dataset.platformId,name:el.dataset.platformName,code:el.dataset.platformCode,width:parseInt(el.dataset.width||'720',10),height:parseInt(el.dataset.height||'900',10)};}
+    function selCountry(){const el=document.querySelector('#ffModal .country-choice.active');if(!el)return null;return{id:el.dataset.countryId,name:el.dataset.countryName,code:el.dataset.countryCode,flag:el.dataset.flag};}
+    function selFrame(){const el=document.querySelector('#ffModal .frame-choice.active');if(!el)return null;return{id:el.dataset.frameId,name:el.dataset.frameName,frame:el.dataset.frame};}
+    function updFrameOverlay(){const f=selFrame();if(!liveFrameOverlay)return;if(!f||!f.frame){liveFrameOverlay.style.display='none';liveFrameOverlay.src='';return;}liveFrameOverlay.src=f.frame;liveFrameOverlay.style.display='block';}
+    function updFlagOverlay(){const c=selCountry();if(!liveFlagOverlay||!liveFlagBox||!liveFlagImage||!liveFlagCode||!cameraWrap||!c)return;const r=cameraWrap.getBoundingClientRect();const W=r.width||0,H=r.height||0;if(!W||!H){liveFlagOverlay.style.display='none';return;}const flagW=Math.round(W*0.245),flagH=Math.round(flagW*0.70),mr=Math.round(W*0.070),bm=Math.round(H*0.110),tg=Math.round(H*0.028),pad=Math.max(4,Math.round(W*0.0046));const fx=W-flagW-mr,fy=H-flagH-bm-tg;liveFlagOverlay.style.left=Math.round(fx-pad)+'px';liveFlagOverlay.style.top=Math.round(fy-pad)+'px';liveFlagOverlay.style.width=Math.round(flagW+pad*2)+'px';liveFlagOverlay.style.display='flex';liveFlagBox.style.height=Math.round(flagH+pad*2)+'px';liveFlagBox.style.padding=pad+'px';liveFlagBox.style.borderRadius=Math.round(W*0.030)+'px';liveFlagImage.style.borderRadius=Math.round(W*0.022)+'px';liveFlagImage.src=c.flag;liveFlagImage.alt=c.name||'';liveFlagCode.textContent=c.code||'';liveFlagCode.style.fontSize=Math.max(12,Math.round(W*0.040))+'px';liveFlagCode.style.marginTop=Math.max(2,tg-pad)+'px';}
+    function updOverlays(){updFrameOverlay();updFlagOverlay();}
+    function updSummary(){const p=selPlatform(),c=selCountry(),f=selFrame();if(selectionSummary)selectionSummary.innerHTML='Selected platform: <strong>'+escapeHtml(p?p.name:'-')+'</strong><br>Selected country: <strong>'+escapeHtml(c?c.name:'-')+'</strong><br>Selected frame: <strong>'+escapeHtml(f?f.name:'-')+'</strong>';}
+    function updAspect(){const p=selPlatform();if(!p||!cameraWrap)return;cameraWrap.style.aspectRatio=p.width+' / '+p.height;}
+    function filterFrames(){const p=selPlatform();if(!p)return;let first=null;document.querySelectorAll('#ffModal .frame-choice').forEach(b=>{const m=String(b.dataset.platformId||'')===String(p.id);b.style.display=m?'':'none';b.classList.remove('active');if(m&&!first)first=b;});if(first)first.classList.add('active');updAspect();updSummary();finalImageData='';finalImageBlob=null;previewImage.src='';previewImage.style.display='none';saveDownloadBtn.disabled=true;retakeBtn.disabled=true;if(stream){video.style.display='block';cameraEmpty.style.display='none';captureBtn.disabled=false;}else{video.style.display='none';cameraEmpty.style.display='grid';captureBtn.disabled=true;}updOverlays();clearMessage();}
+    function loadImage(src){return new Promise((res,rej)=>{const i=new Image();i.crossOrigin='anonymous';i.onload=()=>res(i);i.onerror=()=>rej(new Error('load '+src));i.src=src;});}
+    function drawCover(s,x,y,w,h){const sw=s.videoWidth||s.naturalWidth||s.width,sh=s.videoHeight||s.naturalHeight||s.height;if(!sw||!sh)throw new Error('not ready');const r=Math.max(w/sw,h/sh),nw=sw*r,nh=sh*r;ctx.drawImage(s,x+(w-nw)/2,y+(h-nh)/2,nw,nh);}
+    function roundRect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+    async function compose(source){clearMessage();const p=selPlatform(),c=selCountry(),f=selFrame();if(!p||!c||!f){showMessage('err','Please choose a platform, country and frame first.');return;}canvas.width=p.width;canvas.height=p.height;ctx.clearRect(0,0,canvas.width,canvas.height);try{drawCover(source,0,0,canvas.width,canvas.height);}catch(e){showMessage('err','Camera image is not ready. Please try again.');return;}try{const fr=await loadImage(f.frame);ctx.drawImage(fr,0,0,canvas.width,canvas.height);}catch(e){showMessage('err','Frame image could not be loaded.');return;}try{const fl=await loadImage(c.flag);const flagW=Math.round(canvas.width*0.245),flagH=Math.round(flagW*0.70),mr=Math.round(canvas.width*0.070),bm=Math.round(canvas.height*0.110),tg=Math.round(canvas.height*0.028);const fx=canvas.width-flagW-mr,fy=canvas.height-flagH-bm-tg;ctx.save();ctx.shadowColor='rgba(0,0,0,.25)';ctx.shadowBlur=18;ctx.fillStyle='#fff';roundRect(ctx,fx-10,fy-10,flagW+20,flagH+20,Math.round(canvas.width*0.030));ctx.fill();ctx.restore();ctx.save();roundRect(ctx,fx,fy,flagW,flagH,Math.round(canvas.width*0.022));ctx.clip();ctx.drawImage(fl,fx,fy,flagW,flagH);ctx.restore();ctx.font='900 '+Math.round(canvas.width*0.040)+'px Inter, Arial';ctx.fillStyle='#fff';ctx.textAlign='center';ctx.shadowColor='rgba(0,0,0,.45)';ctx.shadowBlur=8;ctx.fillText(c.code,fx+flagW/2,fy+flagH+tg);ctx.shadowBlur=0;}catch(e){showMessage('err','Flag image could not be loaded.');return;}finalImageData=canvas.toDataURL('image/jpeg',0.88);finalImageBlob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.88));if(!finalImageBlob){showMessage('err','Unable to prepare image.');return;}previewImage.src=finalImageData;previewImage.style.display='block';if(liveFrameOverlay)liveFrameOverlay.style.display='none';if(liveFlagOverlay)liveFlagOverlay.style.display='none';canvas.style.display='none';video.style.display='none';cameraEmpty.style.display='none';saveDownloadBtn.disabled=false;retakeBtn.disabled=false;showMessage('ok','Photo created successfully.');}
+    async function startCamera(fm=currentFacingMode){clearMessage();if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){showMessage('err','Camera not supported. Please upload a photo.');return;}try{if(stream)stream.getTracks().forEach(t=>t.stop());currentFacingMode=fm;stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:currentFacingMode},width:{ideal:1080},height:{ideal:1350}},audio:false});video.srcObject=stream;video.style.display='block';updOverlays();previewImage.style.display='none';cameraEmpty.style.display='none';await video.play();captureBtn.disabled=false;retakeBtn.disabled=true;saveDownloadBtn.disabled=true;finalImageData='';finalImageBlob=null;hasCameraStarted=true;updateFlip();}catch(e){hasCameraStarted=!!stream;updateFlip();showMessage('err','Unable to open camera. Allow access or upload a photo.');}}
+    if(countryTrigger&&countryMenu){countryTrigger.addEventListener('click',e=>{e.stopPropagation();countryMenu.classList.toggle('show');if(countryMenu.classList.contains('show')&&countrySearch)setTimeout(()=>countrySearch.focus(),60);});document.addEventListener('click',e=>{const pk=document.getElementById('countryPicker');if(pk&&!pk.contains(e.target))countryMenu.classList.remove('show');});}
+    document.querySelectorAll('#ffModal .platform-choice').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#ffModal .platform-choice').forEach(x=>x.classList.remove('active'));b.classList.add('active');filterFrames();}));
+    if(countrySearch)countrySearch.addEventListener('input',()=>{const q=countrySearch.value.trim().toLowerCase();let v=0;document.querySelectorAll('#ffModal .country-choice').forEach(b=>{const ok=(b.dataset.search||'').includes(q);b.style.display=ok?'flex':'none';if(ok)v++;});if(noCountryResults)noCountryResults.style.display=v?'none':'block';});
+    document.querySelectorAll('#ffModal .country-choice').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#ffModal .country-choice').forEach(x=>x.classList.remove('active'));b.classList.add('active');selectedCountryFlag.src=b.dataset.flag;selectedCountryName.textContent=b.dataset.countryName;selectedCountryCode.textContent=b.dataset.countryCode;if(countryMenu)countryMenu.classList.remove('show');if(countrySearch){countrySearch.value='';document.querySelectorAll('#ffModal .country-choice').forEach(x=>x.style.display='flex');if(noCountryResults)noCountryResults.style.display='none';}updSummary();updFlagOverlay();clearMessage();}));
+    document.querySelectorAll('#ffModal .frame-choice').forEach(b=>b.addEventListener('click',()=>{if(b.style.display==='none')return;document.querySelectorAll('#ffModal .frame-choice').forEach(x=>x.classList.remove('active'));b.classList.add('active');updSummary();updOverlays();clearMessage();}));
+    startCameraBtn.addEventListener('click',()=>startCamera(currentFacingMode));
+    if(flipCameraBtn)flipCameraBtn.addEventListener('click',async()=>{if(!isMobileDevice)return;const nf=currentFacingMode==='user'?'environment':'user';flipCameraBtn.disabled=true;try{await startCamera(nf);}finally{updateFlip();}});
+    captureBtn.addEventListener('click',()=>{if(!video.srcObject||!video.videoWidth){showMessage('err','Camera is not ready yet.');return;}compose(video);});
+    uploadPhoto.addEventListener('change',()=>{const f=uploadPhoto.files&&uploadPhoto.files[0];if(!f)return;if(!f.type.startsWith('image/')){showMessage('err','Please upload an image file.');return;}const rd=new FileReader();rd.onload=()=>{const im=new Image();im.onload=()=>{if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;hasCameraStarted=false;updateFlip();}compose(im);};im.onerror=()=>showMessage('err','Unable to read photo.');im.src=rd.result;};rd.readAsDataURL(f);});
+    retakeBtn.addEventListener('click',()=>{finalImageData='';finalImageBlob=null;previewImage.src='';previewImage.style.display='none';saveDownloadBtn.disabled=true;retakeBtn.disabled=true;if(stream){video.style.display='block';updOverlays();cameraEmpty.style.display='none';captureBtn.disabled=false;}else{video.style.display='none';cameraEmpty.style.display='grid';captureBtn.disabled=true;}clearMessage();});
+    saveDownloadBtn.addEventListener('click',async()=>{if(!finalImageData||!finalImageBlob){showMessage('err','Create your photo first.');return;}const p=selPlatform(),c=selCountry(),f=selFrame();if(!p||!c||!f){showMessage('err','Please choose a platform, country and frame first.');return;}saveDownloadBtn.disabled=true;saveDownloadBtn.textContent='Saving…';try{const fd=new FormData();fd.append('csrf',csrf);fd.append('photo',finalImageBlob,'wc2026-fan-filter.jpg');fd.append('country_id',c.id);fd.append('frame_id',f.id);fd.append('platform_id',p.id);const res=await fetch('/WC/api/save_filter_photo.php',{method:'POST',body:fd,credentials:'same-origin'});const data=await res.json();if(!data.ok)throw new Error(data.message||'Unable to save photo.');downloadFanImage();showMessage('ok','Photo saved and downloaded successfully.');}catch(e){downloadFanImage();showMessage('ok','Photo downloaded. (Server save not reachable.)');}finally{saveDownloadBtn.disabled=false;saveDownloadBtn.textContent='⚽ Save & Download';}});
+    window.addEventListener('resize',()=>updFlagOverlay());
+    filterFrames();updOverlays();updateFlip();
 })();
 </script>
 
