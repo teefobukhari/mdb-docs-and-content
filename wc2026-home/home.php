@@ -827,6 +827,30 @@ $onlineUsers = wc_rows($conn, "
     LIMIT 24
 ");
 $onlineCount = count($onlineUsers);
+
+/* ---- (8) Native Fan Filter studio data (frames + countries) ---- */
+if (!function_exists('wc_asset_path')) {
+    function wc_asset_path($path): string {
+        $path = trim((string)$path);
+        if ($path === '') return '';
+        if (preg_match('#^https?://#i', $path)) return $path;
+        if (str_starts_with($path, '/WC/') || str_starts_with($path, '/WC2026/')) return $path;
+        if (str_starts_with($path, 'WC/') || str_starts_with($path, 'WC2026/')) return '/' . $path;
+        return '/WC/' . ltrim($path, '/');
+    }
+}
+$ffFrames = wc_rows($conn, "
+    SELECT id, frame_name, frame_path, preview_path
+    FROM WC2026_Filter_Frames
+    WHERE status='Active'
+    ORDER BY sort_order ASC, id ASC
+");
+$ffCountries = wc_rows($conn, "
+    SELECT id, country_name, country_code, flag_path
+    FROM WC2026_Filter_Countries
+    WHERE status='Active'
+    ORDER BY sort_order ASC, country_name ASC
+");
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -2650,7 +2674,7 @@ body{
     width:66px !important;
     height:66px !important;
     font-size:58px !important;
-    bottom:60px !important;
+    bottom:60px;
 }
 
 .aim{
@@ -4632,6 +4656,21 @@ body:before{
                 <!-- Oceania -->
                 <path d="M800,330 C779,340 785,372 811,376 C826,401 871,401 881,375 C906,365 900,334 874,330 C849,314 820,318 800,330 Z"/>
             </g>
+
+            <!-- (4) animated host-region flight arcs + pulsing host-city pins (2026: USA / Mexico / Canada) -->
+            <g class="wm-hosts">
+                <path class="wm-arc" d="M150,120 C170,40 230,60 200,150"></path>
+                <path class="wm-arc" d="M200,150 C240,210 150,210 160,170"></path>
+                <circle class="wm-ping-ring" cx="160" cy="120" r="9"></circle>
+                <circle class="wm-ping" cx="160" cy="120" r="4.5"></circle>
+                <text class="wm-host-tip" x="172" y="116">Canada</text>
+                <circle class="wm-ping-ring live" cx="185" cy="150" r="9"></circle>
+                <circle class="wm-ping live" cx="185" cy="150" r="4.5"></circle>
+                <text class="wm-host-tip" x="197" y="154">USA</text>
+                <circle class="wm-ping-ring" cx="160" cy="185" r="9"></circle>
+                <circle class="wm-ping" cx="160" cy="185" r="4.5"></circle>
+                <text class="wm-host-tip" x="118" y="205">Mexico</text>
+            </g>
         </svg>
 
         <div class="map-head">
@@ -4816,6 +4855,16 @@ body:before{
                 <span data-i18n="showFullBracket">Show Full Bracket</span> <span>↗</span>
             </button>
         </div>
+    </section>
+
+    <!-- (1) Mystery / coming-soon teaser — to be opened later -->
+    <section class="card soon-card" id="mysteryBoxCard">
+        <div class="soon-shimmer"></div>
+        <div class="soon-badge">🔒 <span data-i18n="soonBadge">Coming Soon</span></div>
+        <div class="soon-lock">🎁</div>
+        <div class="soon-title" data-i18n="soonTitle">Mystery Box</div>
+        <div class="soon-sub" data-i18n="soonSub">A surprise World Cup reward drop is on its way. Keep playing and predicting — this box unlocks later in the tournament.</div>
+        <button type="button" class="soon-cta" disabled><span data-i18n="soonCta">Unlocks Soon</span> →</button>
     </section>
 
     <section class="layout">
@@ -5003,19 +5052,67 @@ body:before{
     </div>
 </div>
 
-<!-- (1) Fan Filter Studio pop-up (opens from the nav icon; iframe loads on first open) -->
+<!-- (8) Fan Filter Studio pop-up — native (functional) studio, opens from the nav icon -->
 <div class="modal" id="fanFilterModal">
-    <div class="modal-card fanfilter-modal-card">
+    <div class="modal-card fanfilter-modal-card ff-native">
         <div class="fanfilter-modal-head">
             <div class="modal-kicker" data-i18n="fanFilterTitle">Fan Filter Studio</div>
             <div class="fanfilter-modal-tools">
-                <a href="/WC/fan_filter.php" target="_blank" rel="noopener" class="match-link soft" data-i18n="openFull">Open full page</a>
                 <button type="button" class="ff-close" id="closeFanFilterBtn" aria-label="Close">✕</button>
             </div>
         </div>
-        <div class="fanfilter-frame">
-            <iframe id="fanFilterFrame" data-src="/WC/fan_filter.php" title="Fan Filter Studio" referrerpolicy="same-origin"></iframe>
+
+        <?php if (empty($ffFrames) || empty($ffCountries)): ?>
+            <div class="ff-empty-note" data-i18n="ffNeedData">Add active countries and frames to enable the studio.</div>
+        <?php else: ?>
+        <div class="ff-studio">
+            <div class="ff-pane">
+                <div class="ff-label" data-i18n="fanFilterTitle">Photo Preview</div>
+                <div class="ff-camera">
+                    <video id="ffVideo" autoplay playsinline muted></video>
+                    <canvas id="ffCanvas" width="720" height="900"></canvas>
+                    <img id="ffPreview" alt="Preview">
+                    <div class="ff-empty" id="ffEmpty"><div><b>⚽</b><br><span data-i18n="ffReady">Start the camera or upload a photo.</span></div></div>
+                </div>
+                <div class="ff-controls">
+                    <button type="button" class="ff-btn primary" id="ffStart">📷 <span data-i18n="ffStartCam">Start Camera</span></button>
+                    <label class="ff-btn soft" for="ffUpload">⬆️ <span data-i18n="ffUpload">Upload Photo</span></label>
+                    <input type="file" id="ffUpload" accept="image/*" hidden>
+                    <button type="button" class="ff-btn gold" id="ffCapture" disabled>⚽ <span data-i18n="ffCapture">Capture</span></button>
+                    <button type="button" class="ff-btn soft" id="ffRetake" disabled>↩️ <span data-i18n="ffRetake">Retake</span></button>
+                    <button type="button" class="ff-btn green span2" id="ffSave" disabled>⬇️ <span data-i18n="ffSave">Save &amp; Download</span></button>
+                </div>
+                <div class="ff-msg" id="ffMsg"></div>
+            </div>
+
+            <div class="ff-pane">
+                <div class="ff-label" data-i18n="ffChooseCountry">Choose Country</div>
+                <div class="ff-countries" id="ffCountries">
+                    <?php foreach ($ffCountries as $i => $c): ?>
+                        <button type="button" class="ff-chip <?= $i === 0 ? 'active' : '' ?>"
+                            data-id="<?= (int)$c['id'] ?>"
+                            data-code="<?= htmlspecialchars($c['country_code'], ENT_QUOTES, 'UTF-8') ?>"
+                            data-flag="<?= htmlspecialchars(wc_asset_path($c['flag_path']), ENT_QUOTES, 'UTF-8') ?>">
+                            <img src="<?= htmlspecialchars(wc_asset_path($c['flag_path']), ENT_QUOTES, 'UTF-8') ?>" alt="">
+                            <span><?= htmlspecialchars($c['country_name'], ENT_QUOTES, 'UTF-8') ?></span>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+                <div class="ff-label" data-i18n="ffChooseFrame" style="margin-top:14px">Choose Frame</div>
+                <div class="ff-frames" id="ffFrames">
+                    <?php foreach ($ffFrames as $i => $f): ?>
+                        <?php $prev = $f['preview_path'] ?: $f['frame_path']; ?>
+                        <button type="button" class="ff-frame <?= $i === 0 ? 'active' : '' ?>"
+                            data-id="<?= (int)$f['id'] ?>"
+                            data-frame="<?= htmlspecialchars(wc_asset_path($f['frame_path']), ENT_QUOTES, 'UTF-8') ?>">
+                            <img src="<?= htmlspecialchars(wc_asset_path($prev), ENT_QUOTES, 'UTF-8') ?>" alt="">
+                            <span><?= htmlspecialchars($f['frame_name'], ENT_QUOTES, 'UTF-8') ?></span>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
         </div>
+        <?php endif; ?>
     </div>
 </div>
 
@@ -5243,7 +5340,7 @@ function shoot(){
     setTimeout(() => {
         ball.classList.remove('shooting');
         ball.style.left = '50%';
-        ball.style.bottom = '70px';
+        ball.style.bottom = '';   // clear inline so the per-breakpoint CSS idle position (desktop/mobile) applies
         ball.style.transform = '';
     }, 460);
 
@@ -5602,27 +5699,36 @@ document.addEventListener('DOMContentLoaded', function(){
     const moreBtn = document.getElementById('bracketMoreBtn');
     const showFullBtn = document.getElementById('bracketShowFull');
 
+    const footer = document.getElementById('bracketPreviewFooter');
+
     function expandBracket(){
         if (!card) return;
         card.classList.add('expanded');
         card.classList.remove('bracket-preview-mode');
-
-        if (moreBtn) {
-            moreBtn.innerHTML = 'FULL VIEW <span>✓</span>';
+        if (moreBtn) moreBtn.innerHTML = 'MINIMIZE <span>✕</span>';
+        if (footer) {
+            footer.style.display = 'flex';
+            if (showFullBtn) showFullBtn.innerHTML = '<span>Minimize Bracket</span> <span>↙</span>';
         }
-
-        setTimeout(() => {
-            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 80);
+        setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
     }
 
-    if (moreBtn) {
-        moreBtn.addEventListener('click', expandBracket);
+    function collapseBracket(){
+        if (!card) return;
+        card.classList.remove('expanded');
+        card.classList.add('bracket-preview-mode');
+        if (moreBtn) moreBtn.innerHTML = 'MORE <span>→</span>';
+        if (showFullBtn) showFullBtn.innerHTML = '<span>Show Full Bracket</span> <span>↗</span>';
+        setTimeout(() => card.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80);
     }
 
-    if (showFullBtn) {
-        showFullBtn.addEventListener('click', expandBracket);
+    function toggleBracket(){
+        if (card && card.classList.contains('expanded')) collapseBracket();
+        else expandBracket();
     }
+
+    if (moreBtn) moreBtn.addEventListener('click', toggleBracket);
+    if (showFullBtn) showFullBtn.addEventListener('click', toggleBracket);
 })();
 </script>
 
@@ -5992,7 +6098,9 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       socialTitle:'Fan Wall',socialSub:'Share your moment • comment • like',socialPlaceholder:'Say something about the World Cup…',
       attachPhoto:'Add photo',post:'Post',socialLoading:'Loading the fan wall…',socialEmpty:'Be the first to post on the fan wall!',
       likeWord:'Like',commentWord:'Comment',sendWord:'Send',commentPh:'Write a comment…',justNow:'just now',
-      fanFilterTitle:'Fan Filter Studio',openFull:'Open full page'
+      fanFilterTitle:'Fan Filter Studio',openFull:'Open full page',
+      soonBadge:'Coming Soon',soonTitle:'Mystery Box',soonSub:'A surprise World Cup reward drop is on its way. Keep playing and predicting — this box unlocks later in the tournament.',soonCta:'Unlocks Soon',
+      ffChooseCountry:'Choose Country',ffChooseFrame:'Choose Frame',ffStartCam:'Start Camera',ffUpload:'Upload Photo',ffCapture:'Capture',ffRetake:'Retake',ffSave:'Save & Download',ffReady:'Start the camera or upload a photo.',ffNeedData:'Add active countries and frames to enable the studio.'
     },
     ar:{
       brandSub:'دوري التوقعات • تحدي الأهداف اليومي',themeCatrion:'كاتريون',themeSaudi:'السعودية',
@@ -6037,7 +6145,9 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       socialTitle:'جدار المشجعين',socialSub:'شارك لحظتك • علّق • أعجبني',socialPlaceholder:'شارك رأيك عن كأس العالم…',
       attachPhoto:'إضافة صورة',post:'نشر',socialLoading:'جارٍ تحميل جدار المشجعين…',socialEmpty:'كن أول من ينشر على جدار المشجعين!',
       likeWord:'إعجاب',commentWord:'تعليق',sendWord:'إرسال',commentPh:'اكتب تعليقًا…',justNow:'الآن',
-      fanFilterTitle:'استوديو فلتر المشجع',openFull:'فتح الصفحة كاملة'
+      fanFilterTitle:'استوديو فلتر المشجع',openFull:'فتح الصفحة كاملة',
+      soonBadge:'قريبًا',soonTitle:'الصندوق الغامض',soonSub:'مكافأة مفاجئة من كأس العالم في الطريق. واصل اللعب والتوقع — سيُفتح هذا الصندوق لاحقًا خلال البطولة.',soonCta:'يُفتح قريبًا',
+      ffChooseCountry:'اختر الدولة',ffChooseFrame:'اختر الإطار',ffStartCam:'تشغيل الكاميرا',ffUpload:'رفع صورة',ffCapture:'التقاط',ffRetake:'إعادة',ffSave:'حفظ وتنزيل',ffReady:'شغّل الكاميرا أو ارفع صورة.',ffNeedData:'أضف دولًا وإطارات نشطة لتفعيل الاستوديو.'
     }
   };
   var lang = (function(){ try{ return localStorage.getItem('wc_lang')||'en'; }catch(e){ return 'en'; } })();
@@ -6191,6 +6301,83 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
 .fanfilter-frame{border-radius:18px;overflow:hidden;border:1px solid rgba(168,231,255,.18);background:#05162F;height:74vh}
 .fanfilter-frame iframe{width:100%;height:100%;border:0;display:block}
 @media(max-width:768px){.next24-wrap{margin:16px auto}.fanfilter-frame{height:68vh}}
+
+/* (3) My Profile pop-up — dark card so the white-forced text is readable */
+#profileModal .modal-card{background:linear-gradient(150deg,#0B2C55,#071A35) !important;border:1px solid rgba(168,231,255,.2);color:#fff}
+#profileModal .modal-card h3{color:#fff !important}
+#profileModal .modal-kicker{color:var(--cyan) !important}
+#profileModal .profile-line{border-bottom:1px solid rgba(168,231,255,.14) !important}
+#profileModal .profile-line span:first-child{color:rgba(255,255,255,.72) !important}
+#profileModal .profile-line span:last-child{color:#fff !important}
+
+/* (5) Knockout bracket — align rounds vertically + readable connectors */
+.bracket-col{display:flex !important;flex-direction:column;justify-content:space-around;min-height:100%}
+.bracket-grid{align-items:stretch !important}
+.bracket-col:first-child{justify-content:flex-start}
+.bracket-match{position:relative}
+.bracket-match:after{right:-13px !important;width:13px !important;height:2px !important;background:rgba(168,231,255,.35) !important;top:50% !important}
+.bracket-col:last-child .bracket-match:after{display:none !important}
+.bracket-col:not(:first-child) .bracket-match:before{content:"";position:absolute;left:-13px;top:50%;width:13px;height:2px;background:rgba(168,231,255,.35)}
+.bracket-stage-title{padding:8px 0;border-radius:10px;background:rgba(255,255,255,.06)}
+
+/* (6) keep the footer visible when expanded so it can act as the Minimize control */
+.knockout-card.expanded .bracket-preview-footer{display:flex !important}
+
+/* (4) Live World Cup Map — animated, more attractive */
+.world-map-svg .wm-land path{animation:wmLandGlow 6s ease-in-out infinite}
+@keyframes wmLandGlow{0%,100%{fill:rgba(85,183,255,.14)}50%{fill:rgba(85,183,255,.22)}}
+.wm-ping{fill:var(--gold,#F5C85B)}
+.wm-ping-ring{fill:none;stroke:var(--gold,#F5C85B);stroke-width:2;transform-origin:center;transform-box:fill-box;animation:wmPing 2.4s ease-out infinite}
+.wm-ping.live{fill:#22C55E}.wm-ping-ring.live{stroke:#22C55E}
+.wm-arc{fill:none;stroke:rgba(168,231,255,.55);stroke-width:2;stroke-dasharray:6 9;stroke-linecap:round;animation:wmDash 1.6s linear infinite}
+@keyframes wmPing{0%{transform:scale(.4);opacity:.9}100%{transform:scale(2.6);opacity:0}}
+@keyframes wmDash{to{stroke-dashoffset:-30}}
+.wm-host-tip{fill:#fff;font:900 13px Inter,sans-serif;paint-order:stroke;stroke:rgba(7,26,53,.65);stroke-width:3}
+.map-pin-card{transition:transform .25s ease,box-shadow .25s ease}
+.map-pin-card:hover{transform:translateY(-3px)}
+
+/* (1) coming-soon / mystery teaser card */
+.soon-card{position:relative;overflow:hidden;text-align:center;
+    background:radial-gradient(circle at 80% 0%,rgba(245,200,91,.18),transparent 42%),linear-gradient(135deg,#0B2C55,#071A35) !important;
+    border:1px solid rgba(245,200,91,.25) !important}
+.soon-card .soon-lock{font-size:42px;filter:drop-shadow(0 8px 18px rgba(0,0,0,.4))}
+.soon-badge{display:inline-flex;align-items:center;gap:7px;margin-bottom:12px;padding:7px 13px;border-radius:999px;font-size:11px;font-weight:900;letter-spacing:.6px;text-transform:uppercase;color:#FFE19A;background:rgba(245,200,91,.14);border:1px solid rgba(245,200,91,.35)}
+.soon-title{font-size:23px;font-weight:950;color:#fff;margin:10px 0 6px;letter-spacing:-.4px}
+.soon-sub{color:rgba(255,255,255,.66);font-weight:700;font-size:14px;max-width:520px;margin:0 auto 14px;line-height:1.6}
+.soon-shimmer{position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.08) 50%,transparent 70%);background-size:280% 100%;animation:soonShine 3.2s linear infinite;pointer-events:none}
+@keyframes soonShine{to{background-position:-280% 0}}
+.soon-cta{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:14px;border:1px solid rgba(168,231,255,.25);background:rgba(255,255,255,.06);color:#fff;font-weight:900;font-size:13px;cursor:not-allowed;opacity:.85}
+
+/* (8) native Fan Filter studio inside the pop-up */
+.ff-studio{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.ff-pane{border:1px solid rgba(168,231,255,.16);background:rgba(255,255,255,.04);border-radius:18px;padding:14px}
+.ff-label{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.6);margin:2px 0 10px}
+.ff-camera{position:relative;width:100%;aspect-ratio:4/5;border-radius:16px;overflow:hidden;background:#05162F;box-shadow:inset 0 0 0 1px rgba(168,231,255,.16)}
+.ff-camera video,.ff-camera canvas,.ff-camera img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none}
+.ff-camera .ff-empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:rgba(255,255,255,.75);padding:18px;font-weight:800}
+.ff-controls{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:12px}
+.ff-btn{border:0;border-radius:12px;min-height:44px;padding:10px 12px;font:inherit;font-weight:900;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.ff-btn[disabled]{opacity:.45;cursor:not-allowed}
+.ff-btn.primary{background:linear-gradient(135deg,#0E63E6,#0847B8);color:#fff}
+.ff-btn.gold{background:linear-gradient(135deg,#F5C85B,#E7A90C);color:#2A2105}
+.ff-btn.soft{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(168,231,255,.18)}
+.ff-btn.green{background:linear-gradient(135deg,#15B97A,#0B8E5C);color:#fff}
+.ff-btn.span2{grid-column:1 / -1}
+.ff-msg{display:none;margin-top:10px;border-radius:12px;padding:10px 12px;font-weight:800;font-size:13px}
+.ff-msg.ok{display:block;background:rgba(17,163,106,.16);color:#7EF4AE;border:1px solid rgba(17,163,106,.3)}
+.ff-msg.err{display:block;background:rgba(233,71,71,.14);color:#FFB4B4;border:1px solid rgba(233,71,71,.3)}
+.ff-countries{display:flex;flex-wrap:wrap;gap:8px;max-height:120px;overflow:auto;margin-bottom:6px}
+.ff-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(168,231,255,.18);background:rgba(255,255,255,.05);color:#fff;border-radius:999px;padding:6px 11px;font-weight:800;font-size:12px;cursor:pointer}
+.ff-chip img{width:20px;height:20px;border-radius:5px;object-fit:cover}
+.ff-chip.active{border-color:#F5C85B;background:rgba(245,200,91,.16)}
+.ff-frames{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.ff-frame{border:2px solid transparent;background:rgba(255,255,255,.05);border-radius:14px;padding:8px;cursor:pointer}
+.ff-frame img{width:100%;height:64px;object-fit:cover;border-radius:10px;background:#0a2347}
+.ff-frame span{display:block;margin-top:6px;font-size:11px;font-weight:900;color:#fff;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ff-frame.active{border-color:#0E63E6;background:rgba(14,99,230,.16)}
+.ff-empty-note{padding:14px;border-radius:14px;background:rgba(245,200,91,.12);border:1px solid rgba(245,200,91,.3);color:#FFE19A;font-weight:800;font-size:13px;line-height:1.6}
+.fanfilter-modal-card.ff-native{max-width:min(960px,96vw)}
+@media(max-width:780px){.ff-studio{grid-template-columns:1fr}}
 </style>
 
 <script>
@@ -6227,14 +6414,83 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
   /* (3) audit prediction clicks */
   d.querySelectorAll('.next24-actions a.primary').forEach(function(a){ a.addEventListener('click', function(){ wcAudit('open_prediction', a.getAttribute('href')||''); }); });
 
-  /* (1) fan filter studio pop-up — iframe loads only on first open */
-  var ffModal=d.getElementById('fanFilterModal'), ffFrame=d.getElementById('fanFilterFrame');
-  function openFanFilter(){ if(!ffModal) return; if(ffFrame && !ffFrame.src){ ffFrame.src=ffFrame.dataset.src; } ffModal.classList.add('active'); wcAudit('open_fan_filter'); }
-  function closeFanFilter(){ if(ffModal) ffModal.classList.remove('active'); }
+  /* (8) fan filter studio pop-up — NATIVE functional studio (no iframe) */
+  var ffModal=d.getElementById('fanFilterModal');
+  function closeFanFilter(){ if(ffModal){ ffModal.classList.remove('active'); ffStopCam(); } }
+  function openFanFilter(){ if(ffModal){ ffModal.classList.add('active'); wcAudit('open_fan_filter'); } }
   var offb=d.getElementById('openFanFilterBtn'); if(offb) offb.addEventListener('click', openFanFilter);
   var cffb=d.getElementById('closeFanFilterBtn'); if(cffb) cffb.addEventListener('click', closeFanFilter);
   if(ffModal) ffModal.addEventListener('click', function(e){ if(e.target===ffModal) closeFanFilter(); });
   d.addEventListener('keydown', function(e){ if(e.key==='Escape') closeFanFilter(); });
+
+  // ---- native studio engine ----
+  var ffVideo=d.getElementById('ffVideo'), ffCanvas=d.getElementById('ffCanvas'), ffPreview=d.getElementById('ffPreview'),
+      ffEmpty=d.getElementById('ffEmpty'), ffMsg=d.getElementById('ffMsg'),
+      ffStartBtn=d.getElementById('ffStart'), ffCapBtn=d.getElementById('ffCapture'), ffRetakeBtn=d.getElementById('ffRetake'),
+      ffSaveBtn=d.getElementById('ffSave'), ffUploadInput=d.getElementById('ffUpload');
+  var ffStream=null, ffData='', ffBlob=null, ffCtx = ffCanvas ? ffCanvas.getContext('2d') : null;
+  function ffShow(type,t){ if(!ffMsg) return; ffMsg.className='ff-msg '+(type==='ok'?'ok':'err'); ffMsg.textContent=t; }
+  function ffClear(){ if(ffMsg){ ffMsg.className='ff-msg'; ffMsg.textContent=''; } }
+  function ffStopCam(){ if(ffStream){ ffStream.getTracks().forEach(function(t){t.stop();}); ffStream=null; } }
+  function ffSel(sel){ var el=d.querySelector(sel); return el ? el.dataset : null; }
+  function ffLoad(src){ return new Promise(function(res,rej){ var im=new Image(); im.crossOrigin='anonymous'; im.onload=function(){res(im);}; im.onerror=function(){rej();}; im.src=src; }); }
+  function ffCover(src,w,h){ var sw=src.videoWidth||src.naturalWidth||src.width, sh=src.videoHeight||src.naturalHeight||src.height; if(!sw||!sh) throw 0; var r=Math.max(w/sw,h/sh),nw=sw*r,nh=sh*r; ffCtx.drawImage(src,(w-nw)/2,(h-nh)/2,nw,nh); }
+  function ffRound(x,y,w,h,r){ ffCtx.beginPath(); ffCtx.moveTo(x+r,y); ffCtx.arcTo(x+w,y,x+w,y+h,r); ffCtx.arcTo(x+w,y+h,x,y+h,r); ffCtx.arcTo(x,y+h,x,y,r); ffCtx.arcTo(x,y,x+w,y,r); ffCtx.closePath(); }
+  async function ffCompose(source){
+    ffClear();
+    var country=ffSel('.ff-chip.active'), frame=ffSel('.ff-frame.active');
+    if(!country||!frame){ ffShow('err','Choose a country and frame first.'); return; }
+    ffCanvas.width=720; ffCanvas.height=900; ffCtx.clearRect(0,0,720,900);
+    try{ ffCover(source,0,0+0,720,900); }catch(e){ ffShow('err','Image not ready. Try again.'); return; }
+    try{ var fr=await ffLoad(frame.frame); ffCtx.drawImage(fr,0,0,720,900); }catch(e){ ffShow('err','Frame image could not load.'); return; }
+    try{
+      var fl=await ffLoad(country.flag), fw=170,fh=120,fx=720-fw-55,fy=55;
+      ffCtx.save(); ffCtx.shadowColor='rgba(0,0,0,.25)'; ffCtx.shadowBlur=18; ffCtx.fillStyle='#fff'; ffRound(fx-10,fy-10,fw+20,fh+20,24); ffCtx.fill(); ffCtx.restore();
+      ffCtx.save(); ffRound(fx,fy,fw,fh,18); ffCtx.clip(); ffCtx.drawImage(fl,fx,fy,fw,fh); ffCtx.restore();
+      ffCtx.font='900 34px Inter, Arial'; ffCtx.fillStyle='#fff'; ffCtx.textAlign='left'; ffCtx.shadowColor='rgba(0,0,0,.45)'; ffCtx.shadowBlur=8; ffCtx.fillText(country.code,55,100); ffCtx.shadowBlur=0;
+    }catch(e){ ffShow('err','Flag image could not load.'); return; }
+    ffData=ffCanvas.toDataURL('image/jpeg',0.88);
+    ffBlob=await new Promise(function(res){ ffCanvas.toBlob(res,'image/jpeg',0.88); });
+    ffPreview.src=ffData; ffPreview.style.display='block'; ffCanvas.style.display='none'; ffVideo.style.display='none'; ffEmpty.style.display='none';
+    ffSaveBtn.disabled=false; ffRetakeBtn.disabled=false; ffShow('ok','Photo created successfully.');
+  }
+  if(ffStartBtn) ffStartBtn.addEventListener('click', async function(){
+    ffClear();
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){ ffShow('err','Camera not supported. Please upload a photo.'); return; }
+    try{ ffStopCam(); ffStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:1080},height:{ideal:1350}},audio:false});
+      ffVideo.srcObject=ffStream; ffVideo.style.display='block'; ffPreview.style.display='none'; ffEmpty.style.display='none'; await ffVideo.play();
+      ffCapBtn.disabled=false; ffRetakeBtn.disabled=true; ffSaveBtn.disabled=true; ffData=''; ffBlob=null;
+    }catch(e){ ffShow('err','Unable to open camera. Allow access or upload a photo.'); }
+  });
+  if(ffCapBtn) ffCapBtn.addEventListener('click', function(){ if(!ffVideo.srcObject||!ffVideo.videoWidth){ ffShow('err','Camera not ready yet.'); return; } ffCompose(ffVideo); });
+  if(ffUploadInput) ffUploadInput.addEventListener('change', function(){
+    var f=ffUploadInput.files&&ffUploadInput.files[0]; if(!f) return; if(!f.type.startsWith('image/')){ ffShow('err','Please upload an image file.'); return; }
+    var rd=new FileReader(); rd.onload=function(){ var im=new Image(); im.onload=function(){ ffStopCam(); ffCompose(im); }; im.onerror=function(){ ffShow('err','Unable to read photo.'); }; im.src=rd.result; }; rd.readAsDataURL(f);
+  });
+  if(ffRetakeBtn) ffRetakeBtn.addEventListener('click', function(){
+    ffData=''; ffBlob=null; ffPreview.src=''; ffPreview.style.display='none'; ffSaveBtn.disabled=true; ffRetakeBtn.disabled=true;
+    if(ffStream){ ffVideo.style.display='block'; ffEmpty.style.display='none'; ffCapBtn.disabled=false; } else { ffVideo.style.display='none'; ffEmpty.style.display='grid'; ffCapBtn.disabled=true; }
+    ffClear();
+  });
+  if(ffSaveBtn) ffSaveBtn.addEventListener('click', async function(){
+    if(!ffData||!ffBlob){ ffShow('err','Create your photo first.'); return; }
+    var country=ffSel('.ff-chip.active'), frame=ffSel('.ff-frame.active');
+    ffSaveBtn.disabled=true; var lbl=ffSaveBtn.innerHTML; ffSaveBtn.textContent='Saving…';
+    try{
+      var fd=new FormData(); fd.append('csrf',csrf); fd.append('photo',ffBlob,'wc2026-fan-filter.jpg'); fd.append('country_id',country.id); fd.append('frame_id',frame.id);
+      var res=await fetch('/WC/api/save_filter_photo.php',{method:'POST',body:fd,credentials:'same-origin'});
+      var data=await res.json(); if(!data.ok) throw new Error(data.message||'Unable to save photo.');
+      var a=d.createElement('a'); a.download='wc2026-fan-filter.jpg'; a.href=ffData; a.click();
+      wcAudit('fan_filter_save', country.code+'/'+frame.id);
+      ffShow('ok','Photo saved and downloaded successfully.');
+    }catch(e){
+      // still let the fan download locally even if the save endpoint is unavailable
+      var a=d.createElement('a'); a.download='wc2026-fan-filter.jpg'; a.href=ffData; a.click();
+      ffShow('ok','Photo downloaded. (Saved locally — server save endpoint not reachable.)');
+    }finally{ ffSaveBtn.disabled=false; ffSaveBtn.innerHTML=lbl; }
+  });
+  d.querySelectorAll('#ffCountries .ff-chip').forEach(function(b){ b.addEventListener('click', function(){ d.querySelectorAll('#ffCountries .ff-chip').forEach(function(x){x.classList.remove('active');}); b.classList.add('active'); }); });
+  d.querySelectorAll('#ffFrames .ff-frame').forEach(function(b){ b.addEventListener('click', function(){ d.querySelectorAll('#ffFrames .ff-frame').forEach(function(x){x.classList.remove('active');}); b.classList.add('active'); }); });
 
   /* (10) social wall — UI scaffold posting to /WC2026/api endpoints, degrades gracefully */
   var feed=d.getElementById('socialFeed'), composer=d.getElementById('socialComposer'),
