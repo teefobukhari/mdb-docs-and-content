@@ -2347,6 +2347,9 @@ html[data-theme="saudi"] .tm-frame-wrap{border-color:rgba(126,244,174,.22)}
 .nav-burger svg{width:22px;height:22px}
 @media(max-width:768px){
   .nav{flex-wrap:wrap;position:relative}
+  /* When the drawer is open, lift the whole hero (which contains the nav
+     drawer) above the page content (.container z-index:5) and the backdrop. */
+  html.wc-nav-open .hero{z-index:1995 !important}
   /* Mobile nav drawer — !important so it can't be clobbered by the
      unconditional ".nav/.top-actions" z-index/position rules above. */
   .nav{flex-wrap:wrap;position:relative;z-index:2002 !important}
@@ -2381,7 +2384,7 @@ html[dir="rtl"] .match-social-mini,html[dir="rtl"] .match-meta{text-align:right}
   var b=document.getElementById('navBurger'), a=document.getElementById('topActions');
   if(!b||!a) return;
   var bd=document.createElement('div'); bd.className='nav-backdrop'; document.body.appendChild(bd);
-  function setOpen(open){ a.classList.toggle('open', open); bd.classList.toggle('show', open); b.setAttribute('aria-expanded', open?'true':'false'); }
+  function setOpen(open){ a.classList.toggle('open', open); bd.classList.toggle('show', open); document.documentElement.classList.toggle('wc-nav-open', open); b.setAttribute('aria-expanded', open?'true':'false'); }
   b.addEventListener('click', function(e){ e.stopPropagation(); setOpen(!a.classList.contains('open')); });
   bd.addEventListener('click', function(){ setOpen(false); });
   document.addEventListener('keydown', function(e){ if(e.key==='Escape') setOpen(false); });
