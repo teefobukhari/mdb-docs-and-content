@@ -25,6 +25,35 @@ $mobile = $_SESSION['MOBILE'] ?? '';
 $logoPath = "/WC2026/partials/CATRION%20logo.png";
 $iconPath = "/WC2026/partials/CATRION%20Icon.png";
 
+/* Optional top background banner. Drop an image at this path to show it;
+   if it is missing the gradient hero is used as a graceful fallback. */
+$bannerPath = "/WC2026/partials/banner.png";
+
+/* ----------------------------------------------------------------------
+ * Scoring rules (single source of truth). Applied server-side wherever
+ * points are awarded (photo save endpoint + predictions scoring job).
+ *  - Photobooth capture .... 10 pts (once per day)
+ *  - Predict match winner .... 3 pts
+ *  - Predict correct score ... 5 pts
+ *  - Predict champion ........ 15 pts (FINAL only)
+ * -------------------------------------------------------------------- */
+const WC_PTS_PHOTO            = 10;
+const WC_PTS_PREDICT_WINNER   = 3;
+const WC_PTS_PREDICT_SCORE    = 5;
+const WC_PTS_PREDICT_CHAMPION = 15;
+const WC_PHOTO_DAILY_CAP      = 1; // photo points can be earned once per day
+
+/* Server-side prediction lock: a prediction may only be submitted BEFORE
+   kickoff. Enforce this in the predictions endpoint, e.g.:
+       if (!wc_prediction_open($kickoffDatetime)) { reject('Match already started'); }
+   Champion predictions follow the same rule against the Final kickoff. */
+function wc_prediction_open(?string $kickoffDatetime): bool {
+    if (!$kickoffDatetime) return false;
+    $ts = strtotime((string)$kickoffDatetime);
+    if ($ts === false) return false;
+    return time() < $ts; // closed the moment the match starts
+}
+
 function wc_scalar(mysqli $conn, string $sql, string $types = '', array $params = []) {
     $stmt = $conn->prepare($sql);
     if (!$stmt) return 0;
@@ -748,6 +777,56 @@ $bonusQuestion = wc_rows($conn, "
 $bonusQuestionJson = !empty($bonusQuestion)
     ? json_encode($bonusQuestion[0], JSON_UNESCAPED_UNICODE)
     : 'null';
+
+/* ---- Weekly + overall score (current ISO week vs all-time) ---- */
+$overallScore = (int)$myGamePoints;
+$weeklyScore  = (int)wc_scalar(
+    $conn,
+    "SELECT COALESCE(SUM(total_points),0)
+     FROM WC2026_Game_Sessions
+     WHERE user_id=? AND YEARWEEK(play_date,3)=YEARWEEK(CURDATE(),3)",
+    "i",
+    [$userId]
+);
+$weeklyRank = '--';
+$wr = wc_rows($conn, "
+    SELECT rank_no FROM (
+        SELECT user_id,
+               DENSE_RANK() OVER (ORDER BY COALESCE(SUM(total_points),0) DESC) AS rank_no
+        FROM WC2026_Game_Sessions
+        WHERE YEARWEEK(play_date,3)=YEARWEEK(CURDATE(),3)
+        GROUP BY user_id
+    ) r WHERE user_id=? LIMIT 1
+", "i", [$userId]);
+if ($wr) $weeklyRank = '#' . (int)$wr[0]['rank_no'];
+
+/* ---- Next World Cup matches within the next 24 hours ---- */
+$next24Matches = wc_rows($conn, "
+    SELECT id, home_team, away_team, home_logo, away_logo, match_datetime, stadium, city,
+           round_name, status_short, status_long, elapsed, home_score, away_score, is_live, is_finished
+    FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches
+    WHERE (is_finished=0 OR is_finished IS NULL)
+      AND match_datetime >= NOW()
+      AND match_datetime <= DATE_ADD(NOW(), INTERVAL 24 HOUR)
+    ORDER BY match_datetime ASC
+    LIMIT 8
+");
+wc_attach_flags($next24Matches, $flagByName, $flagByCode);
+/* fall back to the very next fixture if nothing is within 24h */
+$next24Fallback = (empty($next24Matches) && !empty($nextMatch)) ? $nextMatch : [];
+wc_attach_flags($next24Fallback, $flagByName, $flagByCode);
+
+/* ---- Recently-online users (activity in the last 15 minutes) ---- */
+$onlineUsers = wc_rows($conn, "
+    SELECT u.full_name, u.location, MAX(g.played_at) AS last_seen
+    FROM WC2026_Game_Sessions g
+    JOIN WC2026_Users u ON u.id = g.user_id
+    WHERE u.status='Active' AND g.played_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+    GROUP BY u.id, u.full_name, u.location
+    ORDER BY last_seen DESC
+    LIMIT 24
+");
+$onlineCount = count($onlineUsers);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -4326,6 +4405,8 @@ body:before{
             </div>
             <a href="/WC2026/" class="top-link active" data-i18n="navHome">Home</a>
             <a href="/WC2026/matches" class="top-link" data-i18n="navMatches">Matches</a>
+            <a href="#fanFilterSection" class="top-link" data-i18n="navFanFilter">Fan Filter</a>
+            <button type="button" class="top-link" id="openProfileBtn" data-i18n="navProfile">My Profile</button>
             <form method="POST" action="/WC2026/" style="margin:0;">
                 <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
                 <input type="hidden" name="action" value="logout">
@@ -4334,7 +4415,7 @@ body:before{
         </div>
     </div>
 
-    <div class="hero-content">
+    <div class="hero-content hero-single">
         <div>
             <div class="badge"><i></i> <span data-i18n="heroBadge">CATRION FIFA WORLD CUP 2026</span></div>
             <h1 data-i18n-html="heroTitle">Score Goals.<br><span>Predict Matches.</span></h1>
@@ -4344,7 +4425,8 @@ body:before{
             </p>
         </div>
 
-        <div class="daily-card">
+        <!-- (2) Challenge Hub card temporarily hidden -->
+        <div class="daily-card" hidden aria-hidden="true">
             <div class="daily-title" data-i18n="dailyTitle">Challenge Hub</div>
             <div class="daily-prize">SAR 20,000</div>
             <div class="daily-sub" data-i18n="dailySub">
@@ -4359,25 +4441,77 @@ body:before{
     </div>
 </header>
 
+<!-- (3) Next World Cup matches within 24 hours — placed right after the banner -->
+<?php $n24 = !empty($next24Matches) ? $next24Matches : $next24Fallback; ?>
+<section class="next24-wrap">
+    <div class="next24-head">
+        <h2 class="next24-title"><span class="next24-dot"></span> <span data-i18n="next24Title">Next Matches · within 24 hours</span></h2>
+        <a href="/WC2026/matches" class="match-link soft" data-i18n="viewFullMatches">View Full Matches</a>
+    </div>
+    <?php if (!empty($n24)): ?>
+        <div class="next24-grid">
+            <?php foreach ($n24 as $nx): ?>
+                <?php
+                    $nxLive = (int)($nx['is_live'] ?? 0) === 1;
+                    $nxWhen = date('D, d M • h:i A', strtotime((string)$nx['match_datetime']));
+                    $nxVenue = trim(($nx['stadium'] ?? '') . (!empty($nx['city']) ? ' • ' . $nx['city'] : ''));
+                    $kickoffOpen = wc_prediction_open((string)$nx['match_datetime']);
+                ?>
+                <article class="next24-card">
+                    <div class="next24-meta">
+                        <?php if ($nxLive): ?><span class="live-badge" data-i18n="liveNow">Live</span><?php else: ?><span class="status-badge"><?= htmlspecialchars($nxWhen, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+                        <?php if (!$kickoffOpen && !$nxLive): ?><span class="lock-badge" title="Predictions closed">🔒 <span data-i18n="closed">Closed</span></span><?php endif; ?>
+                    </div>
+                    <div class="next24-teams">
+                        <div class="n24-team">
+                            <div class="team-logo">
+                                <?php if (!empty($nx['home_logo'])): ?><img src="<?= htmlspecialchars($nx['home_logo'], ENT_QUOTES, 'UTF-8') ?>" alt=""><?php else: ?><span><?= htmlspecialchars(mb_substr(wc_safe_team($nx['home_team']), 0, 2), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+                            </div>
+                            <strong><?= htmlspecialchars(wc_safe_team($nx['home_team']), ENT_QUOTES, 'UTF-8') ?></strong>
+                        </div>
+                        <div class="n24-vs">VS</div>
+                        <div class="n24-team">
+                            <div class="team-logo">
+                                <?php if (!empty($nx['away_logo'])): ?><img src="<?= htmlspecialchars($nx['away_logo'], ENT_QUOTES, 'UTF-8') ?>" alt=""><?php else: ?><span><?= htmlspecialchars(mb_substr(wc_safe_team($nx['away_team']), 0, 2), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
+                            </div>
+                            <strong><?= htmlspecialchars(wc_safe_team($nx['away_team']), ENT_QUOTES, 'UTF-8') ?></strong>
+                        </div>
+                    </div>
+                    <?php if ($nxVenue !== ''): ?><div class="next24-venue"><?= htmlspecialchars($nxVenue, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
+                    <div class="next24-actions">
+                        <?php if ($kickoffOpen): ?>
+                            <a href="/WC2026/matches?fixture=<?= (int)$nx['id'] ?>" class="match-link primary" data-i18n="submitPrediction">Submit Prediction</a>
+                        <?php else: ?>
+                            <span class="match-link soft" style="opacity:.6;cursor:not-allowed" data-i18n="predictionsClosed">Predictions Closed</span>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    <?php else: ?>
+        <div class="next24-empty" data-i18n="no24">No matches kicking off within the next 24 hours. Check the full schedule.</div>
+    <?php endif; ?>
+</section>
+
 <main class="container">
 
     <section class="stats">
         <div class="stat">
-            <div class="stat-label" data-i18n="statMyPoints">My Points</div>
-            <div class="stat-value"><?= (int)$myGamePoints ?></div>
-            <div class="stat-note" data-i18n="statMyPointsNote">All game points</div>
+            <div class="stat-label" data-i18n="statOverall">Overall Score</div>
+            <div class="stat-value"><?= (int)$overallScore ?></div>
+            <div class="stat-note" data-i18n="statOverallNote">All-time points</div>
+        </div>
+
+        <div class="stat">
+            <div class="stat-label" data-i18n="statWeekly">Weekly Score</div>
+            <div class="stat-value"><?= (int)$weeklyScore ?></div>
+            <div class="stat-note"><span data-i18n="statWeeklyNote">This week</span> • <?= htmlspecialchars($weeklyRank, ENT_QUOTES, 'UTF-8') ?></div>
         </div>
 
         <div class="stat">
             <div class="stat-label" data-i18n="statRank">My Rank</div>
             <div class="stat-value"><?= htmlspecialchars($myRank, ENT_QUOTES, 'UTF-8') ?></div>
-            <div class="stat-note" data-i18n="statRankNote">Daily game leaderboard</div>
-        </div>
-
-        <div class="stat">
-            <div class="stat-label" data-i18n="statBest">Best Score</div>
-            <div class="stat-value"><?= (int)$myBestScore ?></div>
-            <div class="stat-note" data-i18n="statBestNote">Highest daily score</div>
+            <div class="stat-note" data-i18n="statRankNote">Overall leaderboard</div>
         </div>
 
         <div class="stat">
@@ -4386,10 +4520,11 @@ body:before{
             <div class="stat-note"><?= (int)$liveMatchesCount ?> <span data-i18n="live">live</span> • <?= (int)$finishedMatchesCount ?> <span data-i18n="finished">finished</span></div>
         </div>
 
+        <!-- (6) Prize Pool replaced with Participants -->
         <div class="stat">
-            <div class="stat-label" data-i18n="statPrize">Prize Pool</div>
-            <div class="stat-value">20K</div>
-            <div class="stat-note">SAR 20,000</div>
+            <div class="stat-label" data-i18n="statParticipants">Participants</div>
+            <div class="stat-value"><?= (int)$participantsCount ?></div>
+            <div class="stat-note"><?= (int)$onlineCount ?> <span data-i18n="onlineNow">online now</span></div>
         </div>
     </section>
 
@@ -4653,124 +4788,6 @@ body:before{
         </div>
     </section>
 
-    <section class="match-dashboard">
-        <div class="card match-card-premium">
-            <?php if (!empty($liveMatches)): ?>
-                <?php $m = $liveMatches[0]; ?>
-                <div class="match-kicker"><i></i> <span data-i18n="kickerLive">Live Now</span></div>
-            <?php elseif (!empty($nextMatch)): ?>
-                <?php $m = $nextMatch[0]; ?>
-                <div class="match-kicker"><i></i> <span data-i18n="kickerNext">Next World Cup Match</span></div>
-            <?php else: ?>
-                <?php $m = null; ?>
-                <div class="match-kicker"><i></i> <span data-i18n="kickerMatches">World Cup Matches</span></div>
-            <?php endif; ?>
-
-            <?php if ($m): ?>
-                <div class="match-teams">
-                    <div class="match-team">
-                        <div class="team-logo">
-                            <?php if (!empty($m['home_logo'])): ?>
-                                <img src="<?= htmlspecialchars($m['home_logo'], ENT_QUOTES, 'UTF-8') ?>" alt="">
-                            <?php else: ?>
-                                <span><?= htmlspecialchars(mb_substr($m['home_team'], 0, 2), ENT_QUOTES, 'UTF-8') ?></span>
-                            <?php endif; ?>
-                        </div>
-                        <strong><?= htmlspecialchars($m['home_team'], ENT_QUOTES, 'UTF-8') ?></strong>
-                    </div>
-
-                    <div class="score-box">
-                        <?php if ((int)($m['is_live'] ?? 0) === 1 || (int)($m['is_finished'] ?? 0) === 1): ?>
-                            <b><?= is_null($m['home_score']) ? '-' : (int)$m['home_score'] ?> - <?= is_null($m['away_score']) ? '-' : (int)$m['away_score'] ?></b>
-                            <span><?= htmlspecialchars($m['status_short'] ?: 'Live', ENT_QUOTES, 'UTF-8') ?></span>
-                        <?php else: ?>
-                            <b>VS</b>
-                            <span><?= date('d M', strtotime($m['match_datetime'])) ?></span>
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="match-team">
-                        <div class="team-logo">
-                            <?php if (!empty($m['away_logo'])): ?>
-                                <img src="<?= htmlspecialchars($m['away_logo'], ENT_QUOTES, 'UTF-8') ?>" alt="">
-                            <?php else: ?>
-                                <span><?= htmlspecialchars(mb_substr($m['away_team'], 0, 2), ENT_QUOTES, 'UTF-8') ?></span>
-                            <?php endif; ?>
-                        </div>
-                        <strong><?= htmlspecialchars($m['away_team'], ENT_QUOTES, 'UTF-8') ?></strong>
-                    </div>
-                </div>
-
-                <div class="match-meta-premium">
-                    <?php if ((int)($m['is_live'] ?? 0) === 1): ?>
-                        <span class="live-badge">Live<?= !empty($m['elapsed']) ? ' ' . (int)$m['elapsed'] . "'" : '' ?></span>
-                    <?php else: ?>
-                        <span class="status-badge"><?= htmlspecialchars($m['status_long'] ?: 'Scheduled', ENT_QUOTES, 'UTF-8') ?></span>
-                    <?php endif; ?>
-                    <br>
-                    <?= date('D, d M Y - h:i A', strtotime($m['match_datetime'])) ?>
-                    <?php if (!empty($m['stadium']) || !empty($m['city'])): ?>
-                        <br><?= htmlspecialchars(trim(($m['stadium'] ?? '') . (!empty($m['city']) ? ' • ' . $m['city'] : '')), ENT_QUOTES, 'UTF-8') ?>
-                    <?php endif; ?>
-                </div>
-
-                <div class="match-links">
-                    <a href="/WC2026/matches" class="match-link primary" data-i18n="viewMatches">View Matches</a>
-                    <a href="/WC2026/matches" class="match-link soft" data-i18n="submitPrediction">Submit Prediction</a>
-                </div>
-            <?php else: ?>
-                <div class="match-meta-premium">
-                    Matches were synced successfully. Once upcoming fixtures are available by date, they will appear here.
-                    <br>Last sync: <?= $lastApiSync ? htmlspecialchars((string)$lastApiSync, ENT_QUOTES, 'UTF-8') : 'Not synced yet' ?>
-                </div>
-            <?php endif; ?>
-        </div>
-
-        <div class="card match-list-card">
-            <h2 class="card-title">
-                <span data-i18n="worldCupFeed">World Cup Feed</span>
-                <small><?= (int)$matchesCount ?> <span data-i18n="matchesSynced">matches synced</span></small>
-            </h2>
-
-            <?php $feedRows = !empty($liveMatches) ? $liveMatches : (!empty($latestResults) ? $latestResults : $upcomingMatches); ?>
-            <?php if (!empty($feedRows)): ?>
-                <?php foreach ($feedRows as $fx): ?>
-                    <div class="fixture-row">
-                        <div class="fixture-main">
-                            <div class="fixture-logos">
-                                <?php if (!empty($fx['home_logo'])): ?>
-                                    <img src="<?= htmlspecialchars($fx['home_logo'], ENT_QUOTES, 'UTF-8') ?>" alt="">
-                                <?php else: ?>
-                                    <span class="fixture-logo-fallback"><?= htmlspecialchars(mb_substr($fx['home_team'], 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
-                                <?php endif; ?>
-                                <?php if (!empty($fx['away_logo'])): ?>
-                                    <img src="<?= htmlspecialchars($fx['away_logo'], ENT_QUOTES, 'UTF-8') ?>" alt="">
-                                <?php else: ?>
-                                    <span class="fixture-logo-fallback"><?= htmlspecialchars(mb_substr($fx['away_team'], 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
-                                <?php endif; ?>
-                            </div>
-                            <div>
-                                <div class="fixture-title"><?= htmlspecialchars($fx['home_team'], ENT_QUOTES, 'UTF-8') ?> vs <?= htmlspecialchars($fx['away_team'], ENT_QUOTES, 'UTF-8') ?></div>
-                                <div class="fixture-sub"><?= date('d M Y - h:i A', strtotime($fx['match_datetime'])) ?> • <?= htmlspecialchars($fx['status_long'] ?: 'Scheduled', ENT_QUOTES, 'UTF-8') ?></div>
-                            </div>
-                        </div>
-                        <div class="fixture-score <?= ((int)($fx['is_live'] ?? 0) === 1) ? 'live' : '' ?>">
-                            <?php if ((int)($fx['is_live'] ?? 0) === 1 || (int)($fx['is_finished'] ?? 0) === 1): ?>
-                                <?= is_null($fx['home_score']) ? '-' : (int)$fx['home_score'] ?> - <?= is_null($fx['away_score']) ? '-' : (int)$fx['away_score'] ?>
-                            <?php else: ?>
-                                VS
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="disabled-box">
-                    No match records found yet in <strong>wc_fixtures</strong>.
-                </div>
-            <?php endif; ?>
-        </div>
-    </section>
-
     <section class="layout">
         <div>
             <div class="card">
@@ -4862,34 +4879,66 @@ body:before{
                 <?php endif; ?>
             </div>
 
+            <!-- (11) Current users — recently online -->
             <div class="card">
-                <h2 class="card-title" data-i18n="myProfile">My Profile</h2>
-
-                <div class="profile-line">
-                    <span data-i18n="pfName">Name</span>
-                    <span><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></span>
-                </div>
-
-                <div class="profile-line">
-                    <span data-i18n="pfMobile">Mobile</span>
-                    <span><?= htmlspecialchars($mobile, ENT_QUOTES, 'UTF-8') ?></span>
-                </div>
-
-                <div class="profile-line">
-                    <span data-i18n="pfType">User Type</span>
-                    <span><?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?></span>
-                </div>
-
-                <div class="profile-line">
-                    <span data-i18n="pfDays">Days Played</span>
-                    <span><?= (int)$playedDays ?></span>
-                </div>
-
-                <div class="profile-line">
-                    <span data-i18n="pfParticipants">Participants</span>
-                    <span><?= (int)$participantsCount ?></span>
-                </div>
+                <h2 class="card-title">
+                    <span data-i18n="onlineNowTitle">Online Now</span>
+                    <small><?= (int)$onlineCount ?> <span data-i18n="online">online</span></small>
+                </h2>
+                <?php if (!empty($onlineUsers)): ?>
+                    <div class="online-list">
+                        <?php foreach ($onlineUsers as $ou): ?>
+                            <div class="online-row">
+                                <span class="online-ava"><?= htmlspecialchars(mb_substr((string)$ou['full_name'], 0, 1), ENT_QUOTES, 'UTF-8') ?><span class="online-dot"></span></span>
+                                <div class="online-meta">
+                                    <div class="online-name"><?= htmlspecialchars((string)$ou['full_name'], ENT_QUOTES, 'UTF-8') ?></div>
+                                    <div class="online-loc"><?= htmlspecialchars(($ou['location'] ?: 'CATRION'), ENT_QUOTES, 'UTF-8') ?></div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="disabled-box" data-i18n="noOnline">No participants are active right now. Be the first to play!</div>
+                <?php endif; ?>
             </div>
+        </div>
+    </section>
+
+    <!-- (10) Social engagement wall (UI scaffold; posts to /WC2026/api/* endpoints) -->
+    <section class="card social-card" id="socialWall">
+        <h2 class="card-title">
+            <span data-i18n="socialTitle">Fan Wall</span>
+            <small data-i18n="socialSub">Share your moment • comment • like</small>
+        </h2>
+        <form class="social-composer" id="socialComposer">
+            <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+            <div class="social-input-row">
+                <span class="social-ava"><?= htmlspecialchars(mb_substr((string)$name, 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                <textarea id="socialText" name="body" rows="2" data-i18n-ph="socialPlaceholder" placeholder="Say something about the World Cup…"></textarea>
+            </div>
+            <div class="social-actions">
+                <label class="social-attach" for="socialPhoto">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                    <span data-i18n="attachPhoto">Add photo</span>
+                </label>
+                <input type="file" id="socialPhoto" name="photo" accept="image/*" hidden>
+                <span class="social-attach-name" id="socialPhotoName"></span>
+                <button type="submit" class="match-link primary" data-i18n="post">Post</button>
+            </div>
+        </form>
+        <div class="social-feed" id="socialFeed" data-endpoint="/WC2026/api/social_feed.php">
+            <div class="social-loading" data-i18n="socialLoading">Loading the fan wall…</div>
+        </div>
+    </section>
+
+    <!-- (8) Fan Filter embedded via iframe -->
+    <section class="card fanfilter-card" id="fanFilterSection">
+        <h2 class="card-title">
+            <span data-i18n="fanFilterTitle">Fan Filter Studio</span>
+            <a href="/WC/fan_filter.php" target="_blank" rel="noopener" class="match-link soft" data-i18n="openFull">Open full page</a>
+        </h2>
+        <div class="fanfilter-frame">
+            <iframe src="/WC/fan_filter.php" title="Fan Filter Studio" loading="lazy" referrerpolicy="same-origin"></iframe>
         </div>
     </section>
 
@@ -4928,6 +4977,36 @@ body:before{
         <div class="disabled-box" id="finalDetails"></div>
         <br>
         <button class="primary-btn" type="button" onclick="location.reload()">Done</button>
+    </div>
+</div>
+
+<!-- (5) My Profile pop-up (mobile number hidden, Participants removed) -->
+<div class="modal" id="profileModal">
+    <div class="modal-card">
+        <div class="modal-kicker" data-i18n="myProfile">My Profile</div>
+        <h3><?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?></h3>
+        <div class="profile-line">
+            <span data-i18n="pfType">User Type</span>
+            <span><?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?></span>
+        </div>
+        <div class="profile-line">
+            <span data-i18n="statOverall">Overall Score</span>
+            <span><?= (int)$overallScore ?></span>
+        </div>
+        <div class="profile-line">
+            <span data-i18n="statWeekly">Weekly Score</span>
+            <span><?= (int)$weeklyScore ?></span>
+        </div>
+        <div class="profile-line">
+            <span data-i18n="statRank">My Rank</span>
+            <span><?= htmlspecialchars($myRank, ENT_QUOTES, 'UTF-8') ?></span>
+        </div>
+        <div class="profile-line">
+            <span data-i18n="pfDays">Days Played</span>
+            <span><?= (int)$playedDays ?></span>
+        </div>
+        <br>
+        <button class="primary-btn" type="button" id="closeProfileBtn" data-i18n="close">Close</button>
     </div>
 </div>
 
@@ -5890,7 +5969,17 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       agentGreeting:'Hi! I’m your World Cup 2026 Fan Agent. Pick a skill above, then ask me anything about fixtures, predictions, tactics, or today’s action.',
       agentChips:['What should I watch today?','Predict the next match','Give me a tactical view'],
       agentTyping:'Thinking…',agentErr:'Sorry, the agent could not respond. Please try again.',
-      agentInstruction:'Respond in clear, fan-friendly English. If live data is missing, say what is missing.'
+      agentInstruction:'Respond in clear, fan-friendly English. If live data is missing, say what is missing.',
+      navFanFilter:'Fan Filter',navProfile:'My Profile',close:'Close',
+      next24Title:'Next Matches · within 24 hours',liveNow:'Live',closed:'Closed',predictionsClosed:'Predictions Closed',
+      no24:'No matches kicking off within the next 24 hours. Check the full schedule.',
+      statOverall:'Overall Score',statOverallNote:'All-time points',statWeekly:'Weekly Score',statWeeklyNote:'This week',
+      statParticipants:'Participants',onlineNow:'online now',onlineNowTitle:'Online Now',online:'online',
+      noOnline:'No participants are active right now. Be the first to play!',
+      socialTitle:'Fan Wall',socialSub:'Share your moment • comment • like',socialPlaceholder:'Say something about the World Cup…',
+      attachPhoto:'Add photo',post:'Post',socialLoading:'Loading the fan wall…',socialEmpty:'Be the first to post on the fan wall!',
+      likeWord:'Like',commentWord:'Comment',sendWord:'Send',commentPh:'Write a comment…',justNow:'just now',
+      fanFilterTitle:'Fan Filter Studio',openFull:'Open full page'
     },
     ar:{
       brandSub:'دوري التوقعات • تحدي الأهداف اليومي',themeCatrion:'كاتريون',themeSaudi:'السعودية',
@@ -5925,11 +6014,22 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       agentGreeting:'مرحبًا! أنا وكيل جماهير كأس العالم 2026. اختر مهارة من الأعلى ثم اسألني عن المباريات أو التوقعات أو التكتيك أو أحداث اليوم.',
       agentChips:['ماذا أشاهد اليوم؟','توقّع المباراة القادمة','أعطني رؤية تكتيكية'],
       agentTyping:'أفكّر…',agentErr:'عذرًا، تعذّر على الوكيل الرد. حاول مرة أخرى.',
-      agentInstruction:'أجب بالعربية بأسلوب واضح ومناسب للجماهير. إذا كانت البيانات الحية غير متوفرة فاذكر ذلك.'
+      agentInstruction:'أجب بالعربية بأسلوب واضح ومناسب للجماهير. إذا كانت البيانات الحية غير متوفرة فاذكر ذلك.',
+      navFanFilter:'فلتر المشجع',navProfile:'ملفي',close:'إغلاق',
+      next24Title:'المباريات القادمة · خلال 24 ساعة',liveNow:'مباشر',closed:'مغلق',predictionsClosed:'التوقعات مغلقة',
+      no24:'لا توجد مباريات تنطلق خلال الـ24 ساعة القادمة. اطّلع على الجدول الكامل.',
+      statOverall:'النقاط الإجمالية',statOverallNote:'النقاط الكلية',statWeekly:'نقاط الأسبوع',statWeeklyNote:'هذا الأسبوع',
+      statParticipants:'المشاركون',onlineNow:'متصل الآن',onlineNowTitle:'المتصلون الآن',online:'متصل',
+      noOnline:'لا يوجد مشاركون نشطون حاليًا. كن أول من يلعب!',
+      socialTitle:'جدار المشجعين',socialSub:'شارك لحظتك • علّق • أعجبني',socialPlaceholder:'شارك رأيك عن كأس العالم…',
+      attachPhoto:'إضافة صورة',post:'نشر',socialLoading:'جارٍ تحميل جدار المشجعين…',socialEmpty:'كن أول من ينشر على جدار المشجعين!',
+      likeWord:'إعجاب',commentWord:'تعليق',sendWord:'إرسال',commentPh:'اكتب تعليقًا…',justNow:'الآن',
+      fanFilterTitle:'استوديو فلتر المشجع',openFull:'فتح الصفحة كاملة'
     }
   };
   var lang = (function(){ try{ return localStorage.getItem('wc_lang')||'en'; }catch(e){ return 'en'; } })();
   function tr(k){ return (T[lang]&&T[lang][k]!=null)?T[lang][k]:(T.en[k]!=null?T.en[k]:k); }
+  window.wcTr = tr; /* expose current-language translator for the v4 feature script */
 
   function applyLang(l){
     lang = (l==='ar')?'ar':'en';
@@ -5998,6 +6098,186 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
   /* ===== init ===== */
   applyTheme(theme);
   applyLang(lang);
+})();
+</script>
+
+<!-- ===================== v4 FEATURES (banner, next24, online, social, fan-filter, profile, audit) ===================== -->
+<style>
+/* (1) top background banner layer */
+.hero-banner-layer{position:absolute;inset:0;z-index:0;background:url('<?= htmlspecialchars($bannerPath, ENT_QUOTES, 'UTF-8') ?>') center/cover no-repeat;opacity:.30;pointer-events:none;mix-blend-mode:luminosity}
+/* (2) hide Challenge Hub + single-column hero */
+.daily-card{display:none !important}
+.hero-content.hero-single{grid-template-columns:1fr !important;max-width:860px !important}
+.top-actions button.top-link{font-family:inherit}
+
+/* (3) next-24h matches */
+.next24-wrap{width:min(1680px,calc(100vw - (var(--wide-pad,32px) * 2)));margin:-46px auto 6px;position:relative;z-index:6}
+.next24-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px;flex-wrap:wrap}
+.next24-title{display:flex;align-items:center;gap:9px;color:#fff;font-size:20px;font-weight:900;margin:0;letter-spacing:-.3px}
+.next24-dot{width:9px;height:9px;border-radius:50%;background:#22C55E;box-shadow:0 0 18px rgba(34,197,94,.9)}
+.next24-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.next24-card{position:relative;color:#fff;border:1px solid rgba(168,231,255,.2);border-radius:22px;padding:18px;
+    background:radial-gradient(circle at 100% 0%,rgba(14,99,230,.24),transparent 40%),linear-gradient(135deg,#061A36,#08254D 60%,#0A3A76);
+    box-shadow:0 22px 50px rgba(0,0,0,.26);transition:transform .25s ease,border-color .25s}
+.next24-card:hover{transform:translateY(-4px);border-color:rgba(168,231,255,.4)}
+.next24-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.lock-badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:900;text-transform:uppercase;color:#FFE19A;background:rgba(245,200,91,.14);border:1px solid rgba(245,200,91,.35);padding:6px 9px;border-radius:999px}
+.next24-teams{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
+.n24-team{text-align:center}.n24-team .team-logo{width:52px;height:52px;margin:0 auto 8px;border-radius:16px}
+.n24-team .team-logo img{width:38px;height:38px}.n24-team strong{font-size:13px;line-height:1.3}
+.n24-vs{font-size:13px;font-weight:900;color:rgba(255,255,255,.6)}
+.next24-venue{margin-top:12px;color:rgba(255,255,255,.6);font-size:12px;font-weight:700;text-align:center}
+.next24-actions{margin-top:14px;display:flex;justify-content:center}
+.next24-empty{color:rgba(255,255,255,.66);font-weight:800;font-size:14px;padding:18px;border-radius:18px;background:rgba(255,255,255,.06);border:1px solid rgba(168,231,255,.14);text-align:center}
+
+/* (11) online users list */
+.online-list{display:flex;flex-direction:column;gap:4px;max-height:360px;overflow:auto}
+.online-row{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid rgba(168,231,255,.1)}
+.online-row:last-child{border-bottom:0}
+.online-ava{position:relative;width:36px;height:36px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:900;color:#06202e;background:linear-gradient(135deg,#F5C85B,#FFE19A)}
+.online-dot{position:absolute;bottom:-1px;inset-inline-end:-1px;width:11px;height:11px;border-radius:50%;background:#22C55E;border:2px solid #061A36;box-shadow:0 0 8px #22C55E}
+.online-name{font-size:13px;font-weight:900;color:#fff}.online-loc{font-size:11px;color:rgba(255,255,255,.6);margin-top:2px}
+
+/* (10) social wall */
+.social-composer{background:rgba(255,255,255,.05);border:1px solid rgba(168,231,255,.16);border-radius:18px;padding:14px;margin-bottom:16px}
+.social-input-row{display:flex;gap:12px;align-items:flex-start}
+.social-ava{width:40px;height:40px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:900;color:#06202e;background:linear-gradient(135deg,#55B7FF,#A8E7FF)}
+.social-composer textarea{flex:1;min-height:48px;resize:vertical;border-radius:12px;border:1px solid rgba(168,231,255,.18);background:rgba(255,255,255,.05);color:#fff;font:inherit;font-size:14px;padding:11px 13px}
+.social-actions{display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap}
+.social-attach{display:inline-flex;align-items:center;gap:7px;cursor:pointer;color:#A8E7FF;font-weight:800;font-size:13px}
+.social-attach svg{width:20px;height:20px}
+.social-attach-name{color:rgba(255,255,255,.6);font-size:12px;font-weight:700}
+.social-actions .match-link.primary{margin-inline-start:auto}
+.social-feed{display:flex;flex-direction:column;gap:14px}
+.social-loading,.social-empty{color:rgba(255,255,255,.6);font-weight:800;text-align:center;padding:16px}
+.s-post{border:1px solid rgba(168,231,255,.14);border-radius:18px;padding:14px;background:rgba(255,255,255,.04)}
+.s-post-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.s-post-ava{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:900;color:#06202e;background:linear-gradient(135deg,#F5C85B,#FFE19A)}
+.s-post-name{font-size:13px;font-weight:900;color:#fff}.s-post-time{font-size:11px;color:rgba(255,255,255,.5)}
+.s-post-body{color:#eaf3ff;font-size:14px;line-height:1.6;white-space:pre-wrap;word-wrap:break-word}
+.s-post-img{margin-top:10px;border-radius:14px;max-width:240px;max-height:200px;object-fit:cover;border:1px solid rgba(168,231,255,.18)}
+.s-post-actions{display:flex;gap:16px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(168,231,255,.1)}
+.s-act{display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:rgba(255,255,255,.7);font:inherit;font-weight:800;font-size:13px;cursor:pointer}
+.s-act:hover{color:#FFE19A}.s-act.liked{color:#FFE19A}.s-act svg{width:17px;height:17px}
+.s-comments{margin-top:10px;display:flex;flex-direction:column;gap:8px}
+.s-comment{display:flex;gap:8px;font-size:13px}.s-comment b{color:#fff}.s-comment span{color:rgba(255,255,255,.78)}
+.s-comment-form{display:flex;gap:8px;margin-top:8px}
+.s-comment-form input{flex:1;min-height:36px;border-radius:10px;border:1px solid rgba(168,231,255,.18);background:rgba(255,255,255,.05);color:#fff;font:inherit;font-size:13px;padding:0 11px}
+.s-comment-form button{border:0;border-radius:10px;padding:0 13px;background:rgba(245,200,91,.9);color:#06202e;font-weight:900;cursor:pointer}
+
+/* (8) fan filter iframe */
+.fanfilter-card .card-title .match-link{margin-inline-start:auto}
+.fanfilter-frame{border-radius:18px;overflow:hidden;border:1px solid rgba(168,231,255,.18);background:#05162F}
+.fanfilter-frame iframe{width:100%;height:720px;border:0;display:block}
+@media(max-width:768px){.fanfilter-frame iframe{height:560px}.next24-wrap{margin-top:-30px}}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  var d=document, csrf=<?= json_encode($csrf) ?>;
+  var tr = window.wcTr || function(k){ return k; };
+  var arNow = function(){ return d.documentElement.lang==='ar'; };
+
+  /* (1) inject banner layer behind the hero */
+  var hero=d.querySelector('.hero');
+  if(hero){ var bl=d.createElement('div'); bl.className='hero-banner-layer'; hero.insertBefore(bl, hero.firstChild); }
+
+  /* (12) lightweight audit hook (UI scaffold -> POST /WC2026/api/audit_log.php) */
+  function wcAudit(action, detail){
+    try{
+      var body=JSON.stringify({csrf:csrf, action:action, detail:detail||'', page:'home', ts:Date.now()});
+      if(navigator.sendBeacon){ navigator.sendBeacon('/WC2026/api/audit_log.php', new Blob([body],{type:'application/json'})); }
+      else { fetch('/WC2026/api/audit_log.php',{method:'POST',headers:{'Content-Type':'application/json'},body:body,keepalive:true}).catch(function(){}); }
+    }catch(e){}
+  }
+  window.wcAudit = wcAudit;
+  wcAudit('view_home');
+
+  /* (5) profile pop-up */
+  var pModal=d.getElementById('profileModal');
+  function openProfile(){ if(pModal){ pModal.classList.add('active'); wcAudit('open_profile'); } }
+  function closeProfile(){ if(pModal) pModal.classList.remove('active'); }
+  var ob=d.getElementById('openProfileBtn'); if(ob) ob.addEventListener('click', openProfile);
+  var cb=d.getElementById('closeProfileBtn'); if(cb) cb.addEventListener('click', closeProfile);
+  if(pModal) pModal.addEventListener('click', function(e){ if(e.target===pModal) closeProfile(); });
+  d.addEventListener('keydown', function(e){ if(e.key==='Escape') closeProfile(); });
+
+  /* (3) audit prediction clicks */
+  d.querySelectorAll('.next24-actions a.primary').forEach(function(a){ a.addEventListener('click', function(){ wcAudit('open_prediction', a.getAttribute('href')||''); }); });
+  /* (8) audit fan-filter open */
+  var ff=d.getElementById('fanFilterSection'); if(ff){ var io=('IntersectionObserver' in window)?new IntersectionObserver(function(es){ es.forEach(function(en){ if(en.isIntersecting){ wcAudit('view_fan_filter'); io.disconnect(); } }); },{threshold:.4}):null; if(io) io.observe(ff); }
+
+  /* (10) social wall — UI scaffold posting to /WC2026/api endpoints, degrades gracefully */
+  var feed=d.getElementById('socialFeed'), composer=d.getElementById('socialComposer'),
+      photoInput=d.getElementById('socialPhoto'), photoName=d.getElementById('socialPhotoName'),
+      textArea=d.getElementById('socialText');
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[c];}); }
+  function renderPosts(posts){
+    if(!posts || !posts.length){ feed.innerHTML='<div class="social-empty">'+esc(tr('socialEmpty'))+'</div>'; return; }
+    feed.innerHTML='';
+    posts.forEach(function(p){ feed.appendChild(renderPost(p)); });
+  }
+  function renderPost(p){
+    var el=d.createElement('div'); el.className='s-post'; el.dataset.id=p.id;
+    var initial=(p.name||'?').trim().charAt(0)||'?';
+    var img=p.photo?('<img class="s-post-img" src="'+esc(p.photo)+'" alt="">'):'';
+    var comments=(p.comments||[]).map(function(c){ return '<div class="s-comment"><b>'+esc(c.name)+'</b><span>'+esc(c.body)+'</span></div>'; }).join('');
+    el.innerHTML=
+      '<div class="s-post-head"><span class="s-post-ava">'+esc(initial)+'</span><div><div class="s-post-name">'+esc(p.name)+'</div><div class="s-post-time">'+esc(p.created_at||tr('justNow'))+'</div></div></div>'+
+      '<div class="s-post-body">'+esc(p.body)+'</div>'+img+
+      '<div class="s-post-actions">'+
+        '<button class="s-act like'+(p.liked?' liked':'')+'" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 9V5a3 3 0 0 0-6 0v4H5l-1 11h16l-1-11z"/></svg><span class="lk">'+(p.likes||0)+'</span> '+esc(tr('likeWord'))+'</button>'+
+        '<button class="s-act cmt" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>'+esc(tr('commentWord'))+'</button>'+
+      '</div>'+
+      '<div class="s-comments">'+comments+'</div>'+
+      '<form class="s-comment-form"><input type="text" placeholder="'+esc(tr('commentPh'))+'"><button type="submit">'+esc(tr('sendWord'))+'</button></form>';
+    // like
+    el.querySelector('.like').addEventListener('click', function(){
+      var btn=this, span=btn.querySelector('.lk'); var liked=btn.classList.toggle('liked');
+      span.textContent=(parseInt(span.textContent,10)||0)+(liked?1:-1);
+      wcAudit('social_like', p.id);
+      fetch('/WC2026/api/social_like.php',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',body:JSON.stringify({csrf:csrf,post_id:p.id,liked:liked})}).catch(function(){});
+    });
+    // comment
+    var cf=el.querySelector('.s-comment-form');
+    cf.addEventListener('submit', function(e){ e.preventDefault(); var inp=cf.querySelector('input'); var v=inp.value.trim(); if(!v) return; inp.value='';
+      var box=el.querySelector('.s-comments'); var c=d.createElement('div'); c.className='s-comment'; c.innerHTML='<b>'+esc('<?= htmlspecialchars($name, ENT_QUOTES, "UTF-8") ?>')+'</b><span>'+esc(v)+'</span>'; box.appendChild(c);
+      wcAudit('social_comment', p.id);
+      var fd=new FormData(); fd.append('csrf',csrf); fd.append('post_id',p.id); fd.append('body',v);
+      fetch('/WC2026/api/social_comment.php',{method:'POST',body:fd,credentials:'same-origin'}).catch(function(){});
+    });
+    return el;
+  }
+  function loadFeed(){
+    if(!feed) return;
+    fetch(feed.dataset.endpoint,{credentials:'same-origin'})
+      .then(function(r){ return r.json(); })
+      .then(function(data){ renderPosts((data && data.posts)||[]); })
+      .catch(function(){ feed.innerHTML='<div class="social-empty">'+esc(tr('socialEmpty'))+'</div>'; });
+  }
+  if(photoInput){ photoInput.addEventListener('change', function(){ photoName.textContent=(photoInput.files&&photoInput.files[0])?photoInput.files[0].name:''; }); }
+  if(composer){
+    composer.addEventListener('submit', function(e){ e.preventDefault();
+      var body=(textArea.value||'').trim(); var hasPhoto=photoInput && photoInput.files && photoInput.files[0];
+      if(!body && !hasPhoto) return;
+      var fd=new FormData(composer);
+      wcAudit('social_post', body.slice(0,60));
+      fetch('/WC2026/api/social_post.php',{method:'POST',body:fd,credentials:'same-origin'})
+        .then(function(r){ return r.json(); })
+        .then(function(data){
+          if(data && data.ok && data.post){ if(feed.querySelector('.social-empty')||feed.querySelector('.social-loading')) feed.innerHTML=''; feed.insertBefore(renderPost(data.post), feed.firstChild); }
+          else { /* optimistic local add */ if(feed.querySelector('.social-empty')||feed.querySelector('.social-loading')) feed.innerHTML=''; feed.insertBefore(renderPost({id:'tmp',name:'<?= htmlspecialchars($name, ENT_QUOTES, "UTF-8") ?>',body:body,photo:hasPhoto?URL.createObjectURL(photoInput.files[0]):'',likes:0,liked:false,comments:[],created_at:tr('justNow')}), feed.firstChild); }
+          textArea.value=''; if(photoInput){ photoInput.value=''; photoName.textContent=''; }
+        })
+        .catch(function(){
+          if(feed.querySelector('.social-empty')||feed.querySelector('.social-loading')) feed.innerHTML='';
+          feed.insertBefore(renderPost({id:'tmp',name:'<?= htmlspecialchars($name, ENT_QUOTES, "UTF-8") ?>',body:body,photo:hasPhoto?URL.createObjectURL(photoInput.files[0]):'',likes:0,liked:false,comments:[],created_at:tr('justNow')}), feed.firstChild);
+          textArea.value=''; if(photoInput){ photoInput.value=''; photoName.textContent=''; }
+        });
+    });
+  }
+  loadFeed();
 })();
 </script>
 
