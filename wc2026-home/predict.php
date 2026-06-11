@@ -52,6 +52,30 @@ function winnerFromScores(int $home, int $away): string {
     return 'Draw';
 }
 
+/* Map a national-team name to an ISO 3166-1 alpha-2 code for flagcdn. */
+function wc_country_code(?string $team): string {
+    $name = strtolower(trim((string)$team));
+    if ($name === '' || $name === 'tba') return '';
+    $name = strtr($name, ['á'=>'a','à'=>'a','â'=>'a','ä'=>'a','ã'=>'a','å'=>'a','é'=>'e','è'=>'e','ê'=>'e','ë'=>'e','í'=>'i','ì'=>'i','î'=>'i','ï'=>'i','ó'=>'o','ò'=>'o','ô'=>'o','ö'=>'o','õ'=>'o','ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u','ç'=>'c','ñ'=>'n','š'=>'s','ž'=>'z','ć'=>'c','đ'=>'d']);
+    $name = str_replace('&', 'and', $name);
+    $name = preg_replace('/[^a-z]/', '', $name);
+    static $map = [
+        'usa'=>'us','unitedstates'=>'us','canada'=>'ca','mexico'=>'mx',
+        'argentina'=>'ar','brazil'=>'br','brasil'=>'br','uruguay'=>'uy','colombia'=>'co','chile'=>'cl','peru'=>'pe','paraguay'=>'py','ecuador'=>'ec','venezuela'=>'ve','bolivia'=>'bo',
+        'france'=>'fr','spain'=>'es','germany'=>'de','portugal'=>'pt','england'=>'gb-eng','scotland'=>'gb-sct','wales'=>'gb-wls','netherlands'=>'nl','belgium'=>'be','italy'=>'it','croatia'=>'hr','switzerland'=>'ch','denmark'=>'dk','sweden'=>'se','norway'=>'no','poland'=>'pl','austria'=>'at','serbia'=>'rs','ukraine'=>'ua','czechia'=>'cz','czechrepublic'=>'cz','turkey'=>'tr','turkiye'=>'tr','greece'=>'gr','hungary'=>'hu','romania'=>'ro','slovenia'=>'si','slovakia'=>'sk','iceland'=>'is','republicofireland'=>'ie','ireland'=>'ie','albania'=>'al','bosniaandherzegovina'=>'ba','bosnia'=>'ba','northmacedonia'=>'mk','georgia'=>'ge',
+        'japan'=>'jp','southkorea'=>'kr','korearepublic'=>'kr','australia'=>'au','saudiarabia'=>'sa','qatar'=>'qa','iran'=>'ir','iraq'=>'iq','uae'=>'ae','jordan'=>'jo','oman'=>'om','uzbekistan'=>'uz','china'=>'cn','india'=>'in','indonesia'=>'id','palestine'=>'ps',
+        'morocco'=>'ma','senegal'=>'sn','ghana'=>'gh','nigeria'=>'ng','cameroon'=>'cm','egypt'=>'eg','algeria'=>'dz','tunisia'=>'tn','ivorycoast'=>'ci','cotedivoire'=>'ci','southafrica'=>'za','mali'=>'ml','capeverde'=>'cv','caboverde'=>'cv','guinea'=>'gn','drcongo'=>'cd','congodr'=>'cd',
+        'costarica'=>'cr','panama'=>'pa','jamaica'=>'jm','honduras'=>'hn','curacao'=>'cw','suriname'=>'sr','haiti'=>'ht','elsalvador'=>'sv','guatemala'=>'gt','trinidadandtobago'=>'tt',
+        'newzealand'=>'nz','fiji'=>'fj','papuanewguinea'=>'pg',
+    ];
+    return $map[$name] ?? '';
+}
+function wc_flag_emoji(string $code): string {
+    $code = strtoupper(trim($code));
+    if (strlen($code) !== 2 || !ctype_alpha($code)) return '';
+    return mb_chr(0x1F1E6 + (ord($code[0]) - 65), 'UTF-8') . mb_chr(0x1F1E6 + (ord($code[1]) - 65), 'UTF-8');
+}
+
 $matchId = (int)($_GET['match'] ?? $_POST['match_id'] ?? 0);
 $error = '';
 $success = '';
@@ -620,10 +644,19 @@ body.popup-mode .card{background:transparent !important}
                 <?= !empty($match['city']) ? ' • ' . h($match['city']) : '' ?>
             </div>
 
+            <?php
+                $homeCode = wc_country_code($match['home_team'] ?? '');
+                $awayCode = wc_country_code($match['away_team'] ?? '');
+                $homeEmoji = wc_flag_emoji($homeCode);
+                $awayEmoji = wc_flag_emoji($awayCode);
+            ?>
             <div class="teams">
                 <div class="team">
                     <?php if (!empty($match['home_logo'])): ?>
                         <img class="team-logo" src="<?= h($match['home_logo']) ?>" alt="<?= h($match['home_team']) ?>">
+                    <?php elseif ($homeCode !== ''): ?>
+                        <img class="team-logo" style="object-fit:cover;padding:0" src="https://flagcdn.com/w160/<?= h(strtolower($homeCode)) ?>.png" alt="<?= h($match['home_team']) ?> flag" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-grid';">
+                        <div class="team-logo" style="display:none;place-items:center;color:#071A35;"><?= $homeEmoji !== '' ? $homeEmoji : '⚽' ?></div>
                     <?php else: ?>
                         <div class="team-logo" style="display:inline-grid;place-items:center;color:#071A35;">⚽</div>
                     <?php endif; ?>
@@ -635,6 +668,9 @@ body.popup-mode .card{background:transparent !important}
                 <div class="team">
                     <?php if (!empty($match['away_logo'])): ?>
                         <img class="team-logo" src="<?= h($match['away_logo']) ?>" alt="<?= h($match['away_team']) ?>">
+                    <?php elseif ($awayCode !== ''): ?>
+                        <img class="team-logo" style="object-fit:cover;padding:0" src="https://flagcdn.com/w160/<?= h(strtolower($awayCode)) ?>.png" alt="<?= h($match['away_team']) ?> flag" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-grid';">
+                        <div class="team-logo" style="display:none;place-items:center;color:#071A35;"><?= $awayEmoji !== '' ? $awayEmoji : '⚽' ?></div>
                     <?php else: ?>
                         <div class="team-logo" style="display:inline-grid;place-items:center;color:#071A35;">⚽</div>
                     <?php endif; ?>

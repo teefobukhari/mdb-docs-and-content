@@ -4449,7 +4449,6 @@ body:before{
 
     <div class="hero-content hero-single">
         <div>
-            <div class="badge"><i></i> <span data-i18n="heroBadge">CATRION FIFA WORLD CUP 2026</span></div>
             <h1 data-i18n-html="heroTitle">Cheer with <span>CATRION</span></h1>
         </div>
 
@@ -4632,7 +4631,12 @@ body:before{
     <!-- (2)+(8)+(10) Fan Wall — minimized by default; new posts surface in the notification bar -->
     <section class="card social-card collapsed" id="socialWall">
         <h2 class="card-title social-head">
-            <span><span data-i18n="socialTitle">Fan Wall</span> <small data-i18n="socialSub">Share your moment • comment • like</small></span>
+            <span class="fanwall-head">
+                <span class="fanwall-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+                </span>
+                <span><span data-i18n="socialTitle">Fan Wall</span> <small data-i18n="socialSub">Share your moment • comment • like</small></span>
+            </span>
             <button type="button" class="social-toggle" id="fanWallToggle">
                 <span class="social-toggle-label" data-i18n="openWall">Open Fan Wall</span>
                 <span class="social-count" id="fanWallCount"></span>
@@ -4665,12 +4669,12 @@ body:before{
     <?php
     // 2026 host cities (USA / Canada / Mexico) plotted on a stylized North-America board
     $wcHostCities = [
-        ['Seattle',105,150,'usa'],['San Francisco',92,236,'usa'],['Los Angeles',120,300,'usa'],
-        ['Kansas City',300,250,'usa'],['Dallas',285,332,'usa'],['Houston',305,366,'usa'],
-        ['Atlanta',396,316,'usa'],['Miami',446,400,'usa'],['Philadelphia',470,238,'usa'],
-        ['New York',489,216,'usa'],['Boston',506,196,'usa'],
-        ['Vancouver',95,118,'can'],['Toronto',437,190,'can'],
-        ['Monterrey',270,398,'mex'],['Guadalajara',233,440,'mex'],['Mexico City',292,460,'mex'],
+        ['Seattle',108,180,'usa'],['San Francisco',96,255,'usa'],['Los Angeles',124,312,'usa'],
+        ['Kansas City',300,300,'usa'],['Dallas',285,360,'usa'],['Houston',305,392,'usa'],
+        ['Atlanta',400,392,'usa'],['Miami',448,452,'usa'],['Philadelphia',462,252,'usa'],
+        ['New York',478,232,'usa'],['Boston',495,210,'usa'],
+        ['Vancouver',98,150,'can'],['Toronto',440,200,'can'],
+        ['Monterrey',270,420,'mex'],['Guadalajara',245,455,'mex'],['Mexico City',295,478,'mex'],
     ];
     ?>
     <section class="card live-map-card hostmap-card">
@@ -4692,10 +4696,7 @@ body:before{
                             <stop offset="1" stop-color="rgba(14,99,230,.12)"/>
                         </linearGradient>
                     </defs>
-                    <path class="hostmap-land" d="M78,170 C72,150 80,126 100,120 C124,116 146,134 168,150 C220,146 280,146 330,156 C372,160 414,168 452,178 C476,170 500,176 506,198 C512,236 512,276 498,306 C486,330 470,344 452,352 C462,372 460,398 440,402 C398,398 352,402 314,388 C318,420 306,440 296,460 C292,484 262,470 246,438 C226,408 236,372 226,344 C188,330 150,316 122,300 C110,286 98,262 94,238 C88,215 84,192 78,170 Z"/>
-                    <!-- Florida peninsula + Baja for a more realistic silhouette -->
-                    <path class="hostmap-land hostmap-land2" d="M452,352 C470,360 476,392 462,420 C456,432 448,430 448,414 C449,392 444,372 452,352 Z"/>
-                    <path class="hostmap-land hostmap-land2" d="M120,300 C112,326 120,360 132,388 C138,402 130,406 122,396 C108,372 104,332 120,300 Z"/>
+                    <path class="hostmap-land" d="M70,150 C66,180 70,225 84,255 C92,285 104,300 116,312 C150,330 200,345 235,352 C232,388 220,420 238,452 C254,486 286,500 300,478 C312,452 322,430 318,402 C356,414 402,410 442,414 C460,420 466,452 456,476 C470,468 480,448 486,420 C500,392 506,300 500,250 C496,210 488,196 470,196 C440,180 400,172 360,170 C300,164 220,162 160,170 C120,150 96,140 70,150 Z"/>
                     <g class="hostmap-grid">
                         <line x1="0" y1="173" x2="640" y2="173"/><line x1="0" y1="346" x2="640" y2="346"/>
                         <line x1="213" y1="0" x2="213" y2="520"/><line x1="426" y1="0" x2="426" y2="520"/>
@@ -5200,67 +5201,19 @@ body:before{
 </div>
 
 <!-- (8) Fan Filter Studio pop-up — native (functional) studio, opens from the nav icon -->
+<!-- (8) Fan Filter Studio pop-up — loads the full /WC/fan_filter.php studio -->
 <div class="modal" id="fanFilterModal">
     <div class="modal-card fanfilter-modal-card ff-native">
         <div class="fanfilter-modal-head">
             <div class="modal-kicker" data-i18n="fanFilterTitle">Fan Filter Studio</div>
             <div class="fanfilter-modal-tools">
+                <a href="/WC/fan_filter.php" target="_blank" rel="noopener" class="match-link soft" data-i18n="openFull">Open full page</a>
                 <button type="button" class="ff-close" id="closeFanFilterBtn" aria-label="Close">✕</button>
             </div>
         </div>
-
-        <?php if (empty($ffFrames) || empty($ffCountries)): ?>
-            <div class="ff-empty-note" data-i18n="ffNeedData">Add active countries and frames to enable the studio.</div>
-        <?php else: ?>
-        <div class="ff-studio">
-            <div class="ff-pane">
-                <div class="ff-label" data-i18n="fanFilterTitle">Photo Preview</div>
-                <div class="ff-camera">
-                    <video id="ffVideo" autoplay playsinline muted></video>
-                    <canvas id="ffCanvas" width="720" height="900"></canvas>
-                    <img id="ffPreview" alt="Preview">
-                    <div class="ff-empty" id="ffEmpty"><div><b>⚽</b><br><span data-i18n="ffReady">Start the camera or upload a photo.</span></div></div>
-                </div>
-                <div class="ff-controls">
-                    <button type="button" class="ff-btn primary" id="ffStart">📷 <span data-i18n="ffStartCam">Start Camera</span></button>
-                    <label class="ff-btn soft" for="ffUpload">⬆️ <span data-i18n="ffUpload">Upload Photo</span></label>
-                    <input type="file" id="ffUpload" accept="image/*" hidden>
-                    <button type="button" class="ff-btn gold" id="ffCapture" disabled>⚽ <span data-i18n="ffCapture">Capture</span></button>
-                    <button type="button" class="ff-btn soft" id="ffRetake" disabled>↩️ <span data-i18n="ffRetake">Retake</span></button>
-                    <button type="button" class="ff-btn green span2" id="ffSave" disabled>⬇️ <span data-i18n="ffSave">Save &amp; Download</span></button>
-                </div>
-                <div class="ff-msg" id="ffMsg"></div>
-            </div>
-
-            <div class="ff-pane">
-                <div class="ff-label" data-i18n="ffChooseCountry">Choose Country</div>
-                <input type="text" id="ffCountrySearch" class="ff-search" data-i18n-ph="ffSearchCountry" placeholder="Search country…" autocomplete="off">
-                <div class="ff-countries" id="ffCountries">
-                    <?php foreach ($ffCountries as $i => $c): ?>
-                        <button type="button" class="ff-chip <?= $i === 0 ? 'active' : '' ?>"
-                            data-id="<?= (int)$c['id'] ?>"
-                            data-code="<?= htmlspecialchars($c['country_code'], ENT_QUOTES, 'UTF-8') ?>"
-                            data-flag="<?= htmlspecialchars(wc_asset_path($c['flag_path']), ENT_QUOTES, 'UTF-8') ?>">
-                            <img src="<?= htmlspecialchars(wc_asset_path($c['flag_path']), ENT_QUOTES, 'UTF-8') ?>" alt="">
-                            <span><?= htmlspecialchars($c['country_name'], ENT_QUOTES, 'UTF-8') ?></span>
-                        </button>
-                    <?php endforeach; ?>
-                </div>
-                <div class="ff-label" data-i18n="ffChooseFrame" style="margin-top:14px">Choose Frame</div>
-                <div class="ff-frames" id="ffFrames">
-                    <?php foreach ($ffFrames as $i => $f): ?>
-                        <?php $prev = $f['preview_path'] ?: $f['frame_path']; ?>
-                        <button type="button" class="ff-frame <?= $i === 0 ? 'active' : '' ?>"
-                            data-id="<?= (int)$f['id'] ?>"
-                            data-frame="<?= htmlspecialchars(wc_asset_path($f['frame_path']), ENT_QUOTES, 'UTF-8') ?>">
-                            <img src="<?= htmlspecialchars(wc_asset_path($prev), ENT_QUOTES, 'UTF-8') ?>" alt="">
-                            <span><?= htmlspecialchars($f['frame_name'], ENT_QUOTES, 'UTF-8') ?></span>
-                        </button>
-                    <?php endforeach; ?>
-                </div>
-            </div>
+        <div class="fanfilter-frame">
+            <iframe id="fanFilterFrame" data-src="/WC/fan_filter.php" title="Fan Filter Studio" referrerpolicy="same-origin" allow="camera"></iframe>
         </div>
-        <?php endif; ?>
     </div>
 </div>
 
@@ -6900,9 +6853,9 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
   d.querySelectorAll('.next24-actions a.primary').forEach(function(a){ a.addEventListener('click', function(){ wcAudit('open_prediction', a.getAttribute('href')||''); }); });
 
   /* (8) fan filter studio pop-up — NATIVE functional studio (no iframe) */
-  var ffModal=d.getElementById('fanFilterModal');
-  function closeFanFilter(){ if(ffModal){ ffModal.classList.remove('active'); ffStopCam(); } }
-  function openFanFilter(){ if(ffModal){ ffModal.classList.add('active'); wcAudit('open_fan_filter'); } }
+  var ffModal=d.getElementById('fanFilterModal'), ffFrame=d.getElementById('fanFilterFrame');
+  function closeFanFilter(){ if(ffModal){ ffModal.classList.remove('active'); } }
+  function openFanFilter(){ if(ffModal){ if(ffFrame && !ffFrame.src){ ffFrame.src=ffFrame.dataset.src; } ffModal.classList.add('active'); wcAudit('open_fan_filter'); } }
   var offb=d.getElementById('openFanFilterBtn'); if(offb) offb.addEventListener('click', openFanFilter);
   var offc=d.getElementById('openFanFilterCard'); if(offc) offc.addEventListener('click', openFanFilter);
   var cffb=d.getElementById('closeFanFilterBtn'); if(cffb) cffb.addEventListener('click', closeFanFilter);
@@ -7147,30 +7100,56 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 </script>
 
 <style>
-/* Mobile: collapse the header buttons into a hamburger menu */
+/* Fan Wall heading icon */
+.fanwall-head{display:inline-flex;align-items:center;gap:10px}
+.fanwall-icon{width:34px;height:34px;flex:none;display:grid;place-items:center;border-radius:10px;color:#06202e;background:linear-gradient(135deg,#F5C85B,#FFE19A)}
+.fanwall-icon svg{width:19px;height:19px}
+
+/* Mobile: header buttons slide in as a scrollable side drawer */
 .nav-burger{display:none;width:44px;height:44px;flex:none;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);color:#fff;border-radius:12px;cursor:pointer;align-items:center;justify-content:center}
 .nav-burger svg{width:22px;height:22px}
 @media(max-width:768px){
   .nav{flex-wrap:wrap}
-  .nav-burger{display:inline-flex}
-  .top-actions{position:absolute;top:calc(100% + 8px);inset-inline:0;z-index:40;flex-direction:column;align-items:stretch;gap:8px;
-    background:#0c1830;border:1px solid rgba(168,231,255,.2);border-radius:16px;padding:12px;box-shadow:0 24px 60px rgba(0,0,0,.5);display:none}
-  .top-actions.open{display:flex}
+  .nav-burger{display:inline-flex;position:relative;z-index:70}
+  .top-actions{position:fixed;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(82vw,300px);z-index:60;
+    display:flex !important;flex-direction:column;align-items:stretch;gap:10px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    background:#0c1830;border-inline-start:1px solid rgba(168,231,255,.2);border-radius:0;padding:70px 14px 28px;
+    box-shadow:-24px 0 60px rgba(0,0,0,.55);transform:translateX(105%);transition:transform .28s ease}
+  .top-actions.open{transform:none}
+  html[dir="rtl"] .top-actions{inset-inline-end:auto;inset-inline-start:0;border-inline-start:0;border-inline-end:1px solid rgba(168,231,255,.2);box-shadow:24px 0 60px rgba(0,0,0,.55);transform:translateX(-105%)}
+  html[dir="rtl"] .top-actions.open{transform:none}
   .top-actions .theme-switch,.top-actions .lang-switch{justify-content:center}
   .top-actions .top-link,.top-actions .logout,.top-actions form{width:100%}
   .top-actions .top-link,.top-actions .logout{text-align:center;justify-content:center}
   .top-actions form button{width:100%}
+  .nav-backdrop{position:fixed;inset:0;z-index:55;background:rgba(4,12,28,.55);opacity:0;visibility:hidden;transition:.25s}
+  .nav-backdrop.show{opacity:1;visibility:visible}
 }
+
+/* Arabic / RTL spacing fixes */
+html[dir="rtl"] .stat:before{right:auto !important;left:16px !important}
+html[dir="rtl"] .news-label{border-radius:0 18px 18px 0 !important}
+html[dir="rtl"] .hero:after{right:auto;left:70px}
+html[dir="rtl"] .match-card-premium:after{right:auto;left:22px}
+html[dir="rtl"] .social-attach svg,html[dir="rtl"] .fanwall-icon svg{transform:scaleX(-1)}
+html[dir="rtl"] .next24-title,html[dir="rtl"] .map-title,html[dir="rtl"] .bracket-title{flex-direction:row-reverse}
+html[dir="rtl"] .help-item{flex-direction:row-reverse;text-align:right}
+html[dir="rtl"] .pts-table th,html[dir="rtl"] .pts-table td{text-align:right}
+html[dir="rtl"] .wc-agent-fab{inset-inline-end:auto;inset-inline-start:24px}
+html[dir="rtl"] .wc-agent-panel{inset-inline-end:auto;inset-inline-start:24px}
 </style>
 <script>
 (function(){
   var b=document.getElementById('navBurger'), a=document.getElementById('topActions');
   if(!b||!a) return;
-  b.addEventListener('click', function(e){ e.stopPropagation(); var open=a.classList.toggle('open'); b.setAttribute('aria-expanded', open?'true':'false'); });
-  document.addEventListener('click', function(e){ if(a.classList.contains('open') && !a.contains(e.target) && !b.contains(e.target)) a.classList.remove('open'); });
+  var bd=document.createElement('div'); bd.className='nav-backdrop'; document.body.appendChild(bd);
+  function setOpen(open){ a.classList.toggle('open', open); bd.classList.toggle('show', open); b.setAttribute('aria-expanded', open?'true':'false'); }
+  b.addEventListener('click', function(e){ e.stopPropagation(); setOpen(!a.classList.contains('open')); });
+  bd.addEventListener('click', function(){ setOpen(false); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') setOpen(false); });
   a.querySelectorAll('a, button').forEach(function(el){
     if(el.classList.contains('theme-btn')||el.classList.contains('lang-btn')) return;
-    el.addEventListener('click', function(){ if(window.matchMedia('(max-width:768px)').matches) a.classList.remove('open'); });
+    el.addEventListener('click', function(){ if(window.matchMedia('(max-width:768px)').matches) setOpen(false); });
   });
 })();
 </script>

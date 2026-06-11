@@ -2104,19 +2104,25 @@ html[dir="rtl"] .nav-actions{direction:rtl}
 </script>
 
 <style>
-/* Mobile: hamburger nav + scrollable tabs */
+/* Mobile: header buttons slide in as a scrollable side drawer + scrollable tabs */
 .nav-burger{display:none;width:44px;height:44px;flex:none;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);color:#fff;border-radius:12px;cursor:pointer;align-items:center;justify-content:center}
 .nav-burger svg{width:22px;height:22px}
 @media(max-width:768px){
   .nav{flex-wrap:wrap;position:relative}
-  .nav-burger{display:inline-flex}
-  .top-actions{position:absolute;top:calc(100% + 8px);inset-inline:0;z-index:40;flex-direction:column !important;align-items:stretch;gap:8px;
-    background:#0c1830;border:1px solid rgba(168,231,255,.2);border-radius:16px;padding:12px;box-shadow:0 24px 60px rgba(0,0,0,.5);display:none !important}
-  .top-actions.open{display:flex !important}
+  .nav-burger{display:inline-flex;position:relative;z-index:70}
+  .top-actions{position:fixed;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(82vw,300px);z-index:60;
+    display:flex !important;flex-direction:column !important;align-items:stretch;gap:10px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    background:#0c1830;border-inline-start:1px solid rgba(168,231,255,.2);border-radius:0;padding:70px 14px 28px;
+    box-shadow:-24px 0 60px rgba(0,0,0,.55);transform:translateX(105%);transition:transform .28s ease}
+  .top-actions.open{transform:none}
+  html[dir="rtl"] .top-actions{inset-inline-end:auto;inset-inline-start:0;border-inline-start:0;border-inline-end:1px solid rgba(168,231,255,.2);box-shadow:24px 0 60px rgba(0,0,0,.55);transform:translateX(-105%)}
+  html[dir="rtl"] .top-actions.open{transform:none}
   .top-actions .theme-switch,.top-actions .lang-switch{justify-content:center}
   .top-actions .nav-link,.top-actions .logout,.top-actions form{width:100%}
   .top-actions .nav-link,.top-actions .logout{text-align:center;justify-content:center}
   .top-actions form button{width:100%}
+  .nav-backdrop{position:fixed;inset:0;z-index:55;background:rgba(4,12,28,.55);opacity:0;visibility:hidden;transition:.25s}
+  .nav-backdrop.show{opacity:1;visibility:visible}
   .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .tabs::-webkit-scrollbar{display:none}
   .tab{flex:0 0 auto}
@@ -2124,16 +2130,23 @@ html[dir="rtl"] .nav-actions{direction:rtl}
   .search{width:100%}
   .wc-foot-inner{flex-direction:column;text-align:center}
 }
+/* Arabic / RTL spacing fixes */
+html[dir="rtl"] .pts-table th,html[dir="rtl"] .pts-table td{text-align:right}
+html[dir="rtl"] .help-item{flex-direction:row-reverse;text-align:right}
+html[dir="rtl"] .match-social-mini,html[dir="rtl"] .match-meta{text-align:right}
 </style>
 <script>
 (function(){
   var b=document.getElementById('navBurger'), a=document.getElementById('topActions');
   if(!b||!a) return;
-  b.addEventListener('click', function(e){ e.stopPropagation(); var open=a.classList.toggle('open'); b.setAttribute('aria-expanded', open?'true':'false'); });
-  document.addEventListener('click', function(e){ if(a.classList.contains('open') && !a.contains(e.target) && !b.contains(e.target)) a.classList.remove('open'); });
+  var bd=document.createElement('div'); bd.className='nav-backdrop'; document.body.appendChild(bd);
+  function setOpen(open){ a.classList.toggle('open', open); bd.classList.toggle('show', open); b.setAttribute('aria-expanded', open?'true':'false'); }
+  b.addEventListener('click', function(e){ e.stopPropagation(); setOpen(!a.classList.contains('open')); });
+  bd.addEventListener('click', function(){ setOpen(false); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') setOpen(false); });
   a.querySelectorAll('a, button').forEach(function(el){
     if(el.classList.contains('theme-btn')||el.classList.contains('lang-btn')) return;
-    el.addEventListener('click', function(){ if(window.matchMedia('(max-width:768px)').matches) a.classList.remove('open'); });
+    el.addEventListener('click', function(){ if(window.matchMedia('(max-width:768px)').matches) setOpen(false); });
   });
 })();
 </script>
