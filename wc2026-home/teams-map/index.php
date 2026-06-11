@@ -152,6 +152,17 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         .hosts{display:none;align-items:center;gap:6px;font-size:12px;font-weight:800;color:var(--muted)}
         .host-flag{width:24px;height:16px;object-fit:cover;border-radius:3px;box-shadow:0 2px 6px rgba(0,0,0,.4)}
         @media(min-width:1100px){.hosts{display:inline-flex}}
+        /* Compact, tidy header on mobile (works in LTR + RTL via logical props) */
+        @media(max-width:680px){
+            .topbar{padding:10px 14px;gap:9px}
+            .brand-logo{height:34px}
+            .brand-text h1{font-size:15px;white-space:normal}
+            .brand-text p{display:none}
+            .searchbox{order:5;flex:1 1 100%;max-width:none;min-width:0}
+            .top-actions{gap:7px}
+            .top-link{padding:8px 12px;font-size:12px}
+            .theme-btn,.lang-btn{padding:7px 10px;font-size:11px}
+        }
 
         .searchbox{position:relative;flex:1;min-width:180px;max-width:300px;order:5}
         #search{width:100%;padding:9px 16px;border-radius:999px;border:1px solid var(--line);

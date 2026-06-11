@@ -8004,7 +8004,9 @@ html[dir="rtl"] #fanFilterModal .ff-consent-text,html[dir="rtl"] #fanFilterModal
 @media(max-width:768px){
   .nav .logo-card{width:92px !important;height:36px !important;border-radius:11px !important}
   .nav .logo-card img{max-width:72px !important;max-height:24px !important}
-  .nav .brand-title{font-size:12.5px !important}
+  /* The long brand title overflowed/cut off on mobile; the logo already shows
+     the brand, so hide the text title and keep the header clean. */
+  .nav .brand-title{display:none !important}
 }
 </style>
 

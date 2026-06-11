@@ -2358,6 +2358,8 @@ html[data-theme="saudi"] .tm-frame-wrap{border-color:rgba(126,244,174,.22)}
   .nav-burger{display:inline-flex !important;position:relative;z-index:2005;margin-inline-start:auto}
   /* Hide the burger once the drawer is open (close via the dimmed backdrop or Esc). */
   html.wc-nav-open .nav-burger{display:none !important}
+  /* Long brand title overflowed on mobile; the logo conveys the brand. */
+  .brand-title{display:none !important}
   .top-actions{position:fixed !important;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(82vw,300px);z-index:2000 !important;
     display:flex !important;flex-direction:column !important;align-items:stretch;gap:10px;overflow-y:auto;-webkit-overflow-scrolling:touch;
     background:#0c1830;border-inline-start:1px solid rgba(168,231,255,.2);border-radius:0;padding:70px 14px 28px;
