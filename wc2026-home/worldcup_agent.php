@@ -366,7 +366,18 @@ function clearOutput(){$('chat').innerHTML='';$('rawJson').textContent='{}';$('s
 function fmtEvents(ev){return (ev||[]).slice(0,45).map(e=>{const m=(e.time&&e.time.elapsed!=null?e.time.elapsed+"'":'')+(e.time&&e.time.extra?'+'+e.time.extra:'');return m+' '+((e.team&&e.team.name)||'')+' — '+e.type+(e.detail?' ('+e.detail+')':'')+': '+((e.player&&e.player.name)||'')+((e.assist&&e.assist.name)?' (assist '+e.assist.name+')':'');}).join('\n');}
 function fmtLineups(lu){return (lu||[]).map(l=>{const xi=(l.startXI||[]).map(p=>'#'+(p.player.number||'')+' '+p.player.name+(p.player.pos?' ('+p.player.pos+')':'')).join(', ');const subs=(l.substitutes||[]).map(p=>p.player.name).join(', ');return ((l.team&&l.team.name)||'')+' — formation '+(l.formation||'?')+', coach '+((l.coach&&l.coach.name)||'?')+'\n  XI: '+xi+'\n  Subs: '+subs;}).join('\n\n');}
 function fmtStats(st){return (st||[]).map(s=>((s.team&&s.team.name)||'')+': '+(s.statistics||[]).map(x=>x.type+' '+(x.value==null?'-':x.value)).join(', ')).join('\n');}
-function fmtPred(p){if(!p)return '';const pr=p.predictions||{},pc=pr.percent||{};return 'winner '+((pr.winner&&pr.winner.name)||'-')+', win-or-draw '+pr.win_or_draw+', under/over '+(pr.under_over||'-')+', advice: '+(pr.advice||'-')+', % H/D/A '+(pc.home||'-')+'/'+(pc.draw||'-')+'/'+(pc.away||'-');}
+function fmtPred(p){
+  if(!p) return '';
+  const pr=p.predictions||{},pc=pr.percent||{},cmp=p.comparison||{},tm=p.teams||{};
+  const L=[];
+  L.push('winner '+((pr.winner&&pr.winner.name)||'-')+', win-or-draw '+pr.win_or_draw+', under/over '+(pr.under_over||'-')+', advice: '+(pr.advice||'-')+', % H/D/A '+(pc.home||'-')+'/'+(pc.draw||'-')+'/'+(pc.away||'-'));
+  const fm=x=>x&&x.last_5?('last5 form '+(x.last_5.form||'-')+', att '+(x.last_5.att||'-')+', def '+(x.last_5.def||'-')+(x.last_5.goals?(' goals '+(x.last_5.goals.for&&x.last_5.goals.for.total)+'/'+(x.last_5.goals.against&&x.last_5.goals.against.total)):'')):'';
+  if(tm.home) L.push('  Home ('+tm.home.name+'): '+fm(tm.home)+((tm.home.league&&tm.home.league.form)?(' | season form '+tm.home.league.form):''));
+  if(tm.away) L.push('  Away ('+tm.away.name+'): '+fm(tm.away)+((tm.away.league&&tm.away.league.form)?(' | season form '+tm.away.league.form):''));
+  const c2=(o)=>o?((o.home||'-')+'/'+(o.away||'-')):'-';
+  if(cmp.form||cmp.att||cmp.def||cmp.total||cmp.h2h) L.push('  Comparison H/A — form '+c2(cmp.form)+', attack '+c2(cmp.att)+', defense '+c2(cmp.def)+', poisson '+c2(cmp.poisson_distribution)+', h2h '+c2(cmp.h2h)+', total '+c2(cmp.total));
+  return L.join('\n');
+}
 function fmtInj(inj){return (inj||[]).slice(0,45).map(i=>(((i.team&&i.team.name)||'')+': '+((i.player&&i.player.name)||'')+' — '+((i.player&&i.player.type)||'')+' '+((i.player&&i.player.reason)||'')).trim()).join('\n');}
 async function buildFixtureContext(fid){
   const fxR=await apiGet('fixtures',{id:fid});
@@ -408,15 +419,24 @@ async function runAgent(){
   addMsg(q||modeLabel(mode),'user');
   $('status').textContent=t('running');
   const typing=document.createElement('div');typing.className='typing';typing.innerHTML='<i></i><i></i><i></i>';$('chat').appendChild(typing);$('chat').scrollTop=$('chat').scrollHeight;
-  let ctxText='', apifootball=null;
-  if($('fixture').value){
+  let fid=$('fixture').value;
+  /* No fixture but a Team ID → resolve that team's NEXT fixture (great for "predict the next match"). */
+  if(!fid && $('team').value){
     try{
-      const c=await buildFixtureContext($('fixture').value);
+      const nx=await apiGet('fixtures',{team:parseInt($('team').value,10),next:1});
+      const nf=(nx&&nx.response&&nx.response[0]);
+      if(nf){ fid=String(nf.fixture.id); $('fixture').value=fid; syncCards(); }
+    }catch(e){}
+  }
+  let ctxText='', apifootball=null;
+  if(fid){
+    try{
+      const c=await buildFixtureContext(fid);
       if(c.summary){ ctxText='\n\n=== LIVE API-FOOTBALL MATCH DATA (ground truth) ===\n'+c.summary; apifootball=c.raw; }
     }catch(e){}
   }
   const payload={module:'WORLDCUP',lang,date:$('date').value,text:t('aiInstruction')+"\n\nUser request:\n"+q+ctxText};
-  if($('fixture').value) payload.fixture=parseInt($('fixture').value,10);
+  if(fid) payload.fixture=parseInt(fid,10);
   if($('team').value) payload.team=parseInt($('team').value,10);
   if(apifootball) payload.apifootball=apifootball;
   try{
