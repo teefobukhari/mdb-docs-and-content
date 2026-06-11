@@ -1962,12 +1962,18 @@ html[dir="rtl"] .nav-actions{direction:rtl}
 
 /* [WC2026] Participating Teams Map card */
 .teams-map-card{padding:22px}
+/* Participating Teams Map — light card, navy text */
+.card.teams-map-card{
+    background:linear-gradient(160deg,#FFFFFF 0%,#F3F8FF 100%) !important;
+    border:1px solid #DCE8F6 !important;color:#06234B !important;
+    box-shadow:0 18px 44px rgba(7,42,85,.10) !important;
+}
 .tm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px;flex-wrap:wrap}
-.tm-title{color:#fff;font-weight:900;font-size:16px;display:flex;align-items:center;gap:8px}
-.tm-dot{width:10px;height:10px;border-radius:50%;background:#7EF4AE;box-shadow:0 0 12px #7EF4AE}
-.tm-open{color:#A8E7FF;text-decoration:none;font-weight:800;font-size:13px;white-space:nowrap}
+.tm-title{color:#06234B !important;font-weight:900;font-size:16px;display:flex;align-items:center;gap:8px}
+.tm-dot{width:10px;height:10px;border-radius:50%;background:#0E63E6;box-shadow:0 0 12px rgba(14,99,230,.7)}
+.tm-open{color:#0E63E6 !important;text-decoration:none;font-weight:800;font-size:13px;white-space:nowrap}
 .tm-open:hover{text-decoration:underline}
-.tm-sub{color:rgba(255,255,255,.72);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
+.tm-sub{color:#50647F;font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
 .tm-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:radial-gradient(120% 120% at 50% 0%,#123a6b 0%,#0a1f3e 55%,#06152c 100%);height:560px}
 .tm-frame{width:100%;height:100%;border:0;display:block}
 .tm-leaflet{width:100%;height:100%;z-index:1}

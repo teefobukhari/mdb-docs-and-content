@@ -7245,8 +7245,17 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .host-next24-tip .n24-city{color:rgba(168,231,255,.75);font-size:10px;font-weight:700}
 .host-next24-tip .n24-empty{padding:6px 2px;color:rgba(255,255,255,.72);font-weight:700}
 
-/* (1) Participating Teams Map card */
-.teams-map-sub{color:rgba(255,255,255,.72);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
+/* (1) Participating Teams Map card — light card, navy text */
+.layout .card.teams-map-card{
+    color:#06234B !important;
+    background:linear-gradient(160deg,#FFFFFF 0%,#F3F8FF 100%) !important;
+    border:1px solid #DCE8F6 !important;
+    box-shadow:0 18px 44px rgba(7,42,85,.10) !important;
+}
+.teams-map-card .map-title{color:#06234B !important}
+.teams-map-card .map-dot{background:#0E63E6 !important;box-shadow:0 0 16px rgba(14,99,230,.7) !important}
+.teams-map-card .match-link.soft{color:#0E63E6 !important}
+.teams-map-sub{color:#50647F;font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
 .teams-map-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:radial-gradient(120% 120% at 50% 0%,#123a6b 0%,#0a1f3e 55%,#06152c 100%);height:560px}
 .teams-map-frame{width:100%;height:100%;border:0;display:block}
 .teams-map-leaflet{width:100%;height:100%;z-index:1}
