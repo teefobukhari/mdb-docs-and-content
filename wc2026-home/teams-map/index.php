@@ -163,12 +163,13 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         .tm-backdrop{position:fixed;inset:0;z-index:1990;background:rgba(4,12,28,.55);opacity:0;visibility:hidden;transition:.25s}
         .tm-backdrop.show{opacity:1;visibility:visible}
         @media(max-width:760px){
-            /* Header: logo · search · burger (burger sits right next to the search box) */
+            /* Header: logo · (gap) · search · burger — burger sits right next to a
+               compact search box, pushed to the inline-end (works in LTR + RTL) */
             .topbar{padding:10px 12px;gap:8px;flex-wrap:nowrap}
-            .brand-logo{height:32px}
+            .brand-logo{height:28px}
             .brand-text{display:none}
-            .searchbox{order:2;flex:1 1 auto;max-width:none;min-width:0}
-            .tm-burger{display:inline-flex;order:3;flex:none}
+            .searchbox{order:2;flex:0 1 auto;width:min(178px,44vw);min-width:70px;max-width:none;margin-inline-start:auto}
+            .tm-burger{display:inline-flex !important;order:3;flex:none}
             .hosts{display:none !important}
             /* Hide the confederation (location) filters on mobile */
             .filters{display:none !important}
