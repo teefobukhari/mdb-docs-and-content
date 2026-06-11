@@ -6337,6 +6337,12 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
 #profileModal .profile-line span:first-child{color:rgba(255,255,255,.72) !important}
 #profileModal .profile-line span:last-child{color:#fff !important}
 
+/* (8) Fan Filter Studio pop-up — base .modal-card is white; force a dark card so studio text is readable */
+#fanFilterModal .modal-card{background:linear-gradient(150deg,#0B2C55,#071A35) !important;border:1px solid rgba(168,231,255,.2) !important;color:#fff !important}
+#fanFilterModal .modal-card h3,#fanFilterModal .ff-label,#fanFilterModal .ff-frame span,#fanFilterModal .ff-chip{color:#fff !important}
+#fanFilterModal .modal-kicker{color:var(--cyan) !important}
+#fanFilterModal .ff-camera .ff-empty{color:rgba(255,255,255,.8) !important}
+
 /* (5)+(6) Knockout bracket — uniform columns, aligned cards, clean connectors */
 .bracket-grid{display:grid !important;grid-auto-flow:column !important;grid-auto-columns:minmax(230px,1fr) !important;
     grid-template-columns:none !important;gap:22px !important;align-items:start !important;min-width:max-content !important}
@@ -6673,7 +6679,7 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
     if(!feed) return;
     fetch(feed.dataset.endpoint,{credentials:'same-origin'})
       .then(function(r){ return r.json(); })
-      .then(function(data){ var posts=(data && data.posts)||[]; renderPosts(posts); seedNotify(posts); })
+      .then(function(data){ var posts=(data && data.posts)||[]; renderPosts(posts); seedNotify((data && data.recent) || posts); })
       .catch(function(){ feed.innerHTML='<div class="social-empty">'+esc(tr('socialEmpty'))+'</div>'; });
   }
   if(photoInput){ photoInput.addEventListener('change', function(){ photoName.textContent=(photoInput.files&&photoInput.files[0])?photoInput.files[0].name:''; }); }
@@ -6704,6 +6710,8 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
     });
   }
   loadFeed();
+  /* (7) keep the notification bar fresh (15-min window) while the wall is minimized */
+  setInterval(function(){ if(wall && wall.classList.contains('collapsed')) loadFeed(); }, 60000);
 })();
 </script>
 
