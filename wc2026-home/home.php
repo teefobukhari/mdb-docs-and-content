@@ -4809,6 +4809,36 @@ body:before{
     $wcHostCitiesJson = json_encode(array_map(function($hc){
         return ['name'=>$hc[0],'lat'=>$hc[1],'lng'=>$hc[2],'country'=>$hc[3]];
     }, $wcHostCities), JSON_UNESCAPED_UNICODE);
+
+    /* Resolve each next-24h match to a venue coordinate (by host-city name) so it can be plotted on the map */
+    $wcCityCoords = [];
+    foreach ($wcHostCities as $hc) { $wcCityCoords[mb_strtolower($hc[0])] = [$hc[1], $hc[2], $hc[3]]; }
+    $wc_match_coords = function($city) use ($wcCityCoords) {
+        $c = mb_strtolower(trim((string)$city));
+        if ($c === '') return null;
+        foreach ($wcCityCoords as $name => $ll) {
+            if (mb_strpos($name, $c) !== false || mb_strpos($c, $name) !== false) return $ll;
+        }
+        return null;
+    };
+    $next24Geo = [];
+    foreach ($next24Matches as $m) {
+        $ll = $wc_match_coords($m['city'] ?? '');
+        $next24Geo[] = [
+            'home'    => wc_safe_team($m['home_team']),
+            'away'    => wc_safe_team($m['away_team']),
+            'hflag'   => (string)($m['flag'] ?? $m['home_flag'] ?? ''),
+            'aflag'   => (string)($m['away_flag'] ?? ''),
+            'time'    => date('D, d M · h:i A', strtotime((string)$m['match_datetime'])),
+            'city'    => (string)($m['city'] ?? ''),
+            'stadium' => (string)($m['stadium'] ?? ''),
+            'status'  => wc_match_status_label($m),
+            'lat'     => $ll ? $ll[0] : null,
+            'lng'     => $ll ? $ll[1] : null,
+            'country' => $ll ? $ll[2] : '',
+        ];
+    }
+    $next24GeoJson = json_encode($next24Geo, JSON_UNESCAPED_UNICODE);
     ?>
     <section class="card live-map-card hostmap-card">
         <div class="map-head">
@@ -4828,12 +4858,13 @@ body:before{
 
             <aside class="hostmap-side">
                 <div class="hostmap-side-head">
-                    <span data-i18n="matchesByLoc">Matches &amp; Locations</span>
+                    <span data-i18n="matchesByLoc">Next 24h · Matches &amp; Locations</span>
                     <a href="/WC2026/matches" class="match-link soft" data-i18n="viewFullMatches">View Full Matches</a>
                 </div>
                 <div class="map-pins hostmap-list">
-                    <?php if (!empty($mapMatches)): ?>
-                        <?php foreach ($mapMatches as $mp): ?>
+                    <?php $sideMatches = !empty($next24Matches) ? $next24Matches : $mapMatches; ?>
+                    <?php if (!empty($sideMatches)): ?>
+                        <?php foreach ($sideMatches as $mp): ?>
                             <?php
                                 $mpStatus = wc_match_status_label($mp);
                                 $mpScore = ($mpStatus === 'Live' || $mpStatus === 'Finished')
@@ -4859,7 +4890,7 @@ body:before{
                             </div>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <div class="bracket-empty" data-i18n="noMapMatches">No synced matches available yet.</div>
+                        <div class="bracket-empty" data-i18n="noMapMatches">No matches scheduled in the next 24 hours.</div>
                     <?php endif; ?>
                 </div>
             </aside>
@@ -6774,7 +6805,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       ptsGoal:'Daily game — score a goal (by zone)',ptsGolden:'Golden ball goal (bonus)',ptsCombo:'Combo streak (every 3 / 5 goals)',ptsMystery:'Daily food bonus roll',
       ptsPredWin:'Predict the match winner',ptsPredScore:'Predict the correct score',ptsChampion:'Predict the champion (Final only)',ptsPhoto:'Fan Filter photo (once per day)',
       ptsNote:'Procedure: 1) Play the daily game and bank your goal + bonus points. 2) Submit predictions before kickoff — points are awarded automatically once the official result is synced. 3) Save your daily Fan Filter photo. Weekly score resets every week; overall score is cumulative across the tournament.',
-      hostUSA:'USA',hostCAN:'Canada',hostMEX:'Mexico',hostCitiesCap:'16 Host Cities · United States · Canada · Mexico',matchesByLoc:'Matches & Locations',noMapMatches:'No synced matches available yet.',
+      hostUSA:'USA',hostCAN:'Canada',hostMEX:'Mexico',hostCitiesCap:'16 Host Cities · United States · Canada · Mexico',matchesByLoc:'Next 24h · Matches & Locations',noMapMatches:'No matches scheduled in the next 24 hours.',
       biHtLbl:'Half-time',biFtLbl:'Full-time',biEtLbl:'Extra time',biPenLbl:'Penalties',
       biDateLbl:'Date',biTimeLbl:'Local Time',biPathLbl:'Projected Path',biOpenMatch:'Open Match Center ↗',
       teamsMapTitle:'Participating Teams Map',openTeamsMap:'Open Full Map ↗',teamsMapSub:'Explore all 48 qualified nations — tap any country for its football story, stars and key moments.',
@@ -6838,7 +6869,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       ptsGoal:'اللعبة اليومية — تسجيل هدف (حسب المنطقة)',ptsGolden:'هدف الكرة الذهبية (مكافأة)',ptsCombo:'سلسلة متتالية (كل 3 / 5 أهداف)',ptsMystery:'لفة المكافأة الغذائية اليومية',
       ptsPredWin:'توقّع الفائز بالمباراة',ptsPredScore:'توقّع النتيجة الصحيحة',ptsChampion:'توقّع البطل (النهائي فقط)',ptsPhoto:'صورة فلتر المشجع (مرة يوميًا)',
       ptsNote:'الطريقة: 1) العب اللعبة اليومية واجمع نقاط الأهداف والمكافآت. 2) أرسل التوقعات قبل انطلاق المباراة — تُمنح النقاط تلقائيًا بعد مزامنة النتيجة الرسمية. 3) احفظ صورة فلتر المشجع اليومية. تُصفّر نقاط الأسبوع أسبوعيًا، أما النقاط الإجمالية فتتراكم طوال البطولة.',
-      hostUSA:'أمريكا',hostCAN:'كندا',hostMEX:'المكسيك',hostCitiesCap:'16 مدينة مضيفة · الولايات المتحدة · كندا · المكسيك',matchesByLoc:'المباريات والمواقع',noMapMatches:'لا توجد مباريات متزامنة بعد.',
+      hostUSA:'أمريكا',hostCAN:'كندا',hostMEX:'المكسيك',hostCitiesCap:'16 مدينة مضيفة · الولايات المتحدة · كندا · المكسيك',matchesByLoc:'خلال 24 ساعة · المباريات والمواقع',noMapMatches:'لا توجد مباريات خلال الـ24 ساعة القادمة.',
       biHtLbl:'الشوط الأول',biFtLbl:'الوقت الأصلي',biEtLbl:'الوقت الإضافي',biPenLbl:'ركلات الترجيح',
       biDateLbl:'التاريخ',biTimeLbl:'التوقيت المحلي',biPathLbl:'المسار المتوقع',biOpenMatch:'فتح مركز المباراة ↗',
       teamsMapTitle:'خريطة المنتخبات المشاركة',openTeamsMap:'فتح الخريطة كاملة ↗',teamsMapSub:'استكشف المنتخبات الـ48 المتأهلة — اضغط على أي دولة لقصتها الكروية ونجومها ولحظاتها المميزة.',
@@ -7253,6 +7284,21 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .host-pin .host-pin-dot{position:absolute;top:50%;left:50%;width:9px;height:9px;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(255,255,255,.9),0 2px 6px rgba(0,0,0,.5)}
 .host-pin .host-pin-ring{position:absolute;top:50%;left:50%;width:18px;height:18px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--pc,#3A8BF6);opacity:.65;animation:hostPinPulse 2s ease-out infinite}
 @keyframes hostPinPulse{0%{transform:translate(-50%,-50%) scale(.7);opacity:.8}100%{transform:translate(-50%,-50%) scale(1.9);opacity:0}}
+
+/* Next-24h match markers plotted at their venue */
+.n24-marker{position:relative}
+.n24-badge{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);display:flex;flex-direction:column;gap:1px;align-items:center;white-space:nowrap;background:linear-gradient(135deg,#0B2C55,#071A35);border:1px solid var(--mc,#F5C85B);border-radius:11px;padding:5px 10px;box-shadow:0 8px 20px rgba(0,0,0,.45);cursor:pointer}
+.n24-vs{color:#fff;font-weight:900;font-size:11px;line-height:1.1}
+.n24-vs i{color:var(--mc,#F5C85B);font-style:normal;font-weight:900;padding:0 2px}
+.n24-when{color:var(--mc,#F5C85B);font-weight:800;font-size:9.5px;line-height:1}
+.n24-stem{position:absolute;left:50%;bottom:0;width:2px;height:10px;transform:translateX(-50%);background:var(--mc,#F5C85B)}
+.n24-marker:after{content:"";position:absolute;left:50%;bottom:-3px;width:8px;height:8px;border-radius:50%;transform:translateX(-50%);background:var(--mc,#F5C85B);box-shadow:0 0 0 3px rgba(245,200,91,.25)}
+.n24-marker.is-live .n24-badge{border-color:#E94747}
+.n24-marker.is-live .n24-badge .n24-when{color:#FF9B9B}
+.n24-marker.is-live:after{background:#E94747;animation:hostPinPulse 1.6s ease-out infinite}
+.hostmap-leaflet .n24-pop b{display:block;color:#fff;font-size:13px;margin-bottom:6px}
+.n24-pop-time{display:block;color:#FFE19A;font-weight:800;font-size:12px}
+.n24-pop-loc{display:block;color:#A8E7FF;font-weight:700;font-size:12px;margin-top:3px}
 /* Next-24h hover table on map pins */
 .leaflet-tooltip.host-next24-tip{background:#0B2C55;border:1px solid rgba(168,231,255,.28);color:#fff;border-radius:14px;padding:12px 12px 8px;box-shadow:0 16px 36px rgba(0,0,0,.45);font-weight:700;white-space:normal}
 .leaflet-tooltip.host-next24-tip:before{display:none}
@@ -7630,7 +7676,35 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
     byCity[c.name.toLowerCase()]=m;
     bounds.push([c.lat,c.lng]);
   });
-  if(bounds.length) map.fitBounds(bounds,{padding:[34,34]});
+  /* Plot the next-24h matches at their venue locations */
+  var n24geo=<?= $next24GeoJson ?? '[]' ?>;
+  var matchBounds=[], cityCount={};
+  n24geo.forEach(function(g){
+    if(g.lat==null || g.lng==null) return;
+    var key=(g.city||'').toLowerCase();
+    var n=(cityCount[key]=(cityCount[key]||0)+1);          // small offset when several matches share a city
+    var lat=g.lat+(n-1)*0.55, lng=g.lng+(n-1)*0.55;
+    var col=colors[g.country]||'#F5C85B';
+    var live=(g.status==='Live');
+    var icon=L.divIcon({
+      className:'n24-marker'+(live?' is-live':''),
+      html:'<span class="n24-badge" style="--mc:'+col+'">'+
+             '<span class="n24-vs">'+esc(g.home)+' <i>vs</i> '+esc(g.away)+'</span>'+
+             '<span class="n24-when">'+(live?'🔴 LIVE':esc(g.time))+'</span>'+
+           '</span><span class="n24-stem" style="--mc:'+col+'"></span>',
+      iconSize:[150,46], iconAnchor:[75,46]
+    });
+    var loc=esc((g.city||'')+(g.stadium?(' • '+g.stadium):''));
+    var m=L.marker([lat,lng],{icon:icon,title:g.home+' vs '+g.away,zIndexOffset:1000}).addTo(map);
+    m.bindPopup('<div class="n24-pop"><b>'+esc(g.home)+' vs '+esc(g.away)+'</b>'+
+                '<span class="n24-pop-time">⏱ '+esc(g.time)+'</span>'+
+                (loc?'<span class="n24-pop-loc">📍 '+loc+'</span>':'')+'</div>');
+    matchBounds.push([lat,lng]);
+  });
+
+  var allBounds=bounds.concat(matchBounds);
+  if(matchBounds.length) map.fitBounds(matchBounds,{padding:[60,60],maxZoom:6});
+  else if(allBounds.length) map.fitBounds(allBounds,{padding:[34,34]});
   setTimeout(function(){ map.invalidateSize(); }, 250);
   window.addEventListener('resize', function(){ map.invalidateSize(); });
 
