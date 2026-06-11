@@ -91,7 +91,7 @@ function wc_country_code(?string $team): string {
         'í'=>'i','ì'=>'i','î'=>'i','ï'=>'i',
         'ó'=>'o','ò'=>'o','ô'=>'o','ö'=>'o','õ'=>'o',
         'ú'=>'u','ù'=>'u','û'=>'u','ü'=>'u',
-        'ç'=>'c','ñ'=>'n',' š'=>'s','ž'=>'z','ć'=>'c','đ'=>'d',
+        'ç'=>'c','ñ'=>'n','š'=>'s','ž'=>'z','ć'=>'c','đ'=>'d',
     ]);
     $name = str_replace('&', 'and', $name);          // FIX: "Bosnia & Herzegovina" -> "...and..."
     $name = preg_replace('/[^a-z]/', '', $name);      // letters only -> "south korea" => "southkorea"
@@ -712,7 +712,29 @@ body{
 .details-btn{
     color:#fff;
     background:var(--deep);
+    border:0;
+    cursor:pointer;
+    font-family:inherit;
 }
+
+/* Footer (consistent CATRION credit) */
+.wc-footer{
+    margin-top:10px;
+    padding:24px 38px;
+    background:linear-gradient(135deg,#071A35,#0B2C55);
+    color:#fff;
+}
+.wc-foot-inner{
+    max-width:1220px;
+    margin:0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+}
+.wc-foot-inner b{font-size:14px;font-weight:900}
+.wc-foot-inner span{font-size:12px;font-weight:700;color:rgba(255,255,255,.7)}
 .empty{
     padding:24px;
     border-radius:22px;
@@ -1635,7 +1657,7 @@ body{
                                     Prediction Closed
                                 </button>
                             <?php endif; ?>
-                            <a class="details-btn" href="/WC2026/matches?match=<?= (int)$m['id'] ?>">Details</a>
+                            <button type="button" class="details-btn" data-predict-url="/WC2026/predict?match=<?= (int)$m['id'] ?>">Details</button>
                         </div>
                     </article>
                 <?php endforeach; ?>
@@ -1644,6 +1666,13 @@ body{
     </section>
 
 </main>
+
+<footer class="wc-footer">
+    <div class="wc-foot-inner">
+        <b>Developed by CATRION &copy; IT Digital &amp; Transformation</b>
+        <span>CATRION FIFA World Cup 2026 Challenge</span>
+    </div>
+</footer>
 
 <div class="predict-popup" id="predictPopup" aria-hidden="true">
     <div class="predict-popup-card">
