@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="NexisTech engineers AI-native enterprise infrastructure — clean architectures, intelligent automation, and bespoke AI integrations built to scale. Available in English & Arabic.">
+<meta name="theme-color" content="#060913">
+<title>NexisTech — Enterprise Infrastructure & AI</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Exo+2:wght@300;400;500;600;700&family=Orbitron:wght@500;600;700;800&family=Tajawal:wght@300;400;500;700;800&display=swap">
+
+<!-- set language/direction before paint to avoid flash -->
+<script>
+(function(){try{var l=localStorage.getItem('nx-lang')||'en';var d=document.documentElement;
+d.lang=l;d.dir=l==='ar'?'rtl':'ltr';}catch(e){}})();
+</script>
+
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root{
+  --bg:#060913; --bg-2:#03050a;
+  --surface:rgba(19,28,49,.45); --surface-solid:#0c1325;
+  --border:rgba(255,255,255,.07); --border-strong:rgba(0,242,254,.28);
+  --text:#f2f6ff; --text-muted:#9aa8c4; --text-dim:#6b7896;
+  --cyan:#00f2fe; --purple:#9d4edd; --blue:#4364f7; --green:#22c55e;
+  --grad-brand:linear-gradient(135deg,var(--cyan),var(--purple));
+  --grad-btn:linear-gradient(45deg,#0052d4,#4364f7,#6fb1fc);
+  --glow-cyan:rgba(0,242,254,.15);
+  --radius:18px; --radius-lg:24px;
+  --ring:0 0 0 3px rgba(0,242,254,.45);
+  --shell:8%; --maxw:1240px;
+  --font-display:'Orbitron',sans-serif;
+  --font-body:'Exo 2',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+
+body{font-family:var(--font-body);font-weight:300;background:var(--bg);color:var(--text);
+  line-height:1.6;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+h1,h2,h3,h4,h5{font-weight:700;line-height:1.15;letter-spacing:-.01em}
+a{color:inherit;text-decoration:none}
+img,svg{display:block}
+.ico{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round}
+:focus-visible{outline:none;box-shadow:var(--ring);border-radius:8px}
+
+/* ---- Arabic typography & RTL ---- */
+[lang="ar"]{--font-body:'Tajawal',system-ui,sans-serif;--font-display:'Tajawal',sans-serif;letter-spacing:0}
+[lang="ar"] h1,[lang="ar"] h2,[lang="ar"] h3,[lang="ar"] h4,[lang="ar"] h5,
+[lang="ar"] .eyebrow,[lang="ar"] .num::before{font-family:'Tajawal',sans-serif;letter-spacing:0}
+/* brand wordmark stays Latin even in Arabic */
+.logo .wordmark{font-family:'Orbitron',sans-serif}
+
+.skip{position:absolute;inset-inline-start:16px;top:-60px;z-index:2000;background:var(--surface-solid);
+  border:1px solid var(--border-strong);color:var(--text);padding:10px 16px;border-radius:10px;transition:top .2s}
+.skip:focus{top:16px}
+
+.gradient-text{background:var(--grad-brand);-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;color:transparent}
+.wrap{max-width:var(--maxw);margin-inline:auto}
+.eyebrow{font-family:var(--font-display);font-weight:600;font-size:.72rem;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--cyan);display:inline-flex;align-items:center;gap:8px}
+.eyebrow::before{content:"";width:26px;height:1px;background:var(--cyan);opacity:.6}
+[lang="ar"] .eyebrow{letter-spacing:.06em}
+
+#particle-canvas{position:fixed;inset:0;width:100vw;height:100vh;z-index:0;pointer-events:none}
+
+@keyframes subtleGlow{0%,100%{opacity:.3;transform:scale(1)}50%{opacity:.6;transform:scale(1.1)}}
+@keyframes reveal{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}
+@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@keyframes pulseRing{0%{transform:scale(1);opacity:.6}70%{transform:scale(1.8);opacity:0}100%{opacity:0}}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+@keyframes nodeGlow{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes dash{to{stroke-dashoffset:-16}}
+@keyframes typing{0%{opacity:.2}20%{opacity:1}100%{opacity:.2}}
+
+/* ============================================================ NAV */
+header{position:fixed;top:0;inset-inline:0;z-index:1000;display:flex;justify-content:space-between;
+  align-items:center;padding:18px var(--shell);background:rgba(6,9,19,.62);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-bottom:1px solid var(--border);
+  transition:padding .3s,background .3s}
+header.scrolled{padding:12px var(--shell);background:rgba(6,9,19,.85)}
+.logo{font-family:var(--font-display);font-weight:800;font-size:1.45rem;letter-spacing:1px;
+  display:inline-flex;align-items:center;gap:10px}
+.logo .mark{width:30px;height:30px;flex:none}
+nav ul{display:flex;list-style:none;align-items:center;gap:32px}
+nav a.navlink{color:var(--text-muted);font-size:.95rem;font-weight:500;position:relative;padding:6px 2px;transition:color .25s}
+nav a.navlink::after{content:"";position:absolute;inset-inline-start:0;bottom:-2px;height:2px;width:100%;
+  background:var(--cyan);transform:scaleX(0);transform-origin:inline-start;transition:transform .3s}
+nav a.navlink:hover{color:var(--text)}
+nav a.navlink:hover::after{transform:scaleX(1)}
+.nav-actions{display:flex;align-items:center;gap:12px}
+
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-family:var(--font-body);
+  font-weight:600;font-size:.95rem;letter-spacing:.3px;padding:13px 26px;border-radius:30px;cursor:pointer;
+  border:1px solid transparent;min-height:46px;white-space:nowrap;
+  transition:transform .25s,box-shadow .3s,background-position .5s,border-color .25s}
+.btn-primary{background:var(--grad-btn);background-size:200% auto;color:#fff;box-shadow:0 6px 20px rgba(67,100,247,.4)}
+.btn-primary:hover{background-position:right center;transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,242,254,.45)}
+.btn-ghost{background:rgba(255,255,255,.04);border-color:var(--border);color:var(--text)}
+.btn-ghost:hover{border-color:var(--border-strong);background:rgba(0,242,254,.08);transform:translateY(-2px)}
+.btn-sm{padding:9px 18px;min-height:40px;font-size:.88rem}
+.btn .ico{width:18px;height:18px}
+
+/* language toggle */
+.lang-toggle{display:inline-flex;align-items:center;gap:7px;height:40px;padding:0 14px;border-radius:30px;
+  background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text);cursor:pointer;
+  font-family:var(--font-display);font-weight:600;font-size:.82rem;letter-spacing:.04em;transition:.25s}
+.lang-toggle:hover{border-color:var(--border-strong);background:rgba(0,242,254,.08);color:var(--cyan)}
+.lang-toggle .ico{width:16px;height:16px}
+
+.hamburger{display:none;width:46px;height:46px;border-radius:12px;border:1px solid var(--border);
+  background:rgba(255,255,255,.04);color:var(--text);cursor:pointer;align-items:center;justify-content:center}
+
+/* ============================================================ HERO */
+.hero{position:relative;z-index:2;min-height:100svh;display:flex;align-items:center;padding:120px var(--shell) 80px}
+.hero-content{max-width:760px}
+.hero-badge{display:inline-flex;align-items:center;gap:9px;margin-bottom:26px;padding:7px 15px;border-radius:30px;
+  font-size:.82rem;font-weight:500;color:var(--text-muted);background:rgba(0,242,254,.06);border:1px solid var(--border-strong)}
+.hero-badge .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green);flex:none}
+.hero h1{font-size:clamp(2.4rem,6vw,4.25rem);margin-bottom:22px}
+.hero p.lede{color:var(--text-muted);font-size:clamp(1.05rem,2vw,1.25rem);max-width:62ch;margin-bottom:34px}
+.hero-cta{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:54px}
+.hero-stats{display:flex;flex-wrap:wrap;gap:38px}
+.hero-stats .stat b{font-family:var(--font-display);font-size:1.9rem;font-weight:700;display:block;font-variant-numeric:tabular-nums}
+.hero-stats .stat span{color:var(--text-dim);font-size:.85rem;letter-spacing:.04em}
+.ambient-glow{position:absolute;top:18%;inset-inline-end:6%;width:520px;height:520px;border-radius:50%;z-index:-1;
+  background:radial-gradient(circle,rgba(0,242,254,.13),rgba(157,78,221,.06) 50%,transparent 70%);
+  animation:subtleGlow 8s infinite ease-in-out;pointer-events:none}
+
+.js .reveal{opacity:0;transform:translateY(28px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+.reveal.in{opacity:1;transform:none}
+.hero-content .reveal{animation:reveal 1s cubic-bezier(.16,1,.3,1) both;opacity:1;transform:none}
+.hero-content .d1{animation-delay:.05s}.hero-content .d2{animation-delay:.18s}
+.hero-content .d3{animation-delay:.31s}.hero-content .d4{animation-delay:.44s}
+
+/* ============================================================ SECTIONS */
+section.block{position:relative;z-index:2;padding:110px var(--shell)}
+.section-head{text-align:center;max-width:700px;margin:0 auto 64px}
+.section-head h2{font-size:clamp(2rem,4.5vw,2.9rem);margin:16px 0 14px}
+.section-head p{color:var(--text-muted);font-size:1.08rem}
+
+/* trust marquee */
+.trust{padding:46px var(--shell);border-block:1px solid var(--border);position:relative;z-index:2;background:rgba(3,5,10,.5)}
+.trust .label{text-align:center;color:var(--text-dim);font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;margin-bottom:26px}
+.marquee{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);
+  mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+.marquee-track{display:flex;gap:64px;width:max-content;animation:marquee 28s linear infinite}
+.marquee:hover .marquee-track{animation-play-state:paused}
+.marquee .brand-item{display:flex;align-items:center;gap:10px;color:var(--text-dim);font-family:var(--font-display);
+  font-weight:600;font-size:1.15rem;letter-spacing:.5px;opacity:.7;transition:.3s;white-space:nowrap}
+.marquee .brand-item:hover{opacity:1;color:var(--text)}
+.marquee .brand-item .ico{width:22px;height:22px;color:var(--cyan)}
+
+/* ============================================================ BENTO */
+.bento{display:grid;grid-template-columns:repeat(6,1fr);gap:22px}
+.card{position:relative;overflow:hidden;background:var(--surface);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--border);border-radius:var(--radius-lg);padding:34px;
+  transition:transform .4s cubic-bezier(.16,1,.3,1),border-color .4s,box-shadow .4s}
+.card::before{content:"";position:absolute;top:0;inset-inline-start:0;width:100%;height:3px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);transform:scaleX(0);transition:transform .45s}
+.card::after{content:"";position:absolute;inset:0;border-radius:inherit;opacity:0;transition:opacity .4s;
+  background:radial-gradient(420px circle at var(--mx,50%) var(--my,50%),rgba(0,242,254,.10),transparent 45%)}
+.card:hover{transform:translateY(-8px);border-color:var(--border-strong);box-shadow:0 18px 44px rgba(0,242,254,.14)}
+.card:hover::before{transform:scaleX(1)}
+.card:hover::after{opacity:1}
+.card-span-3{grid-column:span 3}
+.card-feature{grid-column:span 3;grid-row:span 2}
+.icon-wrap{width:58px;height:58px;border-radius:15px;display:flex;align-items:center;justify-content:center;
+  color:var(--cyan);background:rgba(0,242,254,.07);border:1px solid rgba(0,242,254,.18);margin-bottom:24px;
+  transition:transform .35s,background .3s,color .3s}
+.card:hover .icon-wrap{transform:rotate(-6deg) scale(1.06);background:rgba(0,242,254,.16);color:#fff}
+.icon-wrap .ico{width:28px;height:28px}
+.card h3{font-size:1.35rem;margin-bottom:12px}
+.card p{color:var(--text-muted);font-size:.97rem}
+.card .tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
+.tag{font-size:.74rem;font-weight:500;color:var(--cyan);padding:5px 11px;border-radius:20px;
+  background:rgba(0,242,254,.07);border:1px solid rgba(0,242,254,.18)}
+.feature-visual{margin-top:26px;border-radius:16px;border:1px solid var(--border);overflow:hidden;
+  background:linear-gradient(160deg,rgba(0,242,254,.05),rgba(157,78,221,.04));padding:20px}
+.bar-row{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.bar-row:last-child{margin-bottom:0}
+.bar-row .bl{width:96px;color:var(--text-dim);font-size:.78rem;flex:none}
+.bar-row .bt{flex:1;height:8px;border-radius:6px;background:rgba(255,255,255,.06);overflow:hidden}
+.bar-row .bt i{display:block;height:100%;border-radius:6px;background:var(--grad-brand);width:var(--w,60%)}
+.bar-row .bv{font-family:var(--font-display);font-size:.8rem;color:var(--text);width:42px;text-align:end;flex:none;font-variant-numeric:tabular-nums}
+
+/* ============================================================ INTELLIGENCE CORE (AI) */
+.ai-core{position:relative;z-index:2;padding:40px var(--shell) 110px}
+.ai-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+.ai-copy h2{font-size:clamp(2rem,4.5vw,2.9rem);margin:16px 0 18px}
+.ai-copy>p{color:var(--text-muted);font-size:1.08rem;margin-bottom:28px;max-width:52ch}
+.ai-feats{list-style:none;display:flex;flex-direction:column;gap:18px}
+.ai-feats li{display:flex;gap:14px;align-items:flex-start}
+.ai-feats .fi{width:42px;height:42px;border-radius:12px;flex:none;display:flex;align-items:center;justify-content:center;
+  color:var(--cyan);background:rgba(0,242,254,.08);border:1px solid rgba(0,242,254,.2)}
+.ai-feats .fi .ico{width:22px;height:22px}
+.ai-feats h4{font-size:1.06rem;margin-bottom:4px}
+.ai-feats p{color:var(--text-muted);font-size:.93rem}
+.neural{position:relative;border-radius:var(--radius-lg);border:1px solid var(--border-strong);overflow:hidden;
+  background:radial-gradient(120% 120% at 50% 0%,rgba(0,242,254,.08),rgba(157,78,221,.05) 45%,transparent 70%);
+  min-height:380px;display:flex;align-items:center;justify-content:center;padding:24px}
+.neural svg{width:100%;height:auto;max-width:480px}
+.neural .nn-node{fill:#0c1325;stroke:var(--cyan);stroke-width:1.5}
+.neural .nn-node.glow{animation:nodeGlow 2.6s ease-in-out infinite}
+.neural .nn-edge{stroke:rgba(0,242,254,.22);stroke-width:1}
+.neural .nn-pulse{stroke:var(--cyan);stroke-width:1.6;stroke-dasharray:4 12;animation:dash 1.1s linear infinite;opacity:.9}
+.neural .badge{position:absolute;top:16px;inset-inline-start:16px;display:inline-flex;align-items:center;gap:8px;
+  padding:7px 13px;border-radius:30px;background:rgba(6,9,19,.7);border:1px solid var(--border-strong);
+  font-size:.78rem;color:var(--text)}
+.neural .badge .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+
+/* steps */
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;counter-reset:step}
+.step{position:relative;padding:32px 26px;border-radius:var(--radius);background:var(--surface);
+  border:1px solid var(--border);transition:transform .35s,border-color .35s}
+.step:hover{transform:translateY(-6px);border-color:var(--border-strong)}
+.step .num{counter-increment:step;font-family:var(--font-display);font-weight:700;font-size:.95rem;width:42px;height:42px;
+  border-radius:12px;display:flex;align-items:center;justify-content:center;color:var(--cyan);
+  background:rgba(0,242,254,.08);border:1px solid rgba(0,242,254,.2);margin-bottom:20px}
+.step .num::before{content:"0" counter(step)}
+.step h4{font-size:1.12rem;margin-bottom:10px}
+.step p{color:var(--text-muted);font-size:.92rem}
+
+/* stats band */
+.stats-band{display:grid;grid-template-columns:repeat(4,1fr);gap:22px;padding:46px;border-radius:var(--radius-lg);
+  background:linear-gradient(135deg,rgba(0,242,254,.06),rgba(157,78,221,.05));border:1px solid var(--border-strong)}
+.stats-band .stat{text-align:center}
+.stats-band .stat b{font-family:var(--font-display);font-size:clamp(2rem,4vw,2.8rem);font-weight:700;display:block;font-variant-numeric:tabular-nums}
+.stats-band .stat span{color:var(--text-muted);font-size:.9rem}
+
+/* testimonial */
+.quote{max-width:880px;margin-inline:auto;text-align:center;padding:54px 40px;background:var(--surface);
+  border:1px solid var(--border);border-radius:var(--radius-lg);position:relative}
+.quote .mark{font-family:var(--font-display);font-size:4rem;line-height:.6;color:var(--cyan);opacity:.35;height:36px}
+.quote blockquote{font-size:clamp(1.2rem,2.6vw,1.6rem);font-weight:400;color:var(--text);line-height:1.5;margin:8px 0 28px}
+.quote .who{display:flex;align-items:center;justify-content:center;gap:14px}
+.quote .avatar{width:46px;height:46px;border-radius:50%;background:var(--grad-brand);display:flex;align-items:center;
+  justify-content:center;font-family:var(--font-display);font-weight:700;color:#04121a}
+.quote .who .meta{text-align:start}
+.quote .who .meta b{font-size:.98rem}
+.quote .who .meta span{color:var(--text-dim);font-size:.84rem}
+
+/* final CTA */
+.cta-final{position:relative;z-index:2;text-align:center;padding:96px var(--shell)}
+.cta-card{max-width:920px;margin-inline:auto;padding:64px 48px;border-radius:var(--radius-lg);
+  background:linear-gradient(135deg,rgba(0,82,212,.18),rgba(157,78,221,.14));border:1px solid var(--border-strong);
+  position:relative;overflow:hidden}
+.cta-card::after{content:"";position:absolute;width:380px;height:380px;border-radius:50%;top:-160px;inset-inline-end:-120px;
+  background:radial-gradient(circle,rgba(0,242,254,.22),transparent 70%);pointer-events:none}
+.cta-card h2{font-size:clamp(2rem,4.5vw,2.9rem);margin-bottom:16px;position:relative}
+.cta-card p{color:var(--text-muted);font-size:1.1rem;max-width:56ch;margin:0 auto 32px;position:relative}
+.cta-card .btn{position:relative}
+
+/* footer */
+footer{position:relative;z-index:2;border-top:1px solid var(--border);background:rgba(3,5,10,.7);padding:64px var(--shell) 32px}
+.foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:40px;margin-bottom:48px}
+.foot-brand .logo{margin-bottom:16px}
+.foot-brand p{color:var(--text-muted);font-size:.92rem;max-width:34ch}
+.foot-social{display:flex;gap:12px;margin-top:20px}
+.foot-social a{width:40px;height:40px;border-radius:11px;border:1px solid var(--border);display:flex;align-items:center;
+  justify-content:center;color:var(--text-muted);background:rgba(255,255,255,.03);transition:.25s}
+.foot-social a:hover{color:var(--cyan);border-color:var(--border-strong);transform:translateY(-2px)}
+.foot-col h5{font-family:var(--font-display);font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;color:var(--text);margin-bottom:18px}
+.foot-col a{display:block;color:var(--text-muted);font-size:.92rem;margin-bottom:12px;transition:color .2s}
+.foot-col a:hover{color:var(--cyan)}
+.foot-bottom{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;
+  padding-top:28px;border-top:1px solid var(--border);color:var(--text-dim);font-size:.85rem}
+
+/* ============================================================ MOBILE NAV */
+.scrim{position:fixed;inset:0;background:rgba(3,6,14,.6);z-index:1100;opacity:0;visibility:hidden;transition:opacity .3s;backdrop-filter:blur(2px)}
+.scrim.show{opacity:1;visibility:visible}
+.mobile-menu{position:fixed;top:0;inset-inline-end:0;height:100dvh;width:min(82vw,340px);z-index:1200;
+  background:var(--surface-solid);border-inline-start:1px solid var(--border-strong);padding:84px 28px 28px;
+  transform:translateX(100%);transition:transform .32s cubic-bezier(.16,1,.3,1);display:flex;flex-direction:column;gap:6px}
+[dir="rtl"] .mobile-menu{transform:translateX(-100%)}
+.mobile-menu.open{transform:none}
+.mobile-menu a.m-link{padding:15px 12px;border-radius:12px;color:var(--text);font-size:1.05rem;font-weight:500;border:1px solid transparent;transition:.2s}
+.mobile-menu a.m-link:hover{background:rgba(0,242,254,.07);border-color:var(--border)}
+.mobile-menu .btn,.mobile-menu .lang-toggle{margin-top:14px;width:100%}
+.m-close{position:absolute;top:22px;inset-inline-end:22px;width:44px;height:44px;border-radius:12px;
+  background:rgba(255,255,255,.05);border:1px solid var(--border);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center}
+
+/* ============================================================ AI AGENT WIDGET */
+.agent-fab{position:fixed;bottom:24px;inset-inline-end:24px;z-index:1300;width:64px;height:64px;border-radius:50%;
+  border:none;cursor:pointer;background:var(--grad-brand);box-shadow:0 10px 30px rgba(0,242,254,.4);
+  display:flex;align-items:center;justify-content:center;animation:float 4s ease-in-out infinite}
+.agent-fab::before{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid var(--cyan);animation:pulseRing 2.4s ease-out infinite}
+.agent-fab .face{width:34px;height:34px;color:#04121a}
+.agent-fab .online{position:absolute;top:4px;inset-inline-end:4px;width:14px;height:14px;border-radius:50%;
+  background:var(--green);border:2px solid #04121a;box-shadow:0 0 8px var(--green)}
+.agent-fab:hover{transform:scale(1.05)}
+
+.agent-panel{position:fixed;bottom:100px;inset-inline-end:24px;z-index:1300;width:min(92vw,370px);
+  background:var(--surface-solid);border:1px solid var(--border-strong);border-radius:22px;overflow:hidden;
+  box-shadow:0 30px 70px rgba(0,0,0,.55);transform:translateY(20px) scale(.96);opacity:0;visibility:hidden;
+  transform-origin:bottom right;transition:transform .3s cubic-bezier(.16,1,.3,1),opacity .3s,visibility .3s}
+[dir="rtl"] .agent-panel{transform-origin:bottom left}
+.agent-panel.open{transform:none;opacity:1;visibility:visible}
+.agent-head{display:flex;align-items:center;gap:12px;padding:16px 18px;
+  background:linear-gradient(135deg,rgba(0,242,254,.14),rgba(157,78,221,.12));border-bottom:1px solid var(--border)}
+.agent-head .ava{width:42px;height:42px;border-radius:50%;flex:none;background:var(--grad-brand);display:flex;align-items:center;justify-content:center;color:#04121a;position:relative}
+.agent-head .ava .face{width:24px;height:24px}
+.agent-head .ava .online{position:absolute;bottom:0;inset-inline-end:0;width:11px;height:11px;border-radius:50%;background:var(--green);border:2px solid var(--surface-solid)}
+.agent-head .meta{flex:1;min-width:0}
+.agent-head .meta b{font-size:.98rem;display:block}
+.agent-head .meta span{font-size:.78rem;color:var(--text-muted)}
+.agent-head .x{width:34px;height:34px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.04);
+  color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none}
+.agent-body{padding:16px;height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:84%;padding:11px 14px;border-radius:16px;font-size:.92rem;line-height:1.55;animation:reveal .35s ease both}
+.msg.bot{align-self:flex-start;background:rgba(255,255,255,.05);border:1px solid var(--border);border-bottom-left-radius:5px}
+.msg.user{align-self:flex-end;background:var(--grad-btn);color:#fff;border-bottom-right-radius:5px}
+[dir="rtl"] .msg.bot{border-bottom-left-radius:16px;border-bottom-right-radius:5px}
+[dir="rtl"] .msg.user{border-bottom-right-radius:16px;border-bottom-left-radius:5px}
+.typing{align-self:flex-start;display:flex;gap:4px;padding:12px 14px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:16px}
+.typing i{width:7px;height:7px;border-radius:50%;background:var(--cyan);animation:typing 1.2s infinite}
+.typing i:nth-child(2){animation-delay:.2s}.typing i:nth-child(3){animation-delay:.4s}
+.agent-chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 12px}
+.chip{font-size:.82rem;color:var(--cyan);padding:8px 13px;border-radius:20px;background:rgba(0,242,254,.07);
+  border:1px solid rgba(0,242,254,.22);cursor:pointer;transition:.2s;font-family:inherit}
+.chip:hover{background:rgba(0,242,254,.16);color:#fff}
+.agent-input{display:flex;gap:8px;padding:12px 16px 16px;border-top:1px solid var(--border)}
+.agent-input input{flex:1;min-height:44px;background:rgba(255,255,255,.04);border:1px solid var(--border);
+  border-radius:12px;color:var(--text);padding:0 14px;font-family:inherit;font-size:.92rem}
+.agent-input input:focus{outline:none;border-color:var(--border-strong);box-shadow:var(--ring)}
+.agent-input button{width:44px;height:44px;flex:none;border-radius:12px;border:none;cursor:pointer;
+  background:var(--grad-btn);color:#fff;display:flex;align-items:center;justify-content:center}
+[dir="rtl"] .agent-input button .ico{transform:scaleX(-1)}
+
+/* ============================================================ RESPONSIVE */
+@media (max-width:1024px){
+  .card-feature{grid-column:span 6;grid-row:auto}
+  .card-span-3{grid-column:span 3}
+  .steps{grid-template-columns:repeat(2,1fr)}
+  .ai-grid{grid-template-columns:1fr;gap:36px}
+}
+@media (max-width:860px){
+  :root{--shell:6%}
+  nav,.nav-actions .btn,.nav-actions .lang-toggle{display:none}
+  .hamburger{display:flex}
+  .bento{grid-template-columns:repeat(2,1fr)}
+  .card-span-3,.card-feature{grid-column:span 2}
+  .stats-band{grid-template-columns:repeat(2,1fr);gap:32px;padding:36px}
+  .foot-grid{grid-template-columns:1fr 1fr}
+  section.block{padding:84px var(--shell)}
+  .ambient-glow{display:none}
+}
+@media (max-width:560px){
+  :root{--shell:5%}
+  .bento{grid-template-columns:1fr}
+  .card-span-3,.card-feature{grid-column:span 1}
+  .steps,.stats-band,.foot-grid{grid-template-columns:1fr}
+  .hero-stats{gap:26px}
+  .foot-bottom{flex-direction:column;text-align:center}
+  .agent-fab{bottom:18px;inset-inline-end:18px}
+  .agent-panel{bottom:90px;inset-inline-end:12px;inset-inline-start:12px;width:auto}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  .js .reveal{opacity:1;transform:none}
+}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main" data-en="Skip to content" data-ar="تخطٍّ إلى المحتوى">Skip to content</a>
+<canvas id="particle-canvas" aria-hidden="true"></canvas>
+
+<!-- ================= NAV ================= -->
+<header id="siteHeader">
+  <a class="logo" href="#home" aria-label="NexisTech home">
+    <svg class="mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <defs><linearGradient id="lg" x1="0" y1="0" x2="32" y2="32">
+        <stop offset="0" stop-color="#00f2fe"/><stop offset="1" stop-color="#9d4edd"/></linearGradient></defs>
+      <path d="M16 2 28 9v14L16 30 4 23V9L16 2Z" stroke="url(#lg)" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M11 21V11l10 10V11" stroke="url(#lg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="wordmark">NexisTech</span>
+  </a>
+
+  <nav aria-label="Primary">
+    <ul>
+      <li><a class="navlink" href="#home" data-en="Home" data-ar="الرئيسية">Home</a></li>
+      <li><a class="navlink" href="#capabilities" data-en="Capabilities" data-ar="القدرات">Capabilities</a></li>
+      <li><a class="navlink" href="#intelligence" data-en="Intelligence" data-ar="الذكاء">Intelligence</a></li>
+      <li><a class="navlink" href="#process" data-en="Process" data-ar="منهجية العمل">Process</a></li>
+      <li><a class="navlink" href="#contact" data-en="Contact" data-ar="تواصل معنا">Contact</a></li>
+    </ul>
+  </nav>
+
+  <div class="nav-actions">
+    <button class="lang-toggle" id="langToggle" data-en-aria="Switch to Arabic" data-ar-aria="التبديل إلى الإنجليزية" aria-label="Switch to Arabic">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 4 6.3 4 9s-1.5 6.3-4 9c-2.5-2.7-4-6.3-4-9s1.5-6.3 4-9Z"/></svg>
+      <span id="langLabel">العربية</span>
+    </button>
+    <a class="btn btn-primary btn-sm" href="#contact" data-en="Contact Sales" data-ar="تواصل مع المبيعات">Contact Sales</a>
+    <button class="hamburger" id="menuOpen" data-en-aria="Open menu" data-ar-aria="فتح القائمة" aria-label="Open menu" aria-controls="mobileMenu" aria-expanded="false">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ============== MOBILE MENU ============== -->
+<div class="scrim" id="navScrim"></div>
+<aside class="mobile-menu" id="mobileMenu" aria-label="Mobile navigation" aria-hidden="true">
+  <button class="m-close" id="menuClose" data-en-aria="Close menu" data-ar-aria="إغلاق القائمة" aria-label="Close menu">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+  </button>
+  <a class="m-link" href="#home" data-en="Home" data-ar="الرئيسية">Home</a>
+  <a class="m-link" href="#capabilities" data-en="Capabilities" data-ar="القدرات">Capabilities</a>
+  <a class="m-link" href="#intelligence" data-en="Intelligence" data-ar="الذكاء">Intelligence</a>
+  <a class="m-link" href="#process" data-en="Process" data-ar="منهجية العمل">Process</a>
+  <a class="m-link" href="#contact" data-en="Contact" data-ar="تواصل معنا">Contact</a>
+  <button class="lang-toggle" id="langToggleM">
+    <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 4 6.3 4 9s-1.5 6.3-4 9c-2.5-2.7-4-6.3-4-9s1.5-6.3 4-9Z"/></svg>
+    <span class="langLabel">العربية</span>
+  </button>
+  <a class="btn btn-primary" href="#contact" data-en="Contact Sales" data-ar="تواصل مع المبيعات">Contact Sales</a>
+</aside>
+
+<main id="main">
+
+<!-- ================= HERO ================= -->
+<section class="hero" id="home">
+  <div class="ambient-glow" aria-hidden="true"></div>
+  <div class="hero-content">
+    <span class="hero-badge reveal d1"><span class="dot"></span><span data-en="Enterprise-grade · AI-native infrastructure" data-ar="بنية تحتية للمؤسسات · مدعومة بالذكاء الاصطناعي">Enterprise-grade · AI-native infrastructure</span></span>
+    <h1 class="reveal d2"
+        data-en-html='Architecting High-Performance <span class="gradient-text">Digital Ecosystems</span>'
+        data-ar-html='نُهندس <span class="gradient-text">أنظمة رقمية</span> فائقة الأداء'>Architecting High-Performance <span class="gradient-text">Digital Ecosystems</span></h1>
+    <p class="lede reveal d3" data-en="We deploy clean, custom-built architectures, advanced automation, and robust AI integrations — engineered to push enterprise operational capacity to its absolute limit." data-ar="ننشر بُنى مخصّصة ونظيفة، وأتمتة متقدمة، وتكاملات قوية للذكاء الاصطناعي — مصمّمة لدفع قدرات تشغيل المؤسسات إلى أقصى حدودها.">We deploy clean, custom-built architectures, advanced automation, and robust AI integrations — engineered to push enterprise operational capacity to its absolute limit.</p>
+    <div class="hero-cta reveal d4">
+      <a class="btn btn-primary" href="#capabilities">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        <span data-en="Initialize Systems" data-ar="ابدأ الآن">Initialize Systems</span>
+      </a>
+      <a class="btn btn-ghost" href="#process">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+        <span data-en="See How It Works" data-ar="شاهد آلية العمل">See How It Works</span>
+      </a>
+    </div>
+    <div class="hero-stats reveal d4">
+      <div class="stat"><b class="gradient-text" data-count="99.99" data-suffix="%">0</b><span data-en="Platform uptime SLA" data-ar="نسبة جاهزية المنصة">Platform uptime SLA</span></div>
+      <div class="stat"><b class="gradient-text" data-count="250" data-suffix="+">0</b><span data-en="Systems deployed" data-ar="نظام تم إطلاقه">Systems deployed</span></div>
+      <div class="stat"><b class="gradient-text" data-count="40" data-suffix="%">0</b><span data-en="Avg. cost reduction" data-ar="متوسط خفض التكلفة">Avg. cost reduction</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= TRUST MARQUEE ================= -->
+<div class="trust">
+  <p class="label" data-en="Trusted by engineering teams scaling mission-critical systems" data-ar="موثوق من فرق الهندسة التي تُوسّع الأنظمة الحرجة">Trusted by engineering teams scaling mission-critical systems</p>
+  <div class="marquee">
+    <div class="marquee-track" id="marqueeTrack">
+      <span class="brand-item"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>Helix Systems</span>
+      <span class="brand-item"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>OrbitalGrid</span>
+      <span class="brand-item"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg>Quanta Labs</span>
+      <span class="brand-item"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6l-8-4Z"/></svg>Aegis Cloud</span>
+      <span class="brand-item"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>Pulse AI</span>
+      <span class="brand-item"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>Helix Systems</span>
+      <span class="brand-item"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>OrbitalGrid</span>
+      <span class="brand-item"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg>Quanta Labs</span>
+      <span class="brand-item"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6l-8-4Z"/></svg>Aegis Cloud</span>
+      <span class="brand-item"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>Pulse AI</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= CAPABILITIES (BENTO) ================= -->
+<section class="block" id="capabilities">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow" data-en="Core Capabilities" data-ar="قدراتنا الأساسية">Core Capabilities</span>
+      <h2 data-en-html='Engineered specializations for <span class="gradient-text">complex landscapes</span>' data-ar-html='تخصصات هندسية <span class="gradient-text">للبيئات المعقدة</span>'>Engineered specializations for <span class="gradient-text">complex landscapes</span></h2>
+      <p data-en="Modular, production-hardened building blocks that compose into systems built to scale indefinitely." data-ar="وحدات بناء معيارية جاهزة للإنتاج تتكامل في أنظمة مصمّمة للتوسّع بلا حدود.">Modular, production-hardened building blocks that compose into systems built to scale indefinitely.</p>
+    </div>
+
+    <div class="bento">
+      <article class="card card-feature reveal">
+        <div class="icon-wrap"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M2 12h20M12 2c2.5 2.7 4 6.3 4 10s-1.5 7.3-4 10c-2.5-2.7-4-6.3-4-10s1.5-7.3 4-10Z"/></svg></div>
+        <h3 data-en="Web Development" data-ar="تطوير الويب">Web Development</h3>
+        <p data-en="Clean-code architectural development engineering seamless, blazing-fast, and deeply secure cross-platform web ecosystems designed to scale indefinitely." data-ar="تطوير معماري بكود نظيف يُنتج أنظمة ويب سلسة وفائقة السرعة وعالية الأمان عبر المنصات، مصمّمة للتوسّع بلا حدود.">Clean-code architectural development engineering seamless, blazing-fast, and deeply secure cross-platform web ecosystems designed to scale indefinitely.</p>
+        <div class="feature-visual" aria-hidden="true">
+          <div class="bar-row"><span class="bl" data-en="Performance" data-ar="الأداء">Performance</span><span class="bt"><i style="--w:96%"></i></span><span class="bv">96</span></div>
+          <div class="bar-row"><span class="bl" data-en="Accessibility" data-ar="سهولة الوصول">Accessibility</span><span class="bt"><i style="--w:100%"></i></span><span class="bv">100</span></div>
+          <div class="bar-row"><span class="bl" data-en="Best Practices" data-ar="أفضل الممارسات">Best Practices</span><span class="bt"><i style="--w:98%"></i></span><span class="bv">98</span></div>
+          <div class="bar-row"><span class="bl" data-en="SEO" data-ar="محركات البحث">SEO</span><span class="bt"><i style="--w:99%"></i></span><span class="bv">99</span></div>
+        </div>
+        <div class="tags"><span class="tag">Next.js</span><span class="tag" data-en="Edge runtime" data-ar="حوسبة طرفية">Edge runtime</span><span class="tag" data-en="Zero-trust" data-ar="انعدام الثقة">Zero-trust</span></div>
+      </article>
+
+      <article class="card card-span-3 reveal">
+        <div class="icon-wrap"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/><circle cx="12" cy="12" r="4"/></svg></div>
+        <h3 data-en="Process Automation" data-ar="أتمتة العمليات">Process Automation</h3>
+        <p data-en="Eliminate system friction with custom, governance-compliant workflow models built to sync workforce data and operations in absolute real-time." data-ar="نُزيل احتكاك الأنظمة عبر نماذج سير عمل مخصّصة ومتوافقة مع الحوكمة، تُزامن بيانات وعمليات القوى العاملة في الوقت الفعلي تمامًا.">Eliminate system friction with custom, governance-compliant workflow models built to sync workforce data and operations in absolute real-time.</p>
+        <div class="tags"><span class="tag" data-en="Event-driven" data-ar="مدفوع بالأحداث">Event-driven</span><span class="tag">RPA</span></div>
+      </article>
+
+      <article class="card card-span-3 reveal">
+        <div class="icon-wrap"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a3 3 0 0 0-3 3 3 3 0 0 0-1 5.8A3 3 0 0 0 12 19a3 3 0 0 0 4-5.2A3 3 0 0 0 15 8a3 3 0 0 0-3-3Z"/><path d="M12 5v14M9 8h-.5M16 13.8H15"/></svg></div>
+        <h3 data-en="AI Architecture" data-ar="هندسة الذكاء الاصطناعي">AI Architecture</h3>
+        <p data-en="Bespoke machine learning, cognitive layer processing, and proprietary neural engine integrations tailored directly into core enterprise applications." data-ar="تعلّم آلي مُفصّل، ومعالجة بطبقات إدراكية، وتكاملات لمحركات عصبية خاصة، مدمجة مباشرة في تطبيقات المؤسسة الأساسية.">Bespoke machine learning, cognitive layer processing, and proprietary neural engine integrations tailored directly into core enterprise applications.</p>
+        <div class="tags"><span class="tag">LLM ops</span><span class="tag">RAG</span><span class="tag" data-en="Inference" data-ar="الاستدلال">Inference</span></div>
+      </article>
+
+      <article class="card card-span-3 reveal">
+        <div class="icon-wrap"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 16.5 3 21l4.5-1.5M12 2c3 2 4 6 4 9 0 2-1 4-2 5l-3 3-3-3c-1-1-2-3-2-5 0-3 1-7 4-9Z"/><circle cx="12" cy="9" r="1.6"/></svg></div>
+        <h3 data-en="Enterprise Solutions" data-ar="حلول المؤسسات">Enterprise Solutions</h3>
+        <p data-en="End-to-end custom systems design — from high-availability digital identity architectures to massive-scale real-time operational governance platforms." data-ar="تصميم أنظمة مخصّصة من البداية للنهاية — من بُنى الهوية الرقمية عالية التوافر إلى منصّات حوكمة تشغيلية ضخمة في الوقت الفعلي.">End-to-end custom systems design — from high-availability digital identity architectures to massive-scale real-time operational governance platforms.</p>
+        <div class="tags"><span class="tag">IAM</span><span class="tag" data-en="High-availability" data-ar="توافر عالٍ">High-availability</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= INTELLIGENCE CORE (AI THEME) ================= -->
+<section class="ai-core" id="intelligence">
+  <div class="wrap">
+    <div class="ai-grid">
+      <div class="ai-copy reveal">
+        <span class="eyebrow" data-en="Intelligence Core" data-ar="نواة الذكاء">Intelligence Core</span>
+        <h2 data-en-html='AI woven into <span class="gradient-text">every layer</span>' data-ar-html='ذكاء اصطناعي في <span class="gradient-text">كل طبقة</span>'>AI woven into <span class="gradient-text">every layer</span></h2>
+        <p data-en="From data ingestion to the user experience, our models reason in real time — turning raw signals into autonomous, governed decisions across your stack." data-ar="من استيعاب البيانات إلى تجربة المستخدم، تستدل نماذجنا في الوقت الفعلي — محوِّلةً الإشارات الخام إلى قرارات ذاتية ومحوكمة عبر منظومتك التقنية.">From data ingestion to the user experience, our models reason in real time — turning raw signals into autonomous, governed decisions across your stack.</p>
+        <ul class="ai-feats">
+          <li>
+            <span class="fi"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.5 5 5.5.8-4 3.9.9 5.5L12 21l-4.9 2.6.9-5.5-4-3.9 5.5-.8L12 3Z"/></svg></span>
+            <div><h4 data-en="Generative & agentic AI" data-ar="ذكاء توليدي ووكلاء أذكياء">Generative &amp; agentic AI</h4><p data-en="Autonomous agents that plan, act, and self-correct against your business rules." data-ar="وكلاء مستقلون يخطّطون وينفّذون ويصحّحون أنفسهم وفق قواعد عملك.">Autonomous agents that plan, act, and self-correct against your business rules.</p></div>
+          </li>
+          <li>
+            <span class="fi"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2"/><rect x="8" y="8" width="8" height="8" rx="2"/></svg></span>
+            <div><h4 data-en="Predictive analytics" data-ar="تحليلات تنبؤية">Predictive analytics</h4><p data-en="Forecast demand, detect anomalies, and act before issues reach production." data-ar="تنبّأ بالطلب، واكتشف الشذوذ، وتصرّف قبل أن تصل المشكلات إلى الإنتاج.">Forecast demand, detect anomalies, and act before issues reach production.</p></div>
+          </li>
+          <li>
+            <span class="fi"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 6v6c0 5 3.4 8.4 8 10 4.6-1.6 8-5 8-10V6l-8-4Z"/><path d="m9 12 2 2 4-4"/></svg></span>
+            <div><h4 data-en="Governed & secure" data-ar="محوكم وآمن">Governed &amp; secure</h4><p data-en="Private deployment, full audit trails, and policy guardrails on every model call." data-ar="نشر خاص، وسجلات تدقيق كاملة، وضوابط سياسات على كل استدعاء للنموذج.">Private deployment, full audit trails, and policy guardrails on every model call.</p></div>
+          </li>
+        </ul>
+      </div>
+
+      <div class="neural reveal" role="img" aria-label="Animated neural network visualization">
+        <span class="badge"><span class="dot"></span><span data-en="Neural engine · live" data-ar="المحرك العصبي · مباشر">Neural engine · live</span></span>
+        <svg viewBox="0 0 400 320" aria-hidden="true">
+          <g class="edges" stroke-linecap="round">
+            <!-- layer 1 -> 2 -->
+            <line class="nn-edge" x1="70" y1="80" x2="200" y2="60"/><line class="nn-edge" x1="70" y1="80" x2="200" y2="160"/><line class="nn-edge" x1="70" y1="80" x2="200" y2="260"/>
+            <line class="nn-edge" x1="70" y1="160" x2="200" y2="60"/><line class="nn-pulse" x1="70" y1="160" x2="200" y2="160"/><line class="nn-edge" x1="70" y1="160" x2="200" y2="260"/>
+            <line class="nn-edge" x1="70" y1="240" x2="200" y2="60"/><line class="nn-edge" x1="70" y1="240" x2="200" y2="160"/><line class="nn-pulse" x1="70" y1="240" x2="200" y2="260"/>
+            <!-- layer 2 -> 3 -->
+            <line class="nn-pulse" x1="200" y1="60" x2="330" y2="120"/><line class="nn-edge" x1="200" y1="60" x2="330" y2="200"/>
+            <line class="nn-edge" x1="200" y1="160" x2="330" y2="120"/><line class="nn-edge" x1="200" y1="160" x2="330" y2="200"/>
+            <line class="nn-edge" x1="200" y1="260" x2="330" y2="120"/><line class="nn-pulse" x1="200" y1="260" x2="330" y2="200"/>
+          </g>
+          <g class="nodes">
+            <circle class="nn-node glow" cx="70" cy="80" r="9"/><circle class="nn-node" cx="70" cy="160" r="9"/><circle class="nn-node glow" cx="70" cy="240" r="9"/>
+            <circle class="nn-node" cx="200" cy="60" r="11"/><circle class="nn-node glow" cx="200" cy="160" r="11"/><circle class="nn-node" cx="200" cy="260" r="11"/>
+            <circle class="nn-node glow" cx="330" cy="120" r="13"/><circle class="nn-node" cx="330" cy="200" r="13"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= PROCESS ================= -->
+<section class="block" id="process" style="padding-top:20px">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <span class="eyebrow" data-en="How We Deliver" data-ar="كيف نعمل">How We Deliver</span>
+      <h2 data-en-html='A disciplined path from <span class="gradient-text">brief to production</span>' data-ar-html='مسار منضبط من <span class="gradient-text">الفكرة إلى الإنتاج</span>'>A disciplined path from <span class="gradient-text">brief to production</span></h2>
+      <p data-en="Predictable delivery, transparent at every checkpoint — no black boxes." data-ar="تسليم يمكن التنبؤ به وشفّاف عند كل مرحلة — دون صناديق سوداء.">Predictable delivery, transparent at every checkpoint — no black boxes.</p>
+    </div>
+    <div class="steps">
+      <div class="step reveal"><div class="num"></div><h4 data-en="Discover" data-ar="الاكتشاف">Discover</h4><p data-en="Deep architecture audit, constraint mapping, and a measurable success blueprint." data-ar="تدقيق معماري عميق، وتحديد القيود، ومخطط نجاح قابل للقياس.">Deep architecture audit, constraint mapping, and a measurable success blueprint.</p></div>
+      <div class="step reveal"><div class="num"></div><h4 data-en="Design" data-ar="التصميم">Design</h4><p data-en="System diagrams, data contracts, and a security model — reviewed and signed off with you." data-ar="مخططات النظام، وعقود البيانات، ونموذج الأمان — تُراجَع وتُعتمد معك.">System diagrams, data contracts, and a security model — reviewed and signed off with you.</p></div>
+      <div class="step reveal"><div class="num"></div><h4 data-en="Build" data-ar="البناء">Build</h4><p data-en="Iterative delivery in tight sprints with live previews and automated quality gates." data-ar="تسليم تكراري عبر دفعات قصيرة مع معاينات حية وبوابات جودة آلية.">Iterative delivery in tight sprints with live previews and automated quality gates.</p></div>
+      <div class="step reveal"><div class="num"></div><h4 data-en="Scale" data-ar="التوسّع">Scale</h4><p data-en="Observability, autoscaling, and continuous optimization once you are live." data-ar="مراقبة شاملة، وتوسّع تلقائي، وتحسين مستمر بعد إطلاقك.">Observability, autoscaling, and continuous optimization once you are live.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= STATS BAND ================= -->
+<section class="block" id="about" style="padding-top:20px">
+  <div class="wrap reveal">
+    <div class="stats-band">
+      <div class="stat"><b class="gradient-text" data-count="12" data-suffix="+">0</b><span data-en="Years building infra" data-ar="سنوات في بناء البنية">Years building infra</span></div>
+      <div class="stat"><b class="gradient-text" data-count="98" data-suffix="%">0</b><span data-en="Client retention" data-ar="نسبة بقاء العملاء">Client retention</span></div>
+      <div class="stat"><b class="gradient-text" data-count="3.2" data-suffix="B+">0</b><span data-en="Requests / day handled" data-ar="طلب نعالجه يوميًا">Requests / day handled</span></div>
+      <div class="stat"><b class="gradient-text" data-count="24" data-suffix="/7">0</b><span data-en="Engineering support" data-ar="دعم هندسي">Engineering support</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= TESTIMONIAL ================= -->
+<section class="block" style="padding-top:20px">
+  <div class="wrap reveal">
+    <figure class="quote">
+      <div class="mark" aria-hidden="true">&ldquo;</div>
+      <blockquote data-en-html='NexisTech re-architected our core platform and cut our infrastructure spend by <strong>38%</strong> while doubling throughput. They operate like an extension of our own engineering team.' data-ar-html='أعادت نيكسِس تك هندسة منصّتنا الأساسية وخفّضت إنفاقنا على البنية التحتية بنسبة <strong>38٪</strong> مع مضاعفة الإنتاجية. إنهم يعملون كامتداد لفريقنا الهندسي.'>NexisTech re-architected our core platform and cut our infrastructure spend by <strong>38%</strong> while doubling throughput. They operate like an extension of our own engineering team.</blockquote>
+      <figcaption class="who">
+        <span class="avatar" aria-hidden="true">DR</span>
+        <span class="meta"><b>Dana Reyes</b><span data-en="VP Engineering, OrbitalGrid" data-ar="نائب رئيس الهندسة، OrbitalGrid">VP Engineering, OrbitalGrid</span></span>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ================= FINAL CTA ================= -->
+<section class="cta-final" id="contact">
+  <div class="cta-card reveal">
+    <h2 data-en-html='Ready to push your systems <span class="gradient-text">to the limit?</span>' data-ar-html='جاهز لدفع أنظمتك <span class="gradient-text">إلى أقصى حدودها؟</span>'>Ready to push your systems <span class="gradient-text">to the limit?</span></h2>
+    <p data-en="Tell us where you are headed. We will map the architecture to get you there — securely, and at scale." data-ar="أخبرنا إلى أين تتّجه. سنرسم لك البنية التي توصلك إلى هناك — بأمان وعلى نطاق واسع.">Tell us where you are headed. We will map the architecture to get you there — securely, and at scale.</p>
+    <a class="btn btn-primary" href="mailto:hello@nexistech.io">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4z"/><path d="m4 7 8 6 8-6"/></svg>
+      <span data-en="Contact Sales" data-ar="تواصل مع المبيعات">Contact Sales</span>
+    </a>
+  </div>
+</section>
+
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="logo" href="#home" aria-label="NexisTech home">
+          <svg class="mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+            <path d="M16 2 28 9v14L16 30 4 23V9L16 2Z" stroke="url(#lg)" stroke-width="2" stroke-linejoin="round"/>
+            <path d="M11 21V11l10 10V11" stroke="url(#lg)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="wordmark">NexisTech</span>
+        </a>
+        <p data-en="Architecting high-performance digital ecosystems for the enterprises that can't afford downtime." data-ar="نُهندس أنظمة رقمية فائقة الأداء للمؤسسات التي لا تحتمل التوقف.">Architecting high-performance digital ecosystems for the enterprises that can't afford downtime.</p>
+        <div class="foot-social">
+          <a href="#" aria-label="NexisTech on X"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4l16 16M20 4 4 20"/></svg></a>
+          <a href="#" aria-label="NexisTech on LinkedIn"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M7 10v7M7 7v.01M11 17v-4a2 2 0 0 1 4 0v4"/></svg></a>
+          <a href="#" aria-label="NexisTech on GitHub"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 19c-4 1.5-4-2.5-6-3m12 5v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg></a>
+        </div>
+      </div>
+      <div class="foot-col">
+        <h5 data-en="Product" data-ar="المنتج">Product</h5>
+        <a href="#capabilities" data-en="Capabilities" data-ar="القدرات">Capabilities</a>
+        <a href="#intelligence" data-en="Intelligence" data-ar="الذكاء">Intelligence</a>
+        <a href="#process" data-en="Process" data-ar="منهجية العمل">Process</a>
+        <a href="#contact" data-en="Contact" data-ar="تواصل معنا">Contact</a>
+      </div>
+      <div class="foot-col">
+        <h5 data-en="Solutions" data-ar="الحلول">Solutions</h5>
+        <a href="#capabilities" data-en="Web Development" data-ar="تطوير الويب">Web Development</a>
+        <a href="#capabilities" data-en="Automation" data-ar="الأتمتة">Automation</a>
+        <a href="#intelligence" data-en="AI Architecture" data-ar="هندسة الذكاء">AI Architecture</a>
+        <a href="#capabilities" data-en="Enterprise" data-ar="المؤسسات">Enterprise</a>
+      </div>
+      <div class="foot-col">
+        <h5 data-en="Company" data-ar="الشركة">Company</h5>
+        <a href="#" data-en="Careers" data-ar="الوظائف">Careers</a>
+        <a href="#" data-en="Security" data-ar="الأمان">Security</a>
+        <a href="#" data-en="Privacy" data-ar="الخصوصية">Privacy</a>
+        <a href="#" data-en="Terms" data-ar="الشروط">Terms</a>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span data-en-html='© <span id="year">2026</span> NexisTech. All systems operational.' data-ar-html='© 2026 نيكسِس تك. جميع الأنظمة تعمل.'>© <span id="year">2026</span> NexisTech. All systems operational.</span>
+      <span data-en="Engineered for scale · SOC 2 Type II" data-ar="مُصمم للتوسّع · SOC 2 Type II">Engineered for scale · SOC 2 Type II</span>
+    </div>
+  </div>
+</footer>
+
+<!-- ================= AI AGENT WIDGET ================= -->
+<button class="agent-fab" id="agentFab" data-en-aria="Open AI assistant" data-ar-aria="افتح المساعد الذكي" aria-label="Open AI assistant" aria-controls="agentPanel" aria-expanded="false">
+  <span class="online" aria-hidden="true"></span>
+  <svg class="face" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <rect x="4" y="7" width="16" height="12" rx="4"/><path d="M12 7V4M9 13h.01M15 13h.01M9 16h6"/><path d="M2 11v3M22 11v3"/>
+  </svg>
+</button>
+
+<section class="agent-panel" id="agentPanel" aria-label="AI assistant" aria-hidden="true">
+  <div class="agent-head">
+    <span class="ava" aria-hidden="true">
+      <span class="online"></span>
+      <svg class="face" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="12" rx="4"/><path d="M12 7V4M9 13h.01M15 13h.01M9 16h6"/><path d="M2 11v3M22 11v3"/></svg>
+    </span>
+    <div class="meta">
+      <b data-en="Nexi — AI Assistant" data-ar="نيكسي — المساعد الذكي">Nexi — AI Assistant</b>
+      <span data-en="Online · replies instantly" data-ar="متصل · يرد فورًا">Online · replies instantly</span>
+    </div>
+    <button class="x" id="agentClose" data-en-aria="Close assistant" data-ar-aria="إغلاق المساعد" aria-label="Close assistant">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+  <div class="agent-body" id="agentBody" aria-live="polite"></div>
+  <div class="agent-chips" id="agentChips"></div>
+  <form class="agent-input" id="agentForm">
+    <input id="agentText" data-en-ph="Ask Nexi anything…" data-ar-ph="اسأل نيكسي أي شيء…" placeholder="Ask Nexi anything…" autocomplete="off">
+    <button type="submit" data-en-aria="Send" data-ar-aria="إرسال" aria-label="Send">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+    </button>
+  </form>
+</section>
+
+<script>
+(function(){
+  "use strict";
+  var root = document.documentElement;
+  root.classList.add('js');
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var lang = (function(){ try{ return localStorage.getItem('nx-lang')||'en'; }catch(e){ return 'en'; } })();
+
+  /* ---------- i18n ---------- */
+  function applyLang(l){
+    lang = l;
+    root.lang = l; root.dir = (l==='ar') ? 'rtl' : 'ltr';
+    document.querySelectorAll('[data-'+l+']').forEach(function(el){
+      var v = el.getAttribute('data-'+l); if(v!=null) el.textContent = v;
+    });
+    document.querySelectorAll('[data-'+l+'-html]').forEach(function(el){
+      var v = el.getAttribute('data-'+l+'-html'); if(v!=null) el.innerHTML = v;
+    });
+    document.querySelectorAll('[data-'+l+'-aria]').forEach(function(el){
+      var v = el.getAttribute('data-'+l+'-aria'); if(v!=null) el.setAttribute('aria-label', v);
+    });
+    document.querySelectorAll('[data-'+l+'-ph]').forEach(function(el){
+      var v = el.getAttribute('data-'+l+'-ph'); if(v!=null) el.setAttribute('placeholder', v);
+    });
+    // toggle button shows the OTHER language
+    var label = (l==='ar') ? 'EN' : 'العربية';
+    document.getElementById('langLabel').textContent = label;
+    document.querySelectorAll('.langLabel').forEach(function(s){ s.textContent = label; });
+    try{ localStorage.setItem('nx-lang', l); }catch(e){}
+    var yr = document.getElementById('year'); if(yr) yr.textContent = new Date().getFullYear();
+    // refresh agent greeting/chips in the new language
+    resetAgent();
+  }
+  function toggleLang(){ applyLang(lang==='ar' ? 'en' : 'ar'); }
+  document.getElementById('langToggle').addEventListener('click', toggleLang);
+  document.getElementById('langToggleM').addEventListener('click', toggleLang);
+
+  /* ---------- sticky header ---------- */
+  var header = document.getElementById('siteHeader');
+  var onScroll = function(){ header.classList.toggle('scrolled', window.scrollY > 24); };
+  onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
+
+  /* ---------- mobile menu ---------- */
+  var menu = document.getElementById('mobileMenu'), scrim = document.getElementById('navScrim'),
+      openBtn = document.getElementById('menuOpen');
+  function setMenu(open){
+    menu.classList.toggle('open', open); scrim.classList.toggle('show', open);
+    menu.setAttribute('aria-hidden', String(!open)); openBtn.setAttribute('aria-expanded', String(open));
+    document.body.style.overflow = open ? 'hidden' : '';
+  }
+  openBtn.addEventListener('click', function(){ setMenu(true); });
+  document.getElementById('menuClose').addEventListener('click', function(){ setMenu(false); });
+  scrim.addEventListener('click', function(){ setMenu(false); });
+  menu.querySelectorAll('a').forEach(function(a){ a.addEventListener('click', function(){ setMenu(false); }); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape'){ setMenu(false); setAgent(false); } });
+
+  /* ---------- scroll reveal ---------- */
+  var reveals = document.querySelectorAll('.reveal');
+  if (reduceMotion || !('IntersectionObserver' in window)) {
+    reveals.forEach(function(el){ el.classList.add('in'); });
+  } else {
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(en){ if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); } });
+    }, {threshold:.12, rootMargin:'0px 0px -8% 0px'});
+    reveals.forEach(function(el){ io.observe(el); });
+  }
+
+  /* ---------- count-up ---------- */
+  function animateCount(el){
+    var target=parseFloat(el.getAttribute('data-count')), suffix=el.getAttribute('data-suffix')||'';
+    var dec=(String(target).split('.')[1]||'').length;
+    if(reduceMotion){ el.textContent=target.toFixed(dec)+suffix; return; }
+    var start=performance.now(), dur=1400;
+    (function tick(now){ var p=Math.min(1,(now-start)/dur), e=1-Math.pow(1-p,3);
+      el.textContent=(target*e).toFixed(dec)+suffix; if(p<1) requestAnimationFrame(tick); })(start);
+  }
+  var counted=new WeakSet();
+  if('IntersectionObserver' in window){
+    var cio=new IntersectionObserver(function(es){ es.forEach(function(en){
+      if(en.isIntersecting && !counted.has(en.target)){ counted.add(en.target); animateCount(en.target); cio.unobserve(en.target); }
+    }); }, {threshold:.6});
+    document.querySelectorAll('[data-count]').forEach(function(el){ cio.observe(el); });
+  } else { document.querySelectorAll('[data-count]').forEach(animateCount); }
+
+  /* ---------- card spotlight ---------- */
+  if(!reduceMotion && window.matchMedia('(hover:hover)').matches){
+    document.querySelectorAll('.card').forEach(function(card){
+      card.addEventListener('pointermove', function(e){
+        var r=card.getBoundingClientRect();
+        card.style.setProperty('--mx',(e.clientX-r.left)+'px');
+        card.style.setProperty('--my',(e.clientY-r.top)+'px');
+      });
+    });
+  }
+
+  /* ============================================================
+     AI AGENT (canned, bilingual conversational assistant)
+     ============================================================ */
+  var fab=document.getElementById('agentFab'), panel=document.getElementById('agentPanel'),
+      body=document.getElementById('agentBody'), chipsEl=document.getElementById('agentChips'),
+      form=document.getElementById('agentForm'), input=document.getElementById('agentText');
+
+  var KB = {
+    en:{
+      greeting:"Hi! I'm Nexi, NexisTech's AI assistant. How can I help you build something exceptional today?",
+      chips:["What do you offer?","How fast can you deliver?","Tell me about your AI","Talk to sales"],
+      fallback:"Great question. Our engineers can dive deep on that — tap “Talk to sales” and we'll set up a call.",
+      rules:[
+        {k:["offer","service","do you","capabilit","provide"],a:"We engineer four core areas: high-performance web development, process automation, bespoke AI architecture, and end-to-end enterprise systems — all built to scale."},
+        {k:["fast","time","deliver","long","timeline"],a:"Most engagements ship a first production-ready increment in 2–4 weeks, then iterate in tight weekly sprints with live previews."},
+        {k:["ai","model","ml","agent","intelligen","neural"],a:"Our Intelligence Core blends generative & agentic AI, predictive analytics, and governed, private deployments with full audit trails on every model call."},
+        {k:["sales","contact","call","talk","quote","price","cost"],a:"Happy to connect you. Email hello@nexistech.io or use the Contact Sales button and our team replies within one business day."},
+        {k:["secure","security","compliance","privacy","soc"],a:"Security is foundational: zero-trust architecture, private model deployment, SOC 2 Type II processes, and policy guardrails throughout."},
+        {k:["hello","hi","hey","salam","good"],a:"Hello! 👋 Ask me about our services, delivery speed, or AI capabilities."}
+      ]
+    },
+    ar:{
+      greeting:"مرحبًا! أنا نيكسي، المساعد الذكي لـ نيكسِس تك. كيف أساعدك في بناء شيء استثنائي اليوم؟",
+      chips:["ما الذي تقدمونه؟","ما سرعة التسليم؟","حدثني عن الذكاء الاصطناعي","تحدث مع المبيعات"],
+      fallback:"سؤال ممتاز. يمكن لمهندسينا التعمّق في ذلك — اضغط “تحدث مع المبيعات” وسنرتّب لك مكالمة.",
+      rules:[
+        {k:["تقدم","خدما","ماذا","قدرا","توفر"],a:"نُهندس أربعة مجالات أساسية: تطوير ويب فائق الأداء، وأتمتة العمليات، وهندسة ذكاء اصطناعي مخصّصة، وأنظمة مؤسسية متكاملة — كلها مصمّمة للتوسّع."},
+        {k:["سرعة","وقت","تسليم","مدة","كم"],a:"تُطلق معظم المشاريع أول إصدار جاهز للإنتاج خلال 2—4 أسابيع، ثم نُكرّر عبر دفعات أسبوعية قصيرة مع معاينات حية."},
+        {k:["ذكاء","نموذج","تعلم","وكيل","عصب"],a:"تجمع نواة الذكاء لدينا بين الذكاء التوليدي والوكلاء الأذكياء، والتحليلات التنبؤية، والنشر الخاص المحوكم مع سجلات تدقيق كاملة لكل استدعاء."},
+        {k:["مبيعات","تواصل","اتصال","تحدث","سعر","تكلفة","عرض"],a:"يسعدنا التواصل معك. راسلنا على hello@nexistech.io أو استخدم زر “تواصل مع المبيعات” ويرد فريقنا خلال يوم عمل واحد."},
+        {k:["أمان","أمن","حماية","خصوصية","امتثال"],a:"الأمان أساس عملنا: بنية انعدام الثقة، ونشر خاص للنماذج، وعمليات SOC 2 Type II، وضوابط سياسات شاملة."},
+        {k:["مرحبا","السلام","اهلا","هاي","صباح","مساء"],a:"أهلًا بك! 👋 اسألني عن خدماتنا أو سرعة التسليم أو قدرات الذكاء الاصطناعي."}
+      ]
+    }
+  };
+
+  function scrollBottom(){ body.scrollTop = body.scrollHeight; }
+  function addMsg(text, who){
+    var d=document.createElement('div'); d.className='msg '+who; d.textContent=text;
+    body.appendChild(d); scrollBottom();
+  }
+  function renderChips(){
+    chipsEl.innerHTML='';
+    KB[lang].chips.forEach(function(c){
+      var b=document.createElement('button'); b.type='button'; b.className='chip'; b.textContent=c;
+      b.addEventListener('click', function(){ handleUser(c); });
+      chipsEl.appendChild(b);
+    });
+  }
+  function resetAgent(){
+    body.innerHTML=''; addMsg(KB[lang].greeting,'bot'); renderChips();
+  }
+  function answerFor(q){
+    var s=q.toLowerCase(), rules=KB[lang].rules;
+    for(var i=0;i<rules.length;i++){
+      for(var j=0;j<rules[i].k.length;j++){ if(s.indexOf(rules[i].k[j].toLowerCase())!==-1) return rules[i].a; }
+    }
+    return KB[lang].fallback;
+  }
+  function handleUser(text){
+    addMsg(text,'user');
+    var ans=answerFor(text);
+    if(reduceMotion){ addMsg(ans,'bot'); return; }
+    var t=document.createElement('div'); t.className='typing'; t.innerHTML='<i></i><i></i><i></i>';
+    body.appendChild(t); scrollBottom();
+    setTimeout(function(){ t.remove(); addMsg(ans,'bot'); }, 650);
+  }
+  function setAgent(open){
+    panel.classList.toggle('open', open);
+    panel.setAttribute('aria-hidden', String(!open));
+    fab.setAttribute('aria-expanded', String(open));
+    if(open && body.children.length===0) resetAgent();
+    if(open) setTimeout(function(){ input.focus(); }, 320);
+  }
+  fab.addEventListener('click', function(){ setAgent(!panel.classList.contains('open')); });
+  document.getElementById('agentClose').addEventListener('click', function(){ setAgent(false); });
+  form.addEventListener('submit', function(e){ e.preventDefault();
+    var v=input.value.trim(); if(!v) return; input.value=''; handleUser(v);
+  });
+
+  /* ---------- apply initial language ---------- */
+  applyLang(lang);
+
+  /* ============================================================
+     PARTICLE CANVAS (optimized, reduced-motion aware)
+     ============================================================ */
+  var canvas=document.getElementById('particle-canvas'), ctx=canvas.getContext('2d');
+  var DPR=Math.min(window.devicePixelRatio||1,1.5), W=0,H=0, particles=[], rafId=null;
+  var mouse={x:null,y:null,radius:150};
+  function count(){ return Math.min(70, Math.round(window.innerWidth*window.innerHeight/26000)); }
+  function size(){ W=window.innerWidth; H=window.innerHeight; canvas.width=W*DPR; canvas.height=H*DPR;
+    canvas.style.width=W+'px'; canvas.style.height=H+'px'; ctx.setTransform(DPR,0,0,DPR,0,0); }
+  function P(){ this.x=Math.random()*W; this.y=Math.random()*H; this.size=Math.random()*2+1;
+    this.sx=(Math.random()-.5)*.55; this.sy=(Math.random()-.5)*.55; this.base=Math.random()*.3+.1; this.a=this.base; }
+  P.prototype.update=function(){ this.x+=this.sx; this.y+=this.sy;
+    if(this.x<0||this.x>W) this.sx*=-1; if(this.y<0||this.y>H) this.sy*=-1;
+    if(mouse.x!=null){ var dx=mouse.x-this.x,dy=mouse.y-this.y,d=Math.hypot(dx,dy);
+      if(d<mouse.radius){ this.a=.7; this.x+=(dx/d)*.4; this.y+=(dy/d)*.4; } else if(this.a>this.base) this.a-=.02;
+    } else if(this.a>this.base) this.a-=.02; };
+  P.prototype.draw=function(){ ctx.fillStyle='rgba(0,242,254,'+this.a+')';
+    ctx.beginPath(); ctx.arc(this.x,this.y,this.size,0,Math.PI*2); ctx.fill(); };
+  function init(){ particles=[]; for(var i=0;i<count();i++) particles.push(new P()); }
+  function connect(){ for(var a=0;a<particles.length;a++){ for(var b=a+1;b<particles.length;b++){
+    var dx=particles[a].x-particles[b].x,dy=particles[a].y-particles[b].y,d=Math.hypot(dx,dy);
+    if(d<120){ var la=(1-d/120)*.12;
+      if(mouse.x!=null){ var md=Math.hypot(mouse.x-particles[a].x,mouse.y-particles[a].y); if(md<mouse.radius) la*=2.4; }
+      ctx.strokeStyle='rgba(0,242,254,'+la+')'; ctx.lineWidth=.8;
+      ctx.beginPath(); ctx.moveTo(particles[a].x,particles[a].y); ctx.lineTo(particles[b].x,particles[b].y); ctx.stroke(); } } } }
+  function frame(){ ctx.clearRect(0,0,W,H);
+    for(var i=0;i<particles.length;i++){ particles[i].update(); particles[i].draw(); } connect();
+    rafId=requestAnimationFrame(frame); }
+  function start(){ if(!rafId) frame(); }
+  function stop(){ if(rafId){ cancelAnimationFrame(rafId); rafId=null; } }
+  if(!reduceMotion){
+    size(); init(); start();
+    window.addEventListener('resize', function(){ size(); init(); });
+    window.addEventListener('mousemove', function(e){ mouse.x=e.clientX; mouse.y=e.clientY; });
+    window.addEventListener('mouseout', function(){ mouse.x=null; mouse.y=null; });
+    document.addEventListener('visibilitychange', function(){ document.hidden ? stop() : start(); });
+  } else { size(); init(); ctx.clearRect(0,0,W,H);
+    for(var i=0;i<particles.length;i++){ particles[i].a=particles[i].base; particles[i].draw(); } }
+})();
+</script>
+</body>
+</html>

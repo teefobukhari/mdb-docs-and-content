@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hawii.tech — IT &amp; AI Solutions</title>
+  <meta name="description" content="Hawii.tech delivers enterprise-grade IT infrastructure, cybersecurity, custom software, and AI solutions that move your business forward." />
+  <meta name="theme-color" content="#2563EB" />
+
+  <!-- Fonts: IBM Plex Sans Arabic supports both Latin & Arabic scripts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Bundled, pre-compiled Tailwind (no runtime CDN needed) -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <style>
+    html { -webkit-font-smoothing: antialiased; }
+    /* Reveal-on-scroll baseline */
+    [data-reveal] { opacity: 0; transform: translateY(20px); transition: opacity .6s ease-out, transform .6s ease-out; }
+    [data-reveal].in { opacity: 1; transform: none; }
+    /* Subtle grid backdrop for hero */
+    .grid-bg {
+      background-image: linear-gradient(rgba(37,99,235,.06) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(37,99,235,.06) 1px, transparent 1px);
+      background-size: 44px 44px;
+      -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 40%, transparent 100%);
+              mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 40%, transparent 100%);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      [data-reveal] { opacity: 1; transform: none; }
+      html { scroll-behavior: auto; }
+    }
+  </style>
+</head>
+
+<body class="font-sans bg-slate-50 text-ink dark:bg-slate-950 dark:text-slate-100 antialiased transition-colors duration-300">
+
+  <!-- Skip link -->
+  <a href="#main" data-en="Skip to content" data-ar="تخطّ إلى المحتوى"
+     class="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:start-3 focus:z-[100] focus:rounded-lg focus:bg-brand focus:px-4 focus:py-2 focus:text-white">Skip to content</a>
+
+  <!-- ============ HEADER ============ -->
+  <header id="top" class="fixed inset-x-0 top-0 z-50 transition-all duration-300" data-header>
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <nav class="mt-3 flex items-center justify-between rounded-2xl border border-slate-200/70 bg-white/80 px-4 py-2.5 shadow-card backdrop-blur-md dark:border-white/10 dark:bg-slate-900/70">
+        <!-- Logo -->
+        <a href="#top" class="flex items-center gap-2.5 group" aria-label="Hawii.tech home">
+          <span class="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-brand to-brand-light text-white shadow-lift transition-transform group-hover:scale-105">
+            <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M20 19V5"/><path d="M4 12h16"/></svg>
+          </span>
+          <span class="text-lg font-bold tracking-tight">Hawii<span class="text-brand">.tech</span></span>
+        </a>
+
+        <!-- Desktop links -->
+        <ul class="hidden items-center gap-1 lg:flex">
+          <li><a href="#solutions"  class="rounded-lg px-3 py-2 text-sm font-medium text-ink-soft transition hover:bg-slate-100 hover:text-ink dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white" data-en="Solutions" data-ar="الحلول">Solutions</a></li>
+          <li><a href="#why"        class="rounded-lg px-3 py-2 text-sm font-medium text-ink-soft transition hover:bg-slate-100 hover:text-ink dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white" data-en="Why Hawii" data-ar="لماذا حاوي">Why Hawii</a></li>
+          <li><a href="#industries" class="rounded-lg px-3 py-2 text-sm font-medium text-ink-soft transition hover:bg-slate-100 hover:text-ink dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white" data-en="Industries" data-ar="القطاعات">Industries</a></li>
+          <li><a href="#process"    class="rounded-lg px-3 py-2 text-sm font-medium text-ink-soft transition hover:bg-slate-100 hover:text-ink dark:text-slate-300 dark:hover:bg-white/5 dark:hover:text-white" data-en="Process" data-ar="منهجيتنا">Process</a></li>
+        </ul>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-1.5">
+          <!-- Language toggle -->
+          <button id="langToggle" type="button" aria-label="Switch language"
+            class="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-2 text-sm font-semibold text-ink-soft transition hover:border-brand hover:text-brand cursor-pointer dark:border-white/10 dark:text-slate-300 dark:hover:text-white">
+            <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span data-langlabel>العربية</span>
+          </button>
+          <!-- Theme toggle -->
+          <button id="themeToggle" type="button" aria-label="Toggle dark mode"
+            class="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-ink-soft transition hover:border-brand hover:text-brand cursor-pointer dark:border-white/10 dark:text-slate-300 dark:hover:text-white">
+            <svg class="h-4 w-4 dark:hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+            <svg class="hidden h-4 w-4 dark:block" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
+          </button>
+          <!-- Primary CTA -->
+          <a href="#contact" class="hidden rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white shadow-lift transition hover:bg-brand-dark hover:-translate-y-0.5 cursor-pointer sm:inline-block"
+             data-en="Contact Sales" data-ar="تواصل معنا">Contact Sales</a>
+          <!-- Mobile menu button -->
+          <button id="menuToggle" type="button" aria-label="Open menu" aria-expanded="false"
+            class="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-ink-soft lg:hidden cursor-pointer dark:border-white/10 dark:text-slate-300">
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          </button>
+        </div>
+      </nav>
+
+      <!-- Mobile menu -->
+      <div id="mobileMenu" class="hidden lg:hidden">
+        <ul class="mt-2 space-y-1 rounded-2xl border border-slate-200/70 bg-white/95 p-3 shadow-card backdrop-blur dark:border-white/10 dark:bg-slate-900/95">
+          <li><a href="#solutions"  class="block rounded-lg px-3 py-2.5 font-medium hover:bg-slate-100 dark:hover:bg-white/5" data-en="Solutions" data-ar="الحلول">Solutions</a></li>
+          <li><a href="#why"        class="block rounded-lg px-3 py-2.5 font-medium hover:bg-slate-100 dark:hover:bg-white/5" data-en="Why Hawii" data-ar="لماذا حاوي">Why Hawii</a></li>
+          <li><a href="#industries" class="block rounded-lg px-3 py-2.5 font-medium hover:bg-slate-100 dark:hover:bg-white/5" data-en="Industries" data-ar="القطاعات">Industries</a></li>
+          <li><a href="#process"    class="block rounded-lg px-3 py-2.5 font-medium hover:bg-slate-100 dark:hover:bg-white/5" data-en="Process" data-ar="منهجيتنا">Process</a></li>
+          <li><a href="#contact"    class="mt-1 block rounded-lg bg-brand px-3 py-2.5 text-center font-semibold text-white" data-en="Contact Sales" data-ar="تواصل معنا">Contact Sales</a></li>
+        </ul>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <!-- ============ HERO ============ -->
+    <section class="relative overflow-hidden pt-32 pb-20 sm:pt-40 sm:pb-28">
+      <div class="grid-bg pointer-events-none absolute inset-0"></div>
+      <div class="pointer-events-none absolute -top-24 start-1/2 h-72 w-72 -translate-x-1/2 rounded-full bg-brand/20 blur-3xl dark:bg-brand/25"></div>
+
+      <div class="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-3xl text-center">
+          <span class="inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/5 px-4 py-1.5 text-sm font-medium text-brand animate-fade-up dark:border-brand/30 dark:bg-brand/10 dark:text-brand-light">
+            <span class="relative flex h-2 w-2"><span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75"></span><span class="relative inline-flex h-2 w-2 rounded-full bg-accent"></span></span>
+            <span data-en="Enterprise IT &amp; AI, delivered with confidence" data-ar="حلول تقنية وذكاء اصطناعي للمؤسسات بثقة">Enterprise IT &amp; AI, delivered with confidence</span>
+          </span>
+
+          <h1 class="mt-6 text-4xl font-bold leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl animate-fade-up" style="animation-delay:.05s"
+              data-en="Engineering smarter business with IT &amp; AI"
+              data-ar="نهندس أعمالاً أذكى بالتقنية والذكاء الاصطناعي">
+            Engineering smarter business with IT &amp; AI
+          </h1>
+
+          <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-ink-soft animate-fade-up dark:text-slate-300" style="animation-delay:.1s"
+             data-en="Hawii.tech builds secure infrastructure, custom software, and production-grade AI that helps organizations scale, automate, and stay ahead."
+             data-ar="تبني حاوي تك بنية تحتية آمنة وبرمجيات مخصّصة وأنظمة ذكاء اصطناعي جاهزة للإنتاج تساعد المؤسسات على النمو والأتمتة والتقدّم.">
+            Hawii.tech builds secure infrastructure, custom software, and production-grade AI that helps organizations scale, automate, and stay ahead.
+          </p>
+
+          <div class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row animate-fade-up" style="animation-delay:.15s">
+            <a href="#contact" class="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand px-7 py-3.5 text-base font-semibold text-white shadow-lift transition hover:bg-brand-dark hover:-translate-y-0.5 cursor-pointer sm:w-auto"
+               data-en="Book a free consultation" data-ar="احجز استشارة مجانية">
+              <span data-en="Book a free consultation" data-ar="احجز استشارة مجانية">Book a free consultation</span>
+              <svg class="h-4 w-4 transition-transform group-hover:translate-x-1 rtl:rotate-180 rtl:group-hover:-translate-x-1" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </a>
+            <a href="#solutions" class="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-7 py-3.5 text-base font-semibold text-ink transition hover:border-brand hover:text-brand cursor-pointer dark:border-white/15 dark:bg-white/5 dark:text-white sm:w-auto"
+               data-en="Explore solutions" data-ar="استكشف الحلول">Explore solutions</a>
+          </div>
+
+          <p class="mt-5 text-sm text-ink-faint animate-fade-up dark:text-slate-400" style="animation-delay:.2s"
+             data-en="ISO 27001 aligned · SOC 2 practices · 24/7 support" data-ar="متوافق مع ISO 27001 · ممارسات SOC 2 · دعم على مدار الساعة">
+            ISO 27001 aligned · SOC 2 practices · 24/7 support
+          </p>
+        </div>
+
+        <!-- Stats -->
+        <div class="mx-auto mt-16 grid max-w-4xl grid-cols-2 gap-px overflow-hidden rounded-2xl border border-slate-200 bg-slate-200 shadow-card md:grid-cols-4 dark:border-white/10 dark:bg-white/10" data-reveal>
+          <div class="bg-white p-6 text-center dark:bg-slate-900"><div class="text-3xl font-bold text-brand">150+</div><div class="mt-1 text-sm text-ink-faint dark:text-slate-400" data-en="Projects delivered" data-ar="مشروع منجز">Projects delivered</div></div>
+          <div class="bg-white p-6 text-center dark:bg-slate-900"><div class="text-3xl font-bold text-brand">99.9%</div><div class="mt-1 text-sm text-ink-faint dark:text-slate-400" data-en="Uptime SLA" data-ar="نسبة التشغيل">Uptime SLA</div></div>
+          <div class="bg-white p-6 text-center dark:bg-slate-900"><div class="text-3xl font-bold text-brand">40%</div><div class="mt-1 text-sm text-ink-faint dark:text-slate-400" data-en="Avg. cost saved" data-ar="متوسط التوفير">Avg. cost saved</div></div>
+          <div class="bg-white p-6 text-center dark:bg-slate-900"><div class="text-3xl font-bold text-brand">24/7</div><div class="mt-1 text-sm text-ink-faint dark:text-slate-400" data-en="Expert support" data-ar="دعم الخبراء">Expert support</div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LOGO STRIP ============ -->
+    <section class="border-y border-slate-200 bg-white py-10 dark:border-white/5 dark:bg-slate-900/40">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <p class="text-center text-sm font-medium uppercase tracking-wider text-ink-faint dark:text-slate-400" data-en="Trusted by forward-thinking teams" data-ar="موثوق من فرق تتطلّع إلى المستقبل">Trusted by forward-thinking teams</p>
+        <div class="mt-6 flex flex-wrap items-center justify-center gap-x-10 gap-y-6 opacity-70">
+          <span class="text-xl font-bold tracking-tight text-ink-soft dark:text-slate-300">Northwind</span>
+          <span class="text-xl font-semibold italic text-ink-soft dark:text-slate-300">Vertex&nbsp;Labs</span>
+          <span class="text-xl font-bold uppercase tracking-widest text-ink-soft dark:text-slate-300">NOVA</span>
+          <span class="text-xl font-bold text-ink-soft dark:text-slate-300">Qamar&nbsp;Group</span>
+          <span class="text-xl font-semibold text-ink-soft dark:text-slate-300">Helix&nbsp;Co</span>
+          <span class="text-xl font-bold tracking-tight text-ink-soft dark:text-slate-300">Meridian</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SOLUTIONS ============ -->
+    <section id="solutions" class="py-20 sm:py-28">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-2xl text-center" data-reveal>
+          <span class="text-sm font-semibold uppercase tracking-wider text-brand" data-en="Our Solutions" data-ar="حلولنا">Our Solutions</span>
+          <h2 class="mt-3 text-3xl font-bold tracking-tight sm:text-4xl" data-en="Two pillars. One partner." data-ar="ركيزتان. شريك واحد.">Two pillars. One partner.</h2>
+          <p class="mt-4 text-lg text-ink-soft dark:text-slate-300" data-en="From the infrastructure that runs your business to the AI that reinvents it — we cover the full stack." data-ar="من البنية التحتية التي تُشغّل أعمالك إلى الذكاء الاصطناعي الذي يعيد ابتكارها — نغطّي المنظومة بالكامل.">From the infrastructure that runs your business to the AI that reinvents it — we cover the full stack.</p>
+        </div>
+
+        <!-- Two pillar headers -->
+        <div class="mt-14 grid gap-8 lg:grid-cols-2">
+          <!-- IT pillar -->
+          <div data-reveal>
+            <div class="mb-6 flex items-center gap-3">
+              <span class="grid h-11 w-11 place-items-center rounded-xl bg-brand/10 text-brand dark:bg-brand/15"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
+              <h3 class="text-2xl font-bold" data-en="IT Solutions" data-ar="حلول تقنية المعلومات">IT Solutions</h3>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <!-- card -->
+              <article class="group rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:-translate-y-1 hover:border-brand/40 hover:shadow-lift dark:border-white/10 dark:bg-slate-900">
+                <span class="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-brand transition group-hover:bg-brand group-hover:text-white dark:bg-white/5"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .5-9 6 6 0 0 0-11.6-1.5A4 4 0 0 0 6.5 19z"/></svg></span>
+                <h4 class="mt-3 font-semibold" data-en="Cloud &amp; DevOps" data-ar="السحابة و DevOps">Cloud &amp; DevOps</h4>
+                <p class="mt-1.5 text-sm leading-relaxed text-ink-soft dark:text-slate-400" data-en="Migration, IaC, CI/CD and cost-optimized cloud on AWS, Azure &amp; GCP." data-ar="ترحيل وبنية تحتية ككود و CI/CD وسحابة محسّنة التكلفة على AWS و Azure و GCP.">Migration, IaC, CI/CD and cost-optimized cloud on AWS, Azure &amp; GCP.</p>
+              </article>
+              <article class="group rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:-translate-y-1 hover:border-brand/40 hover:shadow-lift dark:border-white/10 dark:bg-slate-900">
+                <span class="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-brand transition group-hover:bg-brand group-hover:text-white dark:bg-white/5"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+                <h4 class="mt-3 font-semibold" data-en="Cybersecurity" data-ar="الأمن السيبراني">Cybersecurity</h4>
+                <p class="mt-1.5 text-sm leading-relaxed text-ink-soft dark:text-slate-400" data-en="Threat detection, audits, zero-trust architecture and compliance." data-ar="كشف التهديدات والتدقيق وبنية انعدام الثقة والامتثال.">Threat detection, audits, zero-trust architecture and compliance.</p>
+              </article>
+              <article class="group rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:-translate-y-1 hover:border-brand/40 hover:shadow-lift dark:border-white/10 dark:bg-slate-900">
+                <span class="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-brand transition group-hover:bg-brand group-hover:text-white dark:bg-white/5"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4M6 8l-4 4 4 4M14.5 4l-5 16"/></svg></span>
+                <h4 class="mt-3 font-semibold" data-en="Custom Software" data-ar="برمجيات مخصّصة">Custom Software</h4>
+                <p class="mt-1.5 text-sm leading-relaxed text-ink-soft dark:text-slate-400" data-en="Web, mobile &amp; enterprise apps built to scale and last." data-ar="تطبيقات ويب وجوال وأنظمة مؤسسية مبنية للنمو والاستمرار.">Web, mobile &amp; enterprise apps built to scale and last.</p>
+              </article>
+              <article class="group rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:-translate-y-1 hover:border-brand/40 hover:shadow-lift dark:border-white/10 dark:bg-slate-900">
+                <span class="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-brand transition group-hover:bg-brand group-hover:text-white dark:bg-white/5"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M12 4h9M3 12h18"/><circle cx="6" cy="4" r="2"/><circle cx="6" cy="20" r="2"/><circle cx="18" cy="12" r="2"/></svg></span>
+                <h4 class="mt-3 font-semibold" data-en="Managed IT &amp; Support" data-ar="الإدارة والدعم التقني">Managed IT &amp; Support</h4>
+                <p class="mt-1.5 text-sm leading-relaxed text-ink-soft dark:text-slate-400" data-en="Proactive monitoring, helpdesk and infrastructure management 24/7." data-ar="مراقبة استباقية ومكتب مساعدة وإدارة بنية تحتية على مدار الساعة.">Proactive monitoring, helpdesk and infrastructure management 24/7.</p>
+              </article>
+            </div>
+          </div>
+
+          <!-- AI pillar -->
+          <div data-reveal style="transition-delay:.1s">
+            <div class="mb-6 flex items-center gap-3">
+              <span class="grid h-11 w-11 place-items-center rounded-xl bg-accent/10 text-accent dark:bg-accent/15"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9zM9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg></span>
+              <h3 class="text-2xl font-bold" data-en="AI Solutions" data-ar="حلول الذكاء الاصطناعي">AI Solutions</h3>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <article class="group rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:-translate-y-1 hover:border-accent/40 hover:shadow-lift dark:border-white/10 dark:bg-slate-900">
+                <span class="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-accent transition group-hover:bg-accent group-hover:text-white dark:bg-white/5"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4M8 8h8M7 12h10M9 16h6M5 8a2 2 0 0 1 2-2M19 8a2 2 0 0 0-2-2"/><rect x="5" y="8" width="14" height="12" rx="2"/></svg></span>
+                <h4 class="mt-3 font-semibold" data-en="Generative AI &amp; LLMs" data-ar="الذكاء التوليدي ونماذج اللغة">Generative AI &amp; LLMs</h4>
+                <p class="mt-1.5 text-sm leading-relaxed text-ink-soft dark:text-slate-400" data-en="Copilots, RAG assistants and LLM apps tailored to your data." data-ar="مساعدون أذكياء وأنظمة RAG وتطبيقات نماذج لغوية مصمّمة على بياناتك.">Copilots, RAG assistants and LLM apps tailored to your data.</p>
+              </article>
+              <article class="group rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:-translate-y-1 hover:border-accent/40 hover:shadow-lift dark:border-white/10 dark:bg-slate-900">
+                <span class="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-accent transition group-hover:bg-accent group-hover:text-white dark:bg-white/5"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 14 4-4 3 3 5-6"/></svg></span>
+                <h4 class="mt-3 font-semibold" data-en="ML &amp; Predictive Analytics" data-ar="التعلّم الآلي والتحليلات التنبؤية">ML &amp; Predictive Analytics</h4>
+                <p class="mt-1.5 text-sm leading-relaxed text-ink-soft dark:text-slate-400" data-en="Forecasting, recommendations and decision intelligence from your data." data-ar="تنبؤات وتوصيات وذكاء قرارات مستخلص من بياناتك.">Forecasting, recommendations and decision intelligence from your data.</p>
+              </article>
+              <article class="group rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:-translate-y-1 hover:border-accent/40 hover:shadow-lift dark:border-white/10 dark:bg-slate-900">
+                <span class="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-accent transition group-hover:bg-accent group-hover:text-white dark:bg-white/5"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></span>
+                <h4 class="mt-3 font-semibold" data-en="Computer Vision" data-ar="الرؤية الحاسوبية">Computer Vision</h4>
+                <p class="mt-1.5 text-sm leading-relaxed text-ink-soft dark:text-slate-400" data-en="Detection, OCR and quality control for images and video at scale." data-ar="كشف واستخراج نصوص ومراقبة جودة للصور والفيديو على نطاق واسع.">Detection, OCR and quality control for images and video at scale.</p>
+              </article>
+              <article class="group rounded-2xl border border-slate-200 bg-white p-5 shadow-card transition hover:-translate-y-1 hover:border-accent/40 hover:shadow-lift dark:border-white/10 dark:bg-slate-900">
+                <span class="grid h-10 w-10 place-items-center rounded-lg bg-slate-100 text-accent transition group-hover:bg-accent group-hover:text-white dark:bg-white/5"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg></span>
+                <h4 class="mt-3 font-semibold" data-en="AI Automation &amp; Agents" data-ar="الأتمتة والوكلاء الأذكياء">AI Automation &amp; Agents</h4>
+                <p class="mt-1.5 text-sm leading-relaxed text-ink-soft dark:text-slate-400" data-en="Autonomous workflows that cut manual work and speed up operations." data-ar="مهام سير عمل ذاتية تقلّل العمل اليدوي وتُسرّع العمليات.">Autonomous workflows that cut manual work and speed up operations.</p>
+              </article>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ WHY HAWII ============ -->
+    <section id="why" class="bg-white py-20 dark:bg-slate-900/40 sm:py-28">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="grid items-center gap-12 lg:grid-cols-2">
+          <div data-reveal>
+            <span class="text-sm font-semibold uppercase tracking-wider text-brand" data-en="Why Hawii.tech" data-ar="لماذا حاوي تك">Why Hawii.tech</span>
+            <h2 class="mt-3 text-3xl font-bold tracking-tight sm:text-4xl" data-en="A technology partner, not just a vendor" data-ar="شريك تقني، وليس مجرد مورّد">A technology partner, not just a vendor</h2>
+            <p class="mt-4 text-lg text-ink-soft dark:text-slate-300" data-en="We embed with your team, learn your business, and own outcomes — from first whiteboard to production and beyond." data-ar="نندمج مع فريقك، ونفهم أعمالك، ونتحمّل مسؤولية النتائج — من أول فكرة وحتى الإنتاج وما بعده.">We embed with your team, learn your business, and own outcomes — from first whiteboard to production and beyond.</p>
+
+            <ul class="mt-8 space-y-5">
+              <li class="flex gap-4">
+                <span class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand/10 text-brand dark:bg-brand/15"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                <div><h4 class="font-semibold" data-en="Senior, certified engineers" data-ar="مهندسون خبراء ومعتمدون">Senior, certified engineers</h4><p class="mt-1 text-sm text-ink-soft dark:text-slate-400" data-en="Cloud, security and ML specialists with real production track records." data-ar="متخصصون في السحابة والأمن والتعلّم الآلي بخبرة إنتاجية حقيقية.">Cloud, security and ML specialists with real production track records.</p></div>
+              </li>
+              <li class="flex gap-4">
+                <span class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand/10 text-brand dark:bg-brand/15"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                <div><h4 class="font-semibold" data-en="Security &amp; compliance first" data-ar="الأمن والامتثال أولاً">Security &amp; compliance first</h4><p class="mt-1 text-sm text-ink-soft dark:text-slate-400" data-en="Every solution is built to enterprise security and data-governance standards." data-ar="كل حل مبني وفق معايير أمن المؤسسات وحوكمة البيانات.">Every solution is built to enterprise security and data-governance standards.</p></div>
+              </li>
+              <li class="flex gap-4">
+                <span class="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand/10 text-brand dark:bg-brand/15"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></span>
+                <div><h4 class="font-semibold" data-en="Measurable ROI" data-ar="عائد استثمار قابل للقياس">Measurable ROI</h4><p class="mt-1 text-sm text-ink-soft dark:text-slate-400" data-en="We define KPIs up front and report against them every sprint." data-ar="نحدّد مؤشرات الأداء مسبقاً ونقدّم تقارير عنها في كل دورة عمل.">We define KPIs up front and report against them every sprint.</p></div>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Feature card -->
+          <div class="relative" data-reveal style="transition-delay:.1s">
+            <div class="absolute -inset-4 -z-10 rounded-3xl bg-gradient-to-br from-brand/15 to-accent/10 blur-2xl"></div>
+            <div class="rounded-3xl border border-slate-200 bg-white p-8 shadow-card dark:border-white/10 dark:bg-slate-900">
+              <div class="flex items-center justify-between">
+                <span class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" data-en="Live" data-ar="مباشر">Live</span>
+                <span class="text-xs text-ink-faint dark:text-slate-400" data-en="Ops dashboard" data-ar="لوحة العمليات">Ops dashboard</span>
+              </div>
+              <div class="mt-6 space-y-4">
+                <div>
+                  <div class="flex items-center justify-between text-sm"><span class="text-ink-soft dark:text-slate-300" data-en="Deployment success" data-ar="نجاح النشر">Deployment success</span><span class="font-semibold tabular-nums">98%</span></div>
+                  <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div class="h-full w-[98%] rounded-full bg-brand"></div></div>
+                </div>
+                <div>
+                  <div class="flex items-center justify-between text-sm"><span class="text-ink-soft dark:text-slate-300" data-en="Automated tasks" data-ar="المهام المؤتمتة">Automated tasks</span><span class="font-semibold tabular-nums">72%</span></div>
+                  <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div class="h-full w-[72%] rounded-full bg-accent"></div></div>
+                </div>
+                <div>
+                  <div class="flex items-center justify-between text-sm"><span class="text-ink-soft dark:text-slate-300" data-en="Threats blocked" data-ar="التهديدات المحظورة">Threats blocked</span><span class="font-semibold tabular-nums">1,204</span></div>
+                  <div class="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-white/10"><div class="h-full w-[88%] rounded-full bg-emerald-500"></div></div>
+                </div>
+              </div>
+              <div class="mt-6 grid grid-cols-3 gap-3 border-t border-slate-100 pt-6 text-center dark:border-white/10">
+                <div><div class="text-xl font-bold text-brand tabular-nums">3.2x</div><div class="text-xs text-ink-faint dark:text-slate-400" data-en="Faster" data-ar="أسرع">Faster</div></div>
+                <div><div class="text-xl font-bold text-brand tabular-nums">-41%</div><div class="text-xs text-ink-faint dark:text-slate-400" data-en="Cost" data-ar="التكلفة">Cost</div></div>
+                <div><div class="text-xl font-bold text-brand tabular-nums">+27%</div><div class="text-xs text-ink-faint dark:text-slate-400" data-en="Revenue" data-ar="الإيرادات">Revenue</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ INDUSTRIES ============ -->
+    <section id="industries" class="py-20 sm:py-28">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-2xl text-center" data-reveal>
+          <span class="text-sm font-semibold uppercase tracking-wider text-brand" data-en="Industries" data-ar="القطاعات">Industries</span>
+          <h2 class="mt-3 text-3xl font-bold tracking-tight sm:text-4xl" data-en="Solutions tuned to your sector" data-ar="حلول مصمّمة لقطاعك">Solutions tuned to your sector</h2>
+        </div>
+        <div class="mt-12 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6" data-reveal>
+          <div class="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-card transition hover:-translate-y-1 hover:border-brand/40 dark:border-white/10 dark:bg-slate-900"><svg class="h-7 w-7 text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg><span class="text-sm font-medium" data-en="Finance" data-ar="المالية">Finance</span></div>
+          <div class="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-card transition hover:-translate-y-1 hover:border-brand/40 dark:border-white/10 dark:bg-slate-900"><svg class="h-7 w-7 text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M12 14v4M10 16h4"/></svg><span class="text-sm font-medium" data-en="Healthcare" data-ar="الرعاية الصحية">Healthcare</span></div>
+          <div class="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-card transition hover:-translate-y-1 hover:border-brand/40 dark:border-white/10 dark:bg-slate-900"><svg class="h-7 w-7 text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18M16 10a4 4 0 0 1-8 0"/></svg><span class="text-sm font-medium" data-en="Retail" data-ar="التجزئة">Retail</span></div>
+          <div class="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-card transition hover:-translate-y-1 hover:border-brand/40 dark:border-white/10 dark:bg-slate-900"><svg class="h-7 w-7 text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h20M4 20V8l8-5 8 5v12M9 20v-6h6v6"/></svg><span class="text-sm font-medium" data-en="Government" data-ar="القطاع الحكومي">Government</span></div>
+          <div class="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-card transition hover:-translate-y-1 hover:border-brand/40 dark:border-white/10 dark:bg-slate-900"><svg class="h-7 w-7 text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 7h20v13H2zM2 7l3-4h14l3 4M12 12v4M9 14h6"/></svg><span class="text-sm font-medium" data-en="Logistics" data-ar="الخدمات اللوجستية">Logistics</span></div>
+          <div class="flex flex-col items-center gap-3 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-card transition hover:-translate-y-1 hover:border-brand/40 dark:border-white/10 dark:bg-slate-900"><svg class="h-7 w-7 text-brand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg><span class="text-sm font-medium" data-en="Education" data-ar="التعليم">Education</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ PROCESS ============ -->
+    <section id="process" class="bg-white py-20 dark:bg-slate-900/40 sm:py-28">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-2xl text-center" data-reveal>
+          <span class="text-sm font-semibold uppercase tracking-wider text-brand" data-en="How we work" data-ar="منهجية عملنا">How we work</span>
+          <h2 class="mt-3 text-3xl font-bold tracking-tight sm:text-4xl" data-en="A clear path from idea to impact" data-ar="مسار واضح من الفكرة إلى الأثر">A clear path from idea to impact</h2>
+        </div>
+        <div class="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4" data-reveal>
+          <div class="relative">
+            <span class="text-5xl font-bold text-brand/15">01</span>
+            <h4 class="mt-2 text-lg font-semibold" data-en="Discover" data-ar="الاكتشاف">Discover</h4>
+            <p class="mt-2 text-sm leading-relaxed text-ink-soft dark:text-slate-400" data-en="We audit your systems, goals and data to map the real opportunity." data-ar="نُدقّق أنظمتك وأهدافك وبياناتك لرسم الفرصة الحقيقية.">We audit your systems, goals and data to map the real opportunity.</p>
+          </div>
+          <div class="relative">
+            <span class="text-5xl font-bold text-brand/15">02</span>
+            <h4 class="mt-2 text-lg font-semibold" data-en="Design" data-ar="التصميم">Design</h4>
+            <p class="mt-2 text-sm leading-relaxed text-ink-soft dark:text-slate-400" data-en="A clear architecture, roadmap and success metrics — agreed up front." data-ar="بنية واضحة وخارطة طريق ومؤشرات نجاح متفق عليها مسبقاً.">A clear architecture, roadmap and success metrics — agreed up front.</p>
+          </div>
+          <div class="relative">
+            <span class="text-5xl font-bold text-brand/15">03</span>
+            <h4 class="mt-2 text-lg font-semibold" data-en="Build" data-ar="التنفيذ">Build</h4>
+            <p class="mt-2 text-sm leading-relaxed text-ink-soft dark:text-slate-400" data-en="Agile delivery with secure code, testing and transparent demos." data-ar="تسليم رشيق بكود آمن واختبارات وعروض شفّافة.">Agile delivery with secure code, testing and transparent demos.</p>
+          </div>
+          <div class="relative">
+            <span class="text-5xl font-bold text-brand/15">04</span>
+            <h4 class="mt-2 text-lg font-semibold" data-en="Scale" data-ar="التوسّع">Scale</h4>
+            <p class="mt-2 text-sm leading-relaxed text-ink-soft dark:text-slate-400" data-en="We monitor, optimize and support your solution as you grow." data-ar="نراقب ونحسّن وندعم حلّك مع نموّك.">We monitor, optimize and support your solution as you grow.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TESTIMONIAL ============ -->
+    <section class="py-20 sm:py-28">
+      <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+        <figure class="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-card dark:border-white/10 dark:bg-slate-900 sm:p-12" data-reveal>
+          <svg class="mx-auto h-9 w-9 text-brand/30" viewBox="0 0 24 24" fill="currentColor"><path d="M9.5 7C6.5 7 4 9.5 4 12.5V19h7v-7H7c0-1.7 1.1-2.8 2.5-3V7zm9 0c-3 0-5.5 2.5-5.5 5.5V19h7v-7h-4c0-1.7 1.1-2.8 2.5-3V7z"/></svg>
+          <blockquote class="mt-6 text-xl font-medium leading-relaxed sm:text-2xl"
+            data-en="“Hawii.tech rebuilt our cloud platform and shipped an AI assistant that now handles 60% of support tickets. They felt like part of our team from day one.”"
+            data-ar="«أعادت حاوي تك بناء منصّتنا السحابية وأطلقت مساعداً ذكياً يتولّى الآن 60٪ من طلبات الدعم. شعرنا أنهم جزء من فريقنا منذ اليوم الأول.»">
+            “Hawii.tech rebuilt our cloud platform and shipped an AI assistant that now handles 60% of support tickets. They felt like part of our team from day one.”
+          </blockquote>
+          <figcaption class="mt-6 flex items-center justify-center gap-3">
+            <span class="grid h-11 w-11 place-items-center rounded-full bg-brand/10 font-semibold text-brand dark:bg-brand/15">SA</span>
+            <div class="text-start">
+              <div class="font-semibold" data-en="Sara Al-Amin" data-ar="سارة الأمين">Sara Al-Amin</div>
+              <div class="text-sm text-ink-faint dark:text-slate-400" data-en="CTO, Meridian Group" data-ar="الرئيسة التقنية، مجموعة ميريديان">CTO, Meridian Group</div>
+            </div>
+          </figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ============ CONTACT / CTA ============ -->
+    <section id="contact" class="py-20 sm:py-28">
+      <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div class="overflow-hidden rounded-3xl bg-gradient-to-br from-brand to-brand-dark shadow-lift">
+          <div class="grid gap-10 p-8 sm:p-12 lg:grid-cols-2 lg:p-16">
+            <div class="text-white" data-reveal>
+              <h2 class="text-3xl font-bold tracking-tight sm:text-4xl" data-en="Let's build what's next" data-ar="لنبنِ ما هو قادم">Let's build what's next</h2>
+              <p class="mt-4 max-w-md text-lg text-blue-100" data-en="Tell us about your project and we'll get back within one business day with a tailored plan." data-ar="أخبرنا عن مشروعك وسنعاود التواصل خلال يوم عمل واحد بخطة مخصّصة.">Tell us about your project and we'll get back within one business day with a tailored plan.</p>
+              <ul class="mt-8 space-y-4 text-blue-50">
+                <li class="flex items-center gap-3"><svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 5L2 7"/></svg><span dir="ltr">hello@hawii.tech</span></li>
+                <li class="flex items-center gap-3"><svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.4-1.2a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg><span dir="ltr">+1 (555) 040-1920</span></li>
+                <li class="flex items-center gap-3"><svg class="h-5 w-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg><span data-en="Remote-first · Worldwide" data-ar="عن بُعد · حول العالم">Remote-first · Worldwide</span></li>
+              </ul>
+            </div>
+
+            <form class="rounded-2xl bg-white p-6 shadow-card dark:bg-slate-900 sm:p-8" data-reveal style="transition-delay:.1s" novalidate>
+              <div class="space-y-4">
+                <div>
+                  <label for="name" class="mb-1.5 block text-sm font-medium" data-en="Full name" data-ar="الاسم الكامل">Full name</label>
+                  <input id="name" name="name" type="text" required autocomplete="name"
+                    class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-ink outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/30 dark:border-white/15 dark:bg-slate-800 dark:text-white"
+                    data-ph-en="Jane Doe" data-ph-ar="مثال: محمد علي" placeholder="Jane Doe" />
+                </div>
+                <div>
+                  <label for="email" class="mb-1.5 block text-sm font-medium" data-en="Work email" data-ar="البريد الإلكتروني">Work email</label>
+                  <input id="email" name="email" type="email" required autocomplete="email" dir="ltr"
+                    class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-ink outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/30 dark:border-white/15 dark:bg-slate-800 dark:text-white"
+                    data-ph-en="you@company.com" data-ph-ar="you@company.com" placeholder="you@company.com" />
+                </div>
+                <div>
+                  <label for="interest" class="mb-1.5 block text-sm font-medium" data-en="I'm interested in" data-ar="أنا مهتم بـ">I'm interested in</label>
+                  <select id="interest" name="interest"
+                    class="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-ink outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/30 dark:border-white/15 dark:bg-slate-800 dark:text-white">
+                    <option data-en="IT Solutions" data-ar="حلول تقنية المعلومات">IT Solutions</option>
+                    <option data-en="AI Solutions" data-ar="حلول الذكاء الاصطناعي">AI Solutions</option>
+                    <option data-en="Both" data-ar="كلاهما">Both</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="msg" class="mb-1.5 block text-sm font-medium" data-en="Project details" data-ar="تفاصيل المشروع">Project details</label>
+                  <textarea id="msg" name="msg" rows="3"
+                    class="w-full resize-none rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-ink outline-none transition focus:border-brand focus:ring-2 focus:ring-brand/30 dark:border-white/15 dark:bg-slate-800 dark:text-white"
+                    data-ph-en="Tell us what you'd like to build…" data-ph-ar="أخبرنا بما تودّ بناءه…" placeholder="Tell us what you'd like to build…"></textarea>
+                </div>
+              </div>
+              <button type="submit" class="mt-5 w-full rounded-xl bg-accent px-6 py-3 font-semibold text-white shadow-lift transition hover:bg-accent-dark hover:-translate-y-0.5 cursor-pointer"
+                data-en="Send request" data-ar="إرسال الطلب">Send request</button>
+              <p id="formNote" class="mt-3 hidden rounded-lg bg-emerald-50 px-3 py-2 text-center text-sm font-medium text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400"
+                data-en="Thanks! This is a demo form — connect it to your backend to receive messages." data-ar="شكراً! هذا نموذج تجريبي — اربطه بخادمك لاستقبال الرسائل."></p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="border-t border-slate-200 bg-white py-12 dark:border-white/10 dark:bg-slate-900/60">
+    <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col items-center justify-between gap-6 sm:flex-row">
+        <a href="#top" class="flex items-center gap-2.5">
+          <span class="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand to-brand-light text-white"><svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M20 19V5"/><path d="M4 12h16"/></svg></span>
+          <span class="font-bold">Hawii<span class="text-brand">.tech</span></span>
+        </a>
+        <nav class="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-ink-soft dark:text-slate-400">
+          <a href="#solutions" class="transition hover:text-brand" data-en="Solutions" data-ar="الحلول">Solutions</a>
+          <a href="#why" class="transition hover:text-brand" data-en="Why Hawii" data-ar="لماذا حاوي">Why Hawii</a>
+          <a href="#industries" class="transition hover:text-brand" data-en="Industries" data-ar="القطاعات">Industries</a>
+          <a href="#contact" class="transition hover:text-brand" data-en="Contact" data-ar="تواصل">Contact</a>
+        </nav>
+        <div class="flex items-center gap-3">
+          <a href="#" aria-label="LinkedIn" class="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-ink-soft transition hover:border-brand hover:text-brand dark:border-white/10 dark:text-slate-400"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.1c.5-1 1.8-2 3.7-2 4 0 4.7 2.6 4.7 6V21h-4v-5.3c0-1.3 0-2.9-1.8-2.9s-2 1.4-2 2.8V21H9z"/></svg></a>
+          <a href="#" aria-label="X" class="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-ink-soft transition hover:border-brand hover:text-brand dark:border-white/10 dark:text-slate-400"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.9 2H22l-7.5 8.6L23 22h-6.8l-5.3-6.9L4.8 22H1.7l8-9.2L1 2h7l4.8 6.3zm-1.2 18h1.9L7.4 4H5.4z"/></svg></a>
+          <a href="#" aria-label="GitHub" class="grid h-9 w-9 place-items-center rounded-lg border border-slate-200 text-ink-soft transition hover:border-brand hover:text-brand dark:border-white/10 dark:text-slate-400"><svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.7c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.4 1.1 3 .8.1-.6.3-1.1.6-1.4-2.2-.2-4.6-1.1-4.6-5a4 4 0 0 1 1-2.7c-.1-.3-.5-1.3.1-2.7 0 0 .8-.3 2.7 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .6 1.4.2 2.4.1 2.7a4 4 0 0 1 1 2.7c0 3.9-2.3 4.8-4.6 5 .4.3.7.9.7 1.9v2.8c0 .3.2.6.7.5A10 10 0 0 0 12 2z"/></svg></a>
+        </div>
+      </div>
+      <div class="mt-8 border-t border-slate-100 pt-6 text-center text-sm text-ink-faint dark:border-white/10 dark:text-slate-500">
+        <span data-en="© 2026 Hawii.tech — IT &amp; AI Solutions. All rights reserved." data-ar="© 2026 حاوي تك — حلول تقنية وذكاء اصطناعي. جميع الحقوق محفوظة.">© 2026 Hawii.tech — IT &amp; AI Solutions. All rights reserved.</span>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const root = document.documentElement;
+
+      /* ---------- Theme ---------- */
+      const themeToggle = document.getElementById('themeToggle');
+      const storedTheme = localStorage.getItem('hawii-theme');
+      if (storedTheme === 'dark' || (!storedTheme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        root.classList.add('dark');
+      }
+      themeToggle.addEventListener('click', () => {
+        root.classList.toggle('dark');
+        localStorage.setItem('hawii-theme', root.classList.contains('dark') ? 'dark' : 'light');
+      });
+
+      /* ---------- Language ---------- */
+      const langToggle = document.getElementById('langToggle');
+      const langLabel = document.querySelector('[data-langlabel]');
+
+      function applyLang(lang) {
+        const isAr = lang === 'ar';
+        root.lang = lang;
+        root.dir = isAr ? 'rtl' : 'ltr';
+        langLabel.textContent = isAr ? 'English' : 'العربية';
+
+        document.querySelectorAll('[data-en]').forEach(el => {
+          const val = isAr ? el.getAttribute('data-ar') : el.getAttribute('data-en');
+          if (val !== null) el.innerHTML = val;
+        });
+        document.querySelectorAll('[data-ph-en]').forEach(el => {
+          el.placeholder = isAr ? el.getAttribute('data-ph-ar') : el.getAttribute('data-ph-en');
+        });
+        localStorage.setItem('hawii-lang', lang);
+      }
+
+      langToggle.addEventListener('click', () => {
+        applyLang(root.lang === 'ar' ? 'en' : 'ar');
+      });
+      applyLang(localStorage.getItem('hawii-lang') || 'en');
+
+      /* ---------- Mobile menu ---------- */
+      const menuToggle = document.getElementById('menuToggle');
+      const mobileMenu = document.getElementById('mobileMenu');
+      menuToggle.addEventListener('click', () => {
+        const open = mobileMenu.classList.toggle('hidden') === false;
+        menuToggle.setAttribute('aria-expanded', String(open));
+      });
+      mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+        mobileMenu.classList.add('hidden');
+        menuToggle.setAttribute('aria-expanded', 'false');
+      }));
+
+      /* ---------- Header elevation on scroll ---------- */
+      const navBar = document.querySelector('[data-header] nav');
+      const onScroll = () => navBar.classList.toggle('shadow-lift', window.scrollY > 8);
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+
+      /* ---------- Reveal on scroll ---------- */
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+      }, { threshold: 0.12 });
+      document.querySelectorAll('[data-reveal]').forEach(el => io.observe(el));
+
+      /* ---------- Demo form ---------- */
+      const form = document.querySelector('form');
+      const note = document.getElementById('formNote');
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!form.checkValidity()) { form.reportValidity(); return; }
+        note.classList.remove('hidden');
+        form.reset();
+      });
+    })();
+  </script>
+</body>
+</html>

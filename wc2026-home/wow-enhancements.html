@@ -1,0 +1,201 @@
+<!--
+  ============================================================================
+  CATRION FIFA World Cup 2026 — "WOW" Animated UI Layer  (DROP-IN, ADDITIVE)
+  ----------------------------------------------------------------------------
+  HOW TO USE:
+    Paste this ENTIRE block into /WC2026/home.php immediately BEFORE </body>.
+    It changes NO PHP, SQL, session, CSRF, or game logic — it only layers on
+    animation + polish on top of your existing markup/classes.
+    Everything is disabled automatically for users with "reduce motion" on.
+  ============================================================================
+-->
+<style>
+@media (prefers-reduced-motion:no-preference){
+
+  /* ---------- keyframes ---------- */
+  @keyframes wcUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}
+  @keyframes wcAurora{0%{transform:translate(-5%,-3%) rotate(0deg)}50%{transform:translate(5%,3%) rotate(10deg)}100%{transform:translate(-5%,-3%) rotate(0deg)}}
+  @keyframes wcFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  @keyframes wcGrad{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+  @keyframes wcPulse{0%{box-shadow:0 0 0 0 rgba(17,163,106,.6)}100%{box-shadow:0 0 0 12px rgba(17,163,106,0)}}
+  @keyframes wcShine{0%{transform:translateX(-160%) skewX(-18deg)}55%,100%{transform:translateX(280%) skewX(-18deg)}}
+  @keyframes wcConfFall{to{transform:translateY(380px) rotate(560deg);opacity:0}}
+  @keyframes wcGlowPulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+  /* ---------- animated background layers (injected by JS) ---------- */
+  .wc-aurora{
+    position:fixed;inset:-25%;z-index:-1;pointer-events:none;opacity:.7;
+    background:
+      radial-gradient(closest-side at 22% 26%, rgba(85,183,255,.22), transparent 70%),
+      radial-gradient(closest-side at 80% 16%, rgba(14,99,230,.24), transparent 70%),
+      radial-gradient(closest-side at 62% 82%, rgba(245,200,91,.12), transparent 70%);
+    animation:wcAurora 24s ease-in-out infinite;
+  }
+  .wc-spark{position:fixed;inset:0;z-index:-1;pointer-events:none}
+
+  /* ---------- hero entrance + animated headline ---------- */
+  .hero .badge{animation:wcUp .8s cubic-bezier(.16,1,.3,1) both}
+  .hero h1{animation:wcUp .9s cubic-bezier(.16,1,.3,1) .12s both}
+  .hero p{animation:wcUp .9s cubic-bezier(.16,1,.3,1) .24s both}
+  .daily-card{animation:wcUp 1s cubic-bezier(.16,1,.3,1) .34s both}
+
+  .hero h1 span{
+    background:linear-gradient(90deg,#A8E7FF,#FFE19A,#55B7FF,#A8E7FF);
+    background-size:200% auto;
+    -webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;color:transparent;
+    animation:wcGrad 6s linear infinite;
+  }
+
+  .badge i{animation:wcGlowPulse 1.6s ease-in-out infinite}
+  .daily-card:before{animation:wcFloat 4s ease-in-out infinite}
+
+  /* sheen sweep across the white logo card */
+  .logo-card{position:relative;overflow:hidden}
+  .logo-card:after{
+    content:"";position:absolute;top:0;left:0;width:42%;height:100%;pointer-events:none;
+    background:linear-gradient(120deg,transparent,rgba(255,255,255,.7),transparent);
+    transform:translateX(-160%) skewX(-18deg);
+    animation:wcShine 6s ease-in-out 1.2s infinite;
+  }
+
+  /* ---------- scroll reveal (added via JS only when supported) ---------- */
+  .wc-reveal{opacity:0;transform:translateY(30px);
+    transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+  .wc-reveal.wc-in{opacity:1;transform:none}
+
+  /* ---------- cards: lift + glow + cursor spotlight ---------- */
+  .wc-spot{position:relative}
+  .wc-spot>*{position:relative;z-index:1}
+  .wc-glow{
+    position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;z-index:0;
+    transition:opacity .35s ease;
+    background:radial-gradient(440px circle at var(--mx,50%) var(--my,50%), rgba(85,183,255,.16), transparent 45%);
+  }
+  .wc-spot:hover .wc-glow{opacity:1}
+
+  .stat{position:relative;overflow:hidden;transition:transform .25s ease, box-shadow .3s ease}
+  .stat:hover{transform:translateY(-5px); box-shadow:0 26px 60px rgba(7,42,85,.30)}
+  .stat .wc-bar{position:absolute;left:0;right:0;top:0;height:3px;z-index:2;transform:scaleX(0);transform-origin:left;
+    background:linear-gradient(90deg,#0E63E6,#55B7FF,#F5C85B);transition:transform .45s ease}
+  .stat:hover .wc-bar{transform:scaleX(1)}
+
+  .live-map-card:hover,.knockout-card:hover,
+  .match-card-premium:hover,.match-list-card:hover,
+  .layout .card:hover{
+    box-shadow:0 30px 72px rgba(0,0,0,.30), 0 0 0 1px rgba(168,231,255,.30), 0 0 42px rgba(85,183,255,.12) !important;
+  }
+
+  /* ---------- live map pins: radar ping ---------- */
+  .map-pin-status.Live{position:relative}
+  .map-pin-status.Live:after{
+    content:"";position:absolute;right:-5px;top:50%;width:9px;height:9px;border-radius:50%;
+    transform:translateY(-50%);background:#11A36A;animation:wcPulse 1.5s ease-out infinite;
+  }
+
+  /* ---------- primary buttons: hover shine ---------- */
+  .match-link.primary,.primary-btn,.food-roll-btn,.bracket-show-full,.bracket-more-btn{position:relative;overflow:hidden}
+  .match-link.primary:after,.primary-btn:after,.food-roll-btn:after,
+  .bracket-show-full:after,.bracket-more-btn:after{
+    content:"";position:absolute;top:0;left:0;width:38%;height:100%;pointer-events:none;
+    background:linear-gradient(120deg,transparent,rgba(255,255,255,.5),transparent);
+    transform:translateX(-160%) skewX(-18deg);transition:transform .6s ease;
+  }
+  .match-link.primary:hover:after,.primary-btn:hover:after,.food-roll-btn:hover:after,
+  .bracket-show-full:hover:after,.bracket-more-btn:hover:after{transform:translateX(320%) skewX(-18deg)}
+
+  /* ---------- confetti (spawned on GOAL) ---------- */
+  .wc-conf{position:absolute;top:28%;width:9px;height:15px;border-radius:2px;z-index:30;pointer-events:none;
+    animation:wcConfFall 1.15s ease-in forwards}
+
+  /* gentle float for the daily-game ball is already in the base CSS */
+}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var d = document, body = d.body;
+
+  /* ---------- aurora ---------- */
+  var aurora = d.createElement('div'); aurora.className = 'wc-aurora'; body.appendChild(aurora);
+
+  /* ---------- drifting spark particles ---------- */
+  var canvas = d.createElement('canvas'); canvas.className = 'wc-spark'; body.appendChild(canvas);
+  var ctx = canvas.getContext('2d');
+  var DPR = Math.min(window.devicePixelRatio || 1, 1.5), W = 0, H = 0, parts = [], raf = null;
+  function size(){ W = innerWidth; H = innerHeight; canvas.width = W*DPR; canvas.height = H*DPR;
+    canvas.style.width = W+'px'; canvas.style.height = H+'px'; ctx.setTransform(DPR,0,0,DPR,0,0); }
+  function seed(){ parts = []; var n = Math.min(64, Math.round(W*H/30000));
+    for (var i=0;i<n;i++) parts.push({x:Math.random()*W, y:Math.random()*H, r:Math.random()*2+.5,
+      s:Math.random()*.45+.12, a:Math.random()*.45+.12}); }
+  function loop(){ ctx.clearRect(0,0,W,H);
+    for (var i=0;i<parts.length;i++){ var p=parts[i]; p.y-=p.s; if(p.y<-6){ p.y=H+6; p.x=Math.random()*W; }
+      ctx.fillStyle='rgba(168,231,255,'+p.a+')'; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.28); ctx.fill(); }
+    raf = requestAnimationFrame(loop); }
+  size(); seed(); loop();
+  addEventListener('resize', function(){ size(); seed(); });
+  d.addEventListener('visibilitychange', function(){ if(d.hidden){ cancelAnimationFrame(raf); raf=null; } else if(!raf){ loop(); } });
+
+  /* ---------- cursor spotlight on cards ---------- */
+  d.querySelectorAll('.card,.stat,.live-map-card,.knockout-card').forEach(function(el){
+    el.classList.add('wc-spot');
+    var g = d.createElement('span'); g.className = 'wc-glow'; el.insertBefore(g, el.firstChild);
+    el.addEventListener('pointermove', function(e){
+      var r = el.getBoundingClientRect();
+      el.style.setProperty('--mx', (e.clientX-r.left)+'px');
+      el.style.setProperty('--my', (e.clientY-r.top)+'px');
+    });
+  });
+
+  /* ---------- stat accent bar ---------- */
+  d.querySelectorAll('.stat').forEach(function(el){ var b=d.createElement('span'); b.className='wc-bar'; el.insertBefore(b, el.firstChild); });
+
+  /* ---------- scroll reveal ---------- */
+  if ('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(es){ es.forEach(function(en){
+      if (en.isIntersecting){ en.target.classList.add('wc-in'); io.unobserve(en.target); } });
+    }, {threshold:.12, rootMargin:'0px 0px -6% 0px'});
+    d.querySelectorAll('.stat, .news-ticker, .live-map-card, .knockout-card, .match-dashboard .card, .layout .card')
+      .forEach(function(el){ el.classList.add('wc-reveal'); io.observe(el); });
+  }
+
+  /* ---------- count-up for integer stat values ---------- */
+  if ('IntersectionObserver' in window){
+    var cio = new IntersectionObserver(function(es){ es.forEach(function(en){
+      if (!en.isIntersecting) return;
+      var el = en.target, raw = el.textContent.trim();
+      cio.unobserve(el);
+      if (!/^\d+$/.test(raw)) return;
+      var target = parseInt(raw,10), start = performance.now(), dur = 1200;
+      (function tick(now){ var p = Math.min(1,(now-start)/dur), e = 1-Math.pow(1-p,3);
+        el.textContent = Math.round(target*e); if(p<1) requestAnimationFrame(tick); })(start);
+    }); }, {threshold:.6});
+    d.querySelectorAll('.stat-value').forEach(function(el){ cio.observe(el); });
+  }
+
+  /* ---------- confetti burst whenever a GOAL flashes ---------- */
+  var gf = d.getElementById('goalFlash');
+  if (gf && 'MutationObserver' in window){
+    var cols = ['#F5C85B','#55B7FF','#11A36A','#FFFFFF','#0E63E6','#FFE19A'];
+    new MutationObserver(function(muts){
+      for (var i=0;i<muts.length;i++){
+        if (muts[i].attributeName === 'class' && gf.classList.contains('active')){
+          var host = gf.parentElement || body, hw = host.clientWidth || 320;
+          for (var k=0;k<28;k++){
+            var s = d.createElement('span'); s.className = 'wc-conf';
+            s.style.left = (16 + Math.random()*(hw-32)) + 'px';
+            s.style.background = cols[k % cols.length];
+            s.style.animationDelay = (Math.random()*.12) + 's';
+            s.style.transform = 'translateY(0) rotate(' + (Math.random()*360) + 'deg)';
+            host.appendChild(s);
+            (function(node){ setTimeout(function(){ node.remove(); }, 1400); })(s);
+          }
+          break;
+        }
+      }
+    }).observe(gf, {attributes:true, attributeFilter:['class']});
+  }
+})();
+</script>
