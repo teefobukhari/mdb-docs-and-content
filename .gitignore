@@ -76,3 +76,6 @@ wp-content/plugins/hello.php
 # Editors
 .vscode/
 .idea/
+# Python bytecode cache
+__pycache__/
+*.pyc
