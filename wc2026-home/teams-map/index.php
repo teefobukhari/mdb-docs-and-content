@@ -11,7 +11,11 @@
  */
 
 declare(strict_types=1);
-require_once __DIR__ . '/../_teams_map.php';
+
+/* Load the shared helpers if present. Guarded so the page never fatals on a
+   partial deploy (e.g. a stale _teams_map.php missing wc_countries_nations). */
+$wcShared = __DIR__ . '/../_teams_map.php';
+if (is_file($wcShared)) { require_once $wcShared; }
 
 /* Same minimal query helper used by the main pages (defined here so the
    standalone Teams-Map page can talk to the DB without pulling in auth). */
@@ -26,14 +30,15 @@ if (!function_exists('wc_rows')) {
     }
 }
 
-/* Data source: the curated wc2026_countries() dataset (data/countries.php) —
-   Arabic + English names, flags, confederation, group, host — enriched with
-   each team's story/stars/moments. Falls back to the real DB fixtures, then to
-   the full static list, so the page always shows data. */
-$nations = wc_countries_nations();
+/* Build the nation list defensively, every step guarded so a missing helper or
+   file can only reduce the data — never blank the page:
+   1) curated wc2026_countries() (with stories)  2) live DB fixtures
+   3) full static list  4) inline build straight from data/countries.php. */
+$nations = [];
+if (function_exists('wc_countries_nations')) { $nations = wc_countries_nations(); }
 if (!$nations) {
     $wcCfg = __DIR__ . '/../connections/config.php';
-    if (is_file($wcCfg)) {
+    if (is_file($wcCfg) && function_exists('wc_teams_map_nations')) {
         try {
             require_once $wcCfg; // expected to define $conn (mysqli)
             if (isset($conn) && $conn instanceof mysqli) {
@@ -44,7 +49,31 @@ if (!$nations) {
         }
     }
 }
-if (!$nations) { $nations = wc_tm_all_nations(); }
+if (!$nations && function_exists('wc_tm_all_nations')) { $nations = wc_tm_all_nations(); }
+if (!$nations) {
+    /* Last resort: read the curated dataset directly, with no dependency on
+       _teams_map.php at all, so the map always has its markers. */
+    $cf = __DIR__ . '/data/countries.php';
+    if (is_file($cf)) { require_once $cf; }
+    if (function_exists('wc2026_countries')) {
+        foreach (wc2026_countries() as $code => $c) {
+            $ll = $c['coords'] ?? null;
+            if (!$ll || !isset($ll[0], $ll[1])) continue;
+            $nations[] = [
+                'name'    => (string)($c['name_en'] ?? $code),
+                'nameAr'  => (string)($c['name_ar'] ?? ''),
+                'code'    => strtolower((string)($c['flag'] ?? $code)),
+                'lat'     => (float)$ll[0],
+                'lng'     => (float)$ll[1],
+                'confed'  => (string)($c['confed'] ?? ''),
+                'group'   => (string)($c['group'] ?? ''),
+                'host'    => !empty($c['host']),
+                'story'   => '', 'storyAr' => '', 'stars' => [], 'moments' => [],
+            ];
+        }
+        usort($nations, fn($a, $b) => strcmp($a['name'], $b['name']));
+    }
+}
 
 /* Confederation region labels (English markup; JS swaps to Arabic) */
 $confedEn = [
@@ -306,6 +335,14 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
     d.querySelectorAll('.theme-btn').forEach(function(b){ b.addEventListener('click', function(){ applyTheme(b.getAttribute('data-theme-set')); }); });
 
     /* ---------- map ---------- */
+    /* If the Leaflet CDN fails to load, keep the page usable (header, theme +
+       language toggles) instead of crashing on an undefined L. */
+    if (typeof L === 'undefined') {
+        var mEl=d.getElementById('map');
+        if(mEl) mEl.innerHTML='<div style="display:grid;place-items:center;height:100%;padding:24px;text-align:center;color:#cfe6ff;font-weight:800;line-height:1.7">⚠️<br>Map library could not load.<br>Please check your connection and refresh.</div>';
+        applyTheme(theme); applyLang(lang);
+        return;
+    }
     var map = L.map('map',{zoomControl:true,scrollWheelZoom:true,worldCopyJump:true}).setView([25,10],2);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
         maxZoom:9,minZoom:1,
