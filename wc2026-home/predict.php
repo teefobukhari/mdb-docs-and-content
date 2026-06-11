@@ -587,7 +587,8 @@ body{
         linear-gradient(180deg,#04142B 0%,#071F42 45%,#04142B 100%) !important;
     color:#fff !important;
 }
-body.popup-mode{background:#0c1830 !important}
+body.popup-mode{background:#0c1830 !important;overflow-y:auto !important}
+.match-social{padding-bottom:30px}
 .card{background:linear-gradient(135deg,#061A36,#08254D 58%,#0A3A76) !important;border:1px solid rgba(168,231,255,.18) !important;color:#fff !important;box-shadow:0 24px 60px rgba(0,0,0,.28) !important}
 body.popup-mode .card{background:transparent !important}
 .popup-title,.form-title{color:#fff !important}

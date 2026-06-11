@@ -4923,6 +4923,7 @@ body:before{
                         <?php if ($stageName === 'Knockout' && empty($stageMatches)) continue; ?>
                         <div class="bracket-col">
                             <div class="bracket-stage-title"><?= htmlspecialchars($stageName, ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="bracket-col-body">
                             <?php if (!empty($stageMatches)): ?>
                                 <?php foreach ($stageMatches as $bm): ?>
                                     <?php
@@ -4984,6 +4985,7 @@ body:before{
                                     <div class="bracket-status upcoming">Upcoming</div>
                                 </div>
                             <?php endif; ?>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
@@ -6593,18 +6595,21 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
 #fanFilterModal .modal-kicker{color:var(--cyan) !important}
 #fanFilterModal .ff-camera .ff-empty{color:rgba(255,255,255,.8) !important}
 
-/* (5)+(6) Knockout bracket — uniform columns, aligned cards, clean connectors */
-.bracket-grid{display:grid !important;grid-auto-flow:column !important;grid-auto-columns:minmax(230px,1fr) !important;
-    grid-template-columns:none !important;gap:22px !important;align-items:start !important;min-width:max-content !important}
-.bracket-col{display:flex !important;flex-direction:column;gap:14px}
-.bracket-stage-title{position:sticky;top:0;z-index:2;margin:0 0 4px !important;padding:9px 0 !important;border-radius:11px;
+/* (5)+(6) Knockout bracket — true bracket pyramid (deeper rounds centre between feeders) */
+.bracket-grid{display:grid !important;grid-auto-flow:column !important;grid-auto-columns:minmax(232px,1fr) !important;
+    grid-template-columns:none !important;gap:26px !important;align-items:stretch !important;min-width:max-content !important}
+.bracket-col{display:flex !important;flex-direction:column;gap:0 !important;height:100%}
+.bracket-stage-title{flex:none;position:sticky;top:0;z-index:2;margin:0 0 10px !important;padding:9px 0 !important;border-radius:11px;
     background:linear-gradient(135deg,rgba(14,99,230,.32),rgba(85,183,255,.16));border:1px solid rgba(168,231,255,.22);text-align:center !important}
-.bracket-match{position:relative;margin-bottom:0 !important;min-height:96px !important;display:flex;flex-direction:column;justify-content:center}
-.bracket-match:after{content:"" !important;right:-22px !important;left:auto !important;width:22px !important;height:2px !important;background:rgba(168,231,255,.28) !important;top:50% !important}
-.bracket-col:last-child .bracket-match:after{display:none !important}
-.bracket-col:not(:first-child) .bracket-match:before{content:"";position:absolute;left:-22px;top:50%;width:22px;height:2px;background:rgba(168,231,255,.28)}
-html[dir="rtl"] .bracket-match:after{right:auto !important;left:-22px !important}
-html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;right:-22px}
+/* the body flexes and spaces the matches evenly -> classic bracket shape */
+.bracket-col-body{flex:1 1 auto;display:flex;flex-direction:column;justify-content:space-around;gap:14px;min-height:0;padding:4px 0}
+.bracket-match{position:relative;margin-bottom:0 !important;min-height:100px !important;display:flex;flex-direction:column;justify-content:center}
+/* connector elbows joining each match to the next round */
+.bracket-match:after{content:"" !important;position:absolute;right:-26px !important;left:auto !important;width:26px !important;height:2px !important;background:rgba(168,231,255,.30) !important;top:50% !important}
+.bracket-col:last-child .bracket-col-body .bracket-match:after{display:none !important}
+.bracket-col:not(:first-child) .bracket-match:before{content:"";position:absolute;left:-26px;top:50%;width:26px;height:2px;background:rgba(168,231,255,.30)}
+html[dir="rtl"] .bracket-match:after{right:auto !important;left:-26px !important}
+html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;right:-26px}
 
 /* (6) keep the footer visible when expanded so it can act as the Minimize control */
 .knockout-card.expanded .bracket-preview-footer{display:flex !important}
