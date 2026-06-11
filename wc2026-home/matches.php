@@ -2100,8 +2100,8 @@ html[dir="rtl"] .nav-actions{direction:rtl}
 .nav-burger svg{width:22px;height:22px}
 @media(max-width:768px){
   .nav{flex-wrap:wrap;position:relative}
-  .nav-burger{display:inline-flex;position:relative;z-index:70}
-  .top-actions{position:fixed;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(82vw,300px);z-index:60;
+  .nav-burger{display:inline-flex;position:relative;z-index:2001}
+  .top-actions{position:fixed;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(82vw,300px);z-index:2000;
     display:flex !important;flex-direction:column !important;align-items:stretch;gap:10px;overflow-y:auto;-webkit-overflow-scrolling:touch;
     background:#0c1830;border-inline-start:1px solid rgba(168,231,255,.2);border-radius:0;padding:70px 14px 28px;
     box-shadow:-24px 0 60px rgba(0,0,0,.55);transform:translateX(105%);transition:transform .28s ease}
@@ -2112,7 +2112,7 @@ html[dir="rtl"] .nav-actions{direction:rtl}
   .top-actions .nav-link,.top-actions .logout,.top-actions form{width:100%}
   .top-actions .nav-link,.top-actions .logout{text-align:center;justify-content:center}
   .top-actions form button{width:100%}
-  .nav-backdrop{position:fixed;inset:0;z-index:55;background:rgba(4,12,28,.55);opacity:0;visibility:hidden;transition:.25s}
+  .nav-backdrop{position:fixed;inset:0;z-index:1990;background:rgba(4,12,28,.55);opacity:0;visibility:hidden;transition:.25s}
   .nav-backdrop.show{opacity:1;visibility:visible}
   .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
   .tabs::-webkit-scrollbar{display:none}

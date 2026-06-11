@@ -7205,8 +7205,8 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .nav-burger svg{width:22px;height:22px}
 @media(max-width:768px){
   .nav{flex-wrap:wrap}
-  .nav-burger{display:inline-flex;position:relative;z-index:70}
-  .top-actions{position:fixed;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(82vw,300px);z-index:60;
+  .nav-burger{display:inline-flex;position:relative;z-index:2001}
+  .top-actions{position:fixed;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(82vw,300px);z-index:2000;
     display:flex !important;flex-direction:column;align-items:stretch;gap:10px;overflow-y:auto;-webkit-overflow-scrolling:touch;
     background:#0c1830;border-inline-start:1px solid rgba(168,231,255,.2);border-radius:0;padding:70px 14px 28px;
     box-shadow:-24px 0 60px rgba(0,0,0,.55);transform:translateX(105%);transition:transform .28s ease}
@@ -7217,9 +7217,41 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
   .top-actions .top-link,.top-actions .logout,.top-actions form{width:100%}
   .top-actions .top-link,.top-actions .logout{text-align:center;justify-content:center}
   .top-actions form button{width:100%}
-  .nav-backdrop{position:fixed;inset:0;z-index:55;background:rgba(4,12,28,.55);opacity:0;visibility:hidden;transition:.25s}
+  .nav-backdrop{position:fixed;inset:0;z-index:1990;background:rgba(4,12,28,.55);opacity:0;visibility:hidden;transition:.25s}
   .nav-backdrop.show{opacity:1;visibility:visible}
+
+  /* (E) Knockout bracket — responsive on mobile (swipe through rounds) */
+  #knockoutBracketCard .bracket-shell{overflow-x:auto !important;-webkit-overflow-scrolling:touch;padding:14px !important}
+  #knockoutBracketCard .bracket-grid{grid-auto-columns:minmax(200px,78vw) !important;gap:18px !important;min-width:max-content !important}
+  #knockoutBracketCard .bracket-stage-title{font-size:11px !important}
+  #knockoutBracketCard .bracket-match{min-height:auto !important;padding:10px !important}
+  #knockoutBracketCard .bracket-row{font-size:11px !important}
+  #knockoutBracketCard .bracket-head-actions{width:100%;justify-content:space-between;flex-wrap:wrap;gap:10px}
+  #knockoutBracketCard.bracket-preview-mode{max-height:none !important}
+  #knockoutBracketCard.bracket-preview-mode .bracket-shell{max-height:440px !important}
 }
+
+/* (1) Hero title — "Cheer with" white, "CATRION" CATRION-blue (override the animated gradient) */
+.hero h1{color:#fff !important}
+.hero h1 span{background:none !important;-webkit-text-fill-color:#3A8BF6 !important;color:#3A8BF6 !important;animation:none !important}
+
+/* (B) Fan Filter Studio pop-up — comfortable large size */
+#fanFilterModal .modal-card.ff-native{max-width:min(1180px,96vw) !important;width:96vw;max-height:94vh}
+
+/* (2) All cards adopt the selected (Saudi) theme */
+html[data-theme="saudi"] .next24-card,
+html[data-theme="saudi"] .social-card,
+html[data-theme="saudi"] .fan-filter-card,
+html[data-theme="saudi"] .hostmap,
+html[data-theme="saudi"] .tournament-progress,
+html[data-theme="saudi"] .modal-card{
+    background:linear-gradient(135deg,#06291a,#0a3f27 58%,#0e6a3e) !important;
+    border-color:rgba(126,244,174,.22) !important;
+}
+html[data-theme="saudi"] .soon-card{background:radial-gradient(circle at 80% 0%,rgba(245,200,91,.18),transparent 42%),linear-gradient(135deg,#0a3f27,#06291a) !important;border-color:rgba(245,200,91,.28) !important}
+html[data-theme="saudi"] .map-pin-card{background:rgba(6,41,26,.92) !important;border-color:rgba(126,244,174,.22) !important}
+html[data-theme="saudi"] .bracket-stage-title{background:linear-gradient(135deg,rgba(17,163,106,.34),rgba(126,244,174,.16)) !important;border-color:rgba(126,244,174,.24) !important}
+html[data-theme="saudi"] .next24-dot,html[data-theme="saudi"] .map-dot{background:#FFE19A !important;box-shadow:0 0 18px rgba(255,225,154,.9) !important}
 
 /* Arabic / RTL spacing fixes */
 html[dir="rtl"] .stat:before{right:auto !important;left:16px !important}
