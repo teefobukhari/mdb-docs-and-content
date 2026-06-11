@@ -10,14 +10,30 @@ declare(strict_types=1);
 | key never leaves the server. Team/league logos come from media.api-sports.io.
 */
 
+/* ---- .env loader (same convention as EOL-review: /var/secrets/.env) ----
+   Loads KEY=VALUE pairs into $_ENV / putenv. Also checks a local .env next to
+   this file as a fallback. Credentials are never hardcoded in the repo. */
+(function () {
+    foreach (['/var/secrets/.env', __DIR__ . '/.env'] as $f) {
+        if (!is_file($f) || !is_readable($f)) continue;
+        foreach (file($f, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+            $t = trim($line);
+            if ($t === '' || $t[0] === '#' || strpos($t, '=') === false) continue;
+            [$k, $v] = array_map('trim', explode('=', $t, 2));
+            $v = trim($v, "\"'");
+            if ($k !== '' && getenv($k) === false) { $_ENV[$k] = $v; putenv("$k=$v"); }
+        }
+    }
+})();
+
 /* ---- API-Football (api-sports.io) configuration ----
-   Set your key in the APISPORTS_KEY environment variable (preferred) or hardcode
-   it below. The key is ONLY used server-side — never exposed to the browser. */
-if (!defined('APISPORTS_KEY'))   define('APISPORTS_KEY',   getenv('APISPORTS_KEY') ?: '');     // <-- x-apisports-key
+   The key is read from .env (APISPORTS_KEY) and used ONLY server-side —
+   it is never exposed to the browser. */
+if (!defined('APISPORTS_KEY'))   define('APISPORTS_KEY',   (string)(getenv('APISPORTS_KEY') ?: ($_ENV['APISPORTS_KEY'] ?? '')));
 if (!defined('APISPORTS_BASE'))  define('APISPORTS_BASE',  'https://v3.football.api-sports.io');
 if (!defined('APISPORTS_MEDIA')) define('APISPORTS_MEDIA', 'https://media.api-sports.io');
-if (!defined('WC_LEAGUE_ID'))    define('WC_LEAGUE_ID',    1);      // FIFA World Cup league id in API-Football
-if (!defined('WC_SEASON'))       define('WC_SEASON',       2026);
+if (!defined('WC_LEAGUE_ID'))    define('WC_LEAGUE_ID',    (int)(getenv('WC_LEAGUE_ID') ?: ($_ENV['WC_LEAGUE_ID'] ?? 1)));   // FIFA World Cup league id
+if (!defined('WC_SEASON'))       define('WC_SEASON',       (int)(getenv('WC_SEASON')    ?: ($_ENV['WC_SEASON']    ?? 2026)));
 
 $wcCacheDir = sys_get_temp_dir() . '/wc_apifootball';
 

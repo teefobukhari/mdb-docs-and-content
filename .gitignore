@@ -79,3 +79,7 @@ wp-content/plugins/hello.php
 # Python bytecode cache
 __pycache__/
 *.pyc
+
+# Secrets — never commit .env files
+.env
+**/.env
