@@ -2347,14 +2347,17 @@ html[data-theme="saudi"] .tm-frame-wrap{border-color:rgba(126,244,174,.22)}
 .nav-burger svg{width:22px;height:22px}
 @media(max-width:768px){
   .nav{flex-wrap:wrap;position:relative}
-  .nav-burger{display:inline-flex;position:relative;z-index:2001}
-  .top-actions{position:fixed;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(82vw,300px);z-index:2000;
+  /* Mobile nav drawer — !important so it can't be clobbered by the
+     unconditional ".nav/.top-actions" z-index/position rules above. */
+  .nav{flex-wrap:wrap;position:relative;z-index:2002 !important}
+  .nav-burger{display:inline-flex !important;position:relative;z-index:2005}
+  .top-actions{position:fixed !important;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(82vw,300px);z-index:2000 !important;
     display:flex !important;flex-direction:column !important;align-items:stretch;gap:10px;overflow-y:auto;-webkit-overflow-scrolling:touch;
     background:#0c1830;border-inline-start:1px solid rgba(168,231,255,.2);border-radius:0;padding:70px 14px 28px;
-    box-shadow:-24px 0 60px rgba(0,0,0,.55);transform:translateX(105%);transition:transform .28s ease}
-  .top-actions.open{transform:none}
-  html[dir="rtl"] .top-actions{inset-inline-end:auto;inset-inline-start:0;border-inline-start:0;border-inline-end:1px solid rgba(168,231,255,.2);box-shadow:24px 0 60px rgba(0,0,0,.55);transform:translateX(-105%)}
-  html[dir="rtl"] .top-actions.open{transform:none}
+    box-shadow:-24px 0 60px rgba(0,0,0,.55);transform:translateX(105%) !important;transition:transform .28s ease}
+  .top-actions.open{transform:none !important}
+  html[dir="rtl"] .top-actions{inset-inline-end:auto;inset-inline-start:0;border-inline-start:0;border-inline-end:1px solid rgba(168,231,255,.2);box-shadow:24px 0 60px rgba(0,0,0,.55);transform:translateX(-105%) !important}
+  html[dir="rtl"] .top-actions.open{transform:none !important}
   .top-actions .theme-switch,.top-actions .lang-switch{justify-content:center}
   .top-actions .nav-link,.top-actions .logout,.top-actions form{width:100%}
   .top-actions .nav-link,.top-actions .logout{text-align:center;justify-content:center}
