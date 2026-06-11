@@ -153,16 +153,32 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         .hosts{display:none;align-items:center;gap:6px;font-size:12px;font-weight:800;color:var(--muted)}
         .host-flag{width:24px;height:16px;object-fit:cover;border-radius:3px;box-shadow:0 2px 6px rgba(0,0,0,.4)}
         @media(min-width:1100px){.hosts{display:inline-flex}}
-        /* Compact, tidy header on mobile (works in LTR + RTL via logical props) */
-        @media(max-width:680px){
-            .topbar{padding:10px 14px;gap:9px}
+
+        /* Mobile burger menu (like the main site): header keeps logo + search;
+           theme/language/nav move into a slide-out drawer. */
+        .tm-burger{display:none;width:42px;height:42px;flex:none;border:1px solid rgba(255,255,255,.22);
+            background:rgba(255,255,255,.12);color:#fff;border-radius:12px;cursor:pointer;align-items:center;justify-content:center}
+        .tm-burger svg{width:22px;height:22px}
+        .tm-backdrop{position:fixed;inset:0;z-index:1990;background:rgba(4,12,28,.55);opacity:0;visibility:hidden;transition:.25s}
+        .tm-backdrop.show{opacity:1;visibility:visible}
+        @media(max-width:760px){
+            .topbar{padding:10px 14px;gap:10px;flex-wrap:nowrap}
             .brand-logo{height:34px}
-            .brand-text h1{font-size:15px;white-space:normal}
-            .brand-text p{display:none}
-            .searchbox{order:5;flex:1 1 100%;max-width:none;min-width:0}
-            .top-actions{gap:7px}
-            .top-link{padding:8px 12px;font-size:12px}
-            .theme-btn,.lang-btn{padding:7px 10px;font-size:11px}
+            .brand-text{display:none}
+            .searchbox{order:2;flex:1 1 auto;max-width:none;min-width:0}
+            .tm-burger{display:inline-flex;order:3}
+            .hosts{display:none !important}
+            .top-actions{position:fixed;top:0;inset-inline-end:0;height:100vh;height:100dvh;width:min(80vw,300px);margin:0;
+                flex-direction:column;align-items:stretch;gap:10px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+                background:#0c1830;border-inline-start:1px solid var(--line);padding:66px 14px 24px;
+                box-shadow:-24px 0 60px rgba(0,0,0,.55);transform:translateX(105%);transition:transform .28s ease;z-index:2000}
+            html[dir="rtl"] .top-actions{box-shadow:24px 0 60px rgba(0,0,0,.55);transform:translateX(-105%)}
+            .top-actions.open{transform:none}
+            html.tm-nav-open .topbar{z-index:2002}
+            html.tm-nav-open .tm-burger{display:none}
+            .top-actions .theme-switch,.top-actions .lang-switch{justify-content:center}
+            .top-actions .top-link{width:100%;justify-content:center;text-align:center}
+            .stage{min-height:56vh}
         }
 
         .searchbox{position:relative;flex:1;min-width:180px;max-width:300px;order:5}
@@ -255,6 +271,10 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         <input type="search" id="search" autocomplete="off" data-i18n-ph="searchPh" placeholder="Search a team…" aria-label="Search a team">
         <ul id="search-results" class="search-results" hidden></ul>
     </div>
+
+    <button type="button" class="tm-burger" id="tmBurger" aria-label="Menu" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
 
     <div class="top-actions">
         <div class="hosts" title="Hosts">
@@ -468,6 +488,20 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
     applyLang(lang);
     setTimeout(function(){ map.invalidateSize(); },200);
     window.addEventListener('resize',function(){ map.invalidateSize(); });
+})();
+
+/* Mobile burger drawer (separate IIFE so it works even if the map fails to load) */
+(function(){
+    var d=document, root=d.documentElement;
+    var b=d.getElementById('tmBurger'), a=d.querySelector('.top-actions');
+    if(!b||!a) return;
+    var bd=d.createElement('div'); bd.className='tm-backdrop'; d.body.appendChild(bd);
+    function setOpen(open){ a.classList.toggle('open',open); bd.classList.toggle('show',open); root.classList.toggle('tm-nav-open',open); b.setAttribute('aria-expanded',open?'true':'false'); }
+    b.addEventListener('click',function(e){ e.stopPropagation(); setOpen(!a.classList.contains('open')); });
+    bd.addEventListener('click',function(){ setOpen(false); });
+    d.addEventListener('keydown',function(e){ if(e.key==='Escape') setOpen(false); });
+    /* close on nav-link click (theme/language toggles keep the drawer open) */
+    a.querySelectorAll('a').forEach(function(el){ el.addEventListener('click',function(){ setOpen(false); }); });
 })();
 </script>
 </body>
