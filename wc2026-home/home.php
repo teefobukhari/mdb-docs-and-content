@@ -4468,7 +4468,9 @@ body:before{
     </div>
 </header>
 
-<!-- (3) Next World Cup matches within 24 hours — placed right after the banner -->
+<main class="container">
+
+<!-- (3) Next World Cup matches within 24 hours — inside main so the container offset can't overlap it -->
 <?php $n24 = !empty($next24Matches) ? $next24Matches : $next24Fallback; ?>
 <section class="next24-wrap">
     <div class="next24-head">
@@ -4519,8 +4521,6 @@ body:before{
         <div class="next24-empty" data-i18n="no24">No matches kicking off within the next 24 hours. Check the full schedule.</div>
     <?php endif; ?>
 </section>
-
-<main class="container">
 
     <section class="stats">
         <div class="stat">
@@ -4600,30 +4600,55 @@ body:before{
         </div>
     </section>
 
-    <!-- (2)+(10) Comments & engagement — placed directly under Match News -->
-    <section class="card social-card" id="socialWall">
-        <h2 class="card-title">
-            <span data-i18n="socialTitle">Fan Wall</span>
-            <small data-i18n="socialSub">Share your moment • comment • like</small>
+    <!-- (7) Fan Wall notification bar — surfaces new posts even while the wall is minimized -->
+    <div class="fan-notify" id="fanNotifyBar" hidden>
+        <span class="fan-notify-bell">🔔</span>
+        <div class="fan-notify-track" id="fanNotifyTrack"></div>
+        <button type="button" class="fan-notify-open" id="fanNotifyOpen" data-i18n="openWall">Open Fan Wall</button>
+        <button type="button" class="fan-notify-x" id="fanNotifyClose" aria-label="Dismiss">✕</button>
+    </div>
+
+    <!-- (2) Fan Filter Studio as a card (also available from the nav icon) -->
+    <section class="card fan-filter-card" id="fanFilterCard">
+        <div class="ff-card-inner">
+            <div class="ff-card-icon">📸</div>
+            <div class="ff-card-copy">
+                <h2 class="card-title" style="margin:0 0 4px"><span data-i18n="fanFilterTitle">Fan Filter Studio</span></h2>
+                <p class="ff-card-sub" data-i18n="ffCardSub">Create your World Cup fan photo — pick your country, choose a frame, snap a selfie and download.</p>
+            </div>
+            <button type="button" class="match-link primary" id="openFanFilterCard" data-i18n="ffOpenStudio">Open Studio</button>
+        </div>
+    </section>
+
+    <!-- (2)+(8)+(10) Fan Wall — minimized by default; new posts surface in the notification bar -->
+    <section class="card social-card collapsed" id="socialWall">
+        <h2 class="card-title social-head">
+            <span><span data-i18n="socialTitle">Fan Wall</span> <small data-i18n="socialSub">Share your moment • comment • like</small></span>
+            <button type="button" class="social-toggle" id="fanWallToggle">
+                <span class="social-toggle-label" data-i18n="openWall">Open Fan Wall</span>
+                <span class="social-count" id="fanWallCount"></span>
+            </button>
         </h2>
-        <form class="social-composer" id="socialComposer">
-            <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
-            <div class="social-input-row">
-                <span class="social-ava"><?= htmlspecialchars(mb_substr((string)$name, 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
-                <textarea id="socialText" name="body" rows="2" data-i18n-ph="socialPlaceholder" placeholder="Say something about the World Cup…"></textarea>
+        <div class="social-body" id="socialBody">
+            <form class="social-composer" id="socialComposer">
+                <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+                <div class="social-input-row">
+                    <span class="social-ava"><?= htmlspecialchars(mb_substr((string)$name, 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                    <textarea id="socialText" name="body" rows="2" data-i18n-ph="socialPlaceholder" placeholder="Say something about the World Cup…"></textarea>
+                </div>
+                <div class="social-actions">
+                    <label class="social-attach" for="socialPhoto">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                        <span data-i18n="attachPhoto">Add photo</span>
+                    </label>
+                    <input type="file" id="socialPhoto" name="photo" accept="image/*" hidden>
+                    <span class="social-attach-name" id="socialPhotoName"></span>
+                    <button type="submit" class="match-link primary" data-i18n="post">Post</button>
+                </div>
+            </form>
+            <div class="social-feed" id="socialFeed" data-endpoint="/WC2026/api/social_feed.php">
+                <div class="social-loading" data-i18n="socialLoading">Loading the fan wall…</div>
             </div>
-            <div class="social-actions">
-                <label class="social-attach" for="socialPhoto">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-                    <span data-i18n="attachPhoto">Add photo</span>
-                </label>
-                <input type="file" id="socialPhoto" name="photo" accept="image/*" hidden>
-                <span class="social-attach-name" id="socialPhotoName"></span>
-                <button type="submit" class="match-link primary" data-i18n="post">Post</button>
-            </div>
-        </form>
-        <div class="social-feed" id="socialFeed" data-endpoint="/WC2026/api/social_feed.php">
-            <div class="social-loading" data-i18n="socialLoading">Loading the fan wall…</div>
         </div>
     </section>
 
@@ -6100,7 +6125,8 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       likeWord:'Like',commentWord:'Comment',sendWord:'Send',commentPh:'Write a comment…',justNow:'just now',
       fanFilterTitle:'Fan Filter Studio',openFull:'Open full page',
       soonBadge:'Coming Soon',soonTitle:'Mystery Box',soonSub:'A surprise World Cup reward drop is on its way. Keep playing and predicting — this box unlocks later in the tournament.',soonCta:'Unlocks Soon',
-      ffChooseCountry:'Choose Country',ffChooseFrame:'Choose Frame',ffStartCam:'Start Camera',ffUpload:'Upload Photo',ffCapture:'Capture',ffRetake:'Retake',ffSave:'Save & Download',ffReady:'Start the camera or upload a photo.',ffNeedData:'Add active countries and frames to enable the studio.'
+      ffChooseCountry:'Choose Country',ffChooseFrame:'Choose Frame',ffStartCam:'Start Camera',ffUpload:'Upload Photo',ffCapture:'Capture',ffRetake:'Retake',ffSave:'Save & Download',ffReady:'Start the camera or upload a photo.',ffNeedData:'Add active countries and frames to enable the studio.',
+      openWall:'Open Fan Wall',closeWall:'Minimize',ffCardSub:'Create your World Cup fan photo — pick your country, choose a frame, snap a selfie and download.',ffOpenStudio:'Open Studio',newPost:'new'
     },
     ar:{
       brandSub:'دوري التوقعات • تحدي الأهداف اليومي',themeCatrion:'كاتريون',themeSaudi:'السعودية',
@@ -6147,7 +6173,8 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       likeWord:'إعجاب',commentWord:'تعليق',sendWord:'إرسال',commentPh:'اكتب تعليقًا…',justNow:'الآن',
       fanFilterTitle:'استوديو فلتر المشجع',openFull:'فتح الصفحة كاملة',
       soonBadge:'قريبًا',soonTitle:'الصندوق الغامض',soonSub:'مكافأة مفاجئة من كأس العالم في الطريق. واصل اللعب والتوقع — سيُفتح هذا الصندوق لاحقًا خلال البطولة.',soonCta:'يُفتح قريبًا',
-      ffChooseCountry:'اختر الدولة',ffChooseFrame:'اختر الإطار',ffStartCam:'تشغيل الكاميرا',ffUpload:'رفع صورة',ffCapture:'التقاط',ffRetake:'إعادة',ffSave:'حفظ وتنزيل',ffReady:'شغّل الكاميرا أو ارفع صورة.',ffNeedData:'أضف دولًا وإطارات نشطة لتفعيل الاستوديو.'
+      ffChooseCountry:'اختر الدولة',ffChooseFrame:'اختر الإطار',ffStartCam:'تشغيل الكاميرا',ffUpload:'رفع صورة',ffCapture:'التقاط',ffRetake:'إعادة',ffSave:'حفظ وتنزيل',ffReady:'شغّل الكاميرا أو ارفع صورة.',ffNeedData:'أضف دولًا وإطارات نشطة لتفعيل الاستوديو.',
+      openWall:'فتح جدار المشجعين',closeWall:'تصغير',ffCardSub:'أنشئ صورتك كمشجع — اختر دولتك، اختر إطارًا، التقط صورة وحمّلها.',ffOpenStudio:'فتح الاستوديو',newPost:'جديد'
     }
   };
   var lang = (function(){ try{ return localStorage.getItem('wc_lang')||'en'; }catch(e){ return 'en'; } })();
@@ -6310,15 +6337,18 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
 #profileModal .profile-line span:first-child{color:rgba(255,255,255,.72) !important}
 #profileModal .profile-line span:last-child{color:#fff !important}
 
-/* (5) Knockout bracket — align rounds vertically + readable connectors */
-.bracket-col{display:flex !important;flex-direction:column;justify-content:space-around;min-height:100%}
-.bracket-grid{align-items:stretch !important}
-.bracket-col:first-child{justify-content:flex-start}
-.bracket-match{position:relative}
-.bracket-match:after{right:-13px !important;width:13px !important;height:2px !important;background:rgba(168,231,255,.35) !important;top:50% !important}
+/* (5)+(6) Knockout bracket — uniform columns, aligned cards, clean connectors */
+.bracket-grid{display:grid !important;grid-auto-flow:column !important;grid-auto-columns:minmax(230px,1fr) !important;
+    grid-template-columns:none !important;gap:22px !important;align-items:start !important;min-width:max-content !important}
+.bracket-col{display:flex !important;flex-direction:column;gap:14px}
+.bracket-stage-title{position:sticky;top:0;z-index:2;margin:0 0 4px !important;padding:9px 0 !important;border-radius:11px;
+    background:linear-gradient(135deg,rgba(14,99,230,.32),rgba(85,183,255,.16));border:1px solid rgba(168,231,255,.22);text-align:center !important}
+.bracket-match{position:relative;margin-bottom:0 !important;min-height:96px !important;display:flex;flex-direction:column;justify-content:center}
+.bracket-match:after{content:"" !important;right:-22px !important;left:auto !important;width:22px !important;height:2px !important;background:rgba(168,231,255,.28) !important;top:50% !important}
 .bracket-col:last-child .bracket-match:after{display:none !important}
-.bracket-col:not(:first-child) .bracket-match:before{content:"";position:absolute;left:-13px;top:50%;width:13px;height:2px;background:rgba(168,231,255,.35)}
-.bracket-stage-title{padding:8px 0;border-radius:10px;background:rgba(255,255,255,.06)}
+.bracket-col:not(:first-child) .bracket-match:before{content:"";position:absolute;left:-22px;top:50%;width:22px;height:2px;background:rgba(168,231,255,.28)}
+html[dir="rtl"] .bracket-match:after{right:auto !important;left:-22px !important}
+html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;right:-22px}
 
 /* (6) keep the footer visible when expanded so it can act as the Minimize control */
 .knockout-card.expanded .bracket-preview-footer{display:flex !important}
@@ -6378,6 +6408,75 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
 .ff-empty-note{padding:14px;border-radius:14px;background:rgba(245,200,91,.12);border:1px solid rgba(245,200,91,.3);color:#FFE19A;font-weight:800;font-size:13px;line-height:1.6}
 .fanfilter-modal-card.ff-native{max-width:min(960px,96vw)}
 @media(max-width:780px){.ff-studio{grid-template-columns:1fr}}
+
+/* ===== v5 fixes ===== */
+/* (1) next-24h cards: equal height, actions pinned to bottom; sit inside main cleanly */
+.next24-wrap{width:auto !important;margin:0 0 18px !important}
+.next24-card{display:flex;flex-direction:column}
+.next24-teams{flex:1 0 auto}
+.n24-team strong{display:block;min-height:2.2em;display:flex;align-items:center;justify-content:center}
+.next24-actions{margin-top:auto;padding-top:12px}
+
+/* (4) Fan Wall + any standalone .card must be dark so white text is readable (no white-on-white) */
+.social-card,.fan-filter-card{
+    color:#fff !important;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(14,99,230,.22), transparent 34%),
+        linear-gradient(135deg,#061A36 0%,#08254D 58%,#0A3A76 100%) !important;
+    border:1px solid rgba(168,231,255,.18) !important;
+    box-shadow:0 22px 55px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.06) !important;
+}
+.social-card .card-title,.fan-filter-card .card-title{color:#fff !important}
+.social-card .card-title small{color:rgba(255,255,255,.62) !important}
+
+/* (8) Fan Wall minimized by default */
+.social-head{display:flex !important;align-items:center;justify-content:space-between;gap:12px}
+.social-toggle{display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(168,231,255,.25);background:rgba(255,255,255,.08);color:#fff;font:inherit;font-weight:900;font-size:12px;padding:9px 14px;border-radius:999px;cursor:pointer}
+.social-toggle:hover{background:rgba(255,255,255,.16)}
+.social-count{min-width:20px;height:20px;padding:0 6px;border-radius:999px;display:none;align-items:center;justify-content:center;background:#E94747;color:#fff;font-size:11px;font-weight:900}
+.social-count.show{display:inline-flex}
+.social-card.collapsed .social-body{display:none}
+.social-card:not(.collapsed) .social-toggle-label:after{content:" ▲"}
+.social-card.collapsed .social-toggle-label:after{content:" ▼"}
+
+/* (7) Fan Wall notification bar */
+.fan-notify[hidden]{display:none !important}
+.fan-notify{display:flex;align-items:center;gap:12px;margin:0 0 18px;padding:12px 16px;border-radius:16px;
+    background:linear-gradient(135deg,#0B3D78,#061A36);border:1px solid rgba(245,200,91,.3);
+    box-shadow:0 18px 44px rgba(0,0,0,.26)}
+.fan-notify-bell{font-size:20px;animation:wmLandGlow 2s ease-in-out infinite;filter:drop-shadow(0 0 8px rgba(245,200,91,.6))}
+.fan-notify-track{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;overflow:hidden}
+.fan-notify-msg{color:#fff;font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fan-notify-msg b{color:#FFE19A}
+.fan-notify-msg small{color:rgba(255,255,255,.6);font-weight:700;margin-inline-start:6px}
+.fan-notify-open{border:0;border-radius:12px;padding:9px 14px;background:linear-gradient(135deg,#F5C85B,#FFE19A);color:#06202e;font-weight:900;font-size:12px;cursor:pointer;flex:none}
+.fan-notify-x{width:30px;height:30px;flex:none;border:0;border-radius:10px;background:rgba(255,255,255,.12);color:#fff;font-weight:900;cursor:pointer}
+.fan-notify-x:hover{background:rgba(255,255,255,.22)}
+
+/* (2) Fan Filter card */
+.ff-card-inner{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.ff-card-icon{width:54px;height:54px;flex:none;display:grid;place-items:center;border-radius:16px;font-size:28px;background:linear-gradient(135deg,#F5C85B,#FFE19A)}
+.ff-card-copy{flex:1;min-width:200px}
+.ff-card-sub{margin:0;color:rgba(255,255,255,.7);font-size:13px;font-weight:700;line-height:1.6}
+.fan-filter-card .match-link.primary{flex:none}
+
+/* (5) Live World Cup Map — richer + mobile-friendly */
+.world-map-svg{opacity:.72 !important}
+.map-pin-card{background:rgba(6,26,54,.92) !important;backdrop-filter:blur(10px)}
+.map-pin-status.Live{animation:wmLandGlow 1.6s ease-in-out infinite}
+@media(max-width:768px){
+    .world-map-svg{position:relative !important;top:auto !important;height:150px !important;opacity:.9 !important;margin-bottom:12px;border-radius:16px;background:linear-gradient(135deg,#05162F,#0a2f5e)}
+    .live-map-bg,.world-lines{display:none !important}
+    .map-stage{grid-template-columns:1fr !important;gap:12px !important}
+    .map-pins{display:grid !important;grid-template-columns:1fr 1fr !important;gap:10px !important}
+    .map-pin-card{width:100% !important;min-height:auto !important}
+    .tournament-progress{grid-column:1 / -1}
+    .next24-grid{grid-template-columns:1fr 1fr}
+    .ff-card-inner{flex-direction:column;text-align:center}
+    .fan-notify{flex-wrap:wrap}
+    .fan-notify-track{order:3;flex-basis:100%}
+}
+@media(max-width:480px){.next24-grid{grid-template-columns:1fr}.map-pins{grid-template-columns:1fr !important}}
 </style>
 
 <script>
@@ -6419,6 +6518,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
   function closeFanFilter(){ if(ffModal){ ffModal.classList.remove('active'); ffStopCam(); } }
   function openFanFilter(){ if(ffModal){ ffModal.classList.add('active'); wcAudit('open_fan_filter'); } }
   var offb=d.getElementById('openFanFilterBtn'); if(offb) offb.addEventListener('click', openFanFilter);
+  var offc=d.getElementById('openFanFilterCard'); if(offc) offc.addEventListener('click', openFanFilter);
   var cffb=d.getElementById('closeFanFilterBtn'); if(cffb) cffb.addEventListener('click', closeFanFilter);
   if(ffModal) ffModal.addEventListener('click', function(e){ if(e.target===ffModal) closeFanFilter(); });
   d.addEventListener('keydown', function(e){ if(e.key==='Escape') closeFanFilter(); });
@@ -6496,6 +6596,42 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
   var feed=d.getElementById('socialFeed'), composer=d.getElementById('socialComposer'),
       photoInput=d.getElementById('socialPhoto'), photoName=d.getElementById('socialPhotoName'),
       textArea=d.getElementById('socialText');
+
+  /* (8) Fan Wall minimize toggle */
+  var wall=d.getElementById('socialWall'), wallToggle=d.getElementById('fanWallToggle'),
+      wallCount=d.getElementById('fanWallCount'), wallLabel=wallToggle?wallToggle.querySelector('.social-toggle-label'):null;
+  function setWall(open){ if(!wall) return; wall.classList.toggle('collapsed', !open);
+    if(wallLabel) wallLabel.textContent = open ? tr('closeWall') : tr('openWall');
+    if(open && wallCount){ wallCount.classList.remove('show'); wallCount.textContent=''; } }
+  if(wallToggle) wallToggle.addEventListener('click', function(){ setWall(wall.classList.contains('collapsed')); });
+
+  /* (7) Fan Wall notification bar */
+  var notifyBar=d.getElementById('fanNotifyBar'), notifyTrack=d.getElementById('fanNotifyTrack'),
+      notifyOpen=d.getElementById('fanNotifyOpen'), notifyClose=d.getElementById('fanNotifyClose');
+  var unseen=0;
+  function notifyShow(){ if(notifyBar) notifyBar.hidden=false; }
+  function pushNotify(name, body){
+    if(!notifyTrack) return;
+    var row=d.createElement('div'); row.className='fan-notify-msg';
+    row.innerHTML='<b>'+esc(name)+'</b> '+esc((body||'').slice(0,90))+'<small>'+esc(tr('justNow'))+'</small>';
+    notifyTrack.insertBefore(row, notifyTrack.firstChild);
+    while(notifyTrack.children.length>2) notifyTrack.removeChild(notifyTrack.lastChild);
+    notifyShow();
+    if(wall && wall.classList.contains('collapsed') && wallCount){ unseen++; wallCount.textContent=unseen; wallCount.classList.add('show'); }
+  }
+  function seedNotify(posts){
+    if(!notifyTrack || !posts || !posts.length) return;
+    notifyTrack.innerHTML='';
+    posts.slice(0,2).forEach(function(p){
+      var row=d.createElement('div'); row.className='fan-notify-msg';
+      row.innerHTML='<b>'+esc(p.name)+'</b> '+esc((p.body||'').slice(0,90))+'<small>'+esc(p.created_at||tr('justNow'))+'</small>';
+      notifyTrack.appendChild(row);
+    });
+    notifyShow();
+    if(wall && wall.classList.contains('collapsed') && wallCount){ wallCount.textContent=posts.length; wallCount.classList.add('show'); }
+  }
+  if(notifyOpen) notifyOpen.addEventListener('click', function(){ setWall(true); wall.scrollIntoView({behavior:'smooth',block:'start'}); });
+  if(notifyClose) notifyClose.addEventListener('click', function(){ if(notifyBar) notifyBar.hidden=true; });
   function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'})[c];}); }
   function renderPosts(posts){
     if(!posts || !posts.length){ feed.innerHTML='<div class="social-empty">'+esc(tr('socialEmpty'))+'</div>'; return; }
@@ -6537,10 +6673,16 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
     if(!feed) return;
     fetch(feed.dataset.endpoint,{credentials:'same-origin'})
       .then(function(r){ return r.json(); })
-      .then(function(data){ renderPosts((data && data.posts)||[]); })
+      .then(function(data){ var posts=(data && data.posts)||[]; renderPosts(posts); seedNotify(posts); })
       .catch(function(){ feed.innerHTML='<div class="social-empty">'+esc(tr('socialEmpty'))+'</div>'; });
   }
   if(photoInput){ photoInput.addEventListener('change', function(){ photoName.textContent=(photoInput.files&&photoInput.files[0])?photoInput.files[0].name:''; }); }
+  var myName='<?= htmlspecialchars($name, ENT_QUOTES, "UTF-8") ?>';
+  function afterPost(body){
+    pushNotify(myName, body);   // (7) surface in the notification bar
+    setWall(true);              // (8) reveal the wall so the user sees their post
+    textArea.value=''; if(photoInput){ photoInput.value=''; photoName.textContent=''; }
+  }
   if(composer){
     composer.addEventListener('submit', function(e){ e.preventDefault();
       var body=(textArea.value||'').trim(); var hasPhoto=photoInput && photoInput.files && photoInput.files[0];
@@ -6551,13 +6693,13 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
         .then(function(r){ return r.json(); })
         .then(function(data){
           if(data && data.ok && data.post){ if(feed.querySelector('.social-empty')||feed.querySelector('.social-loading')) feed.innerHTML=''; feed.insertBefore(renderPost(data.post), feed.firstChild); }
-          else { /* optimistic local add */ if(feed.querySelector('.social-empty')||feed.querySelector('.social-loading')) feed.innerHTML=''; feed.insertBefore(renderPost({id:'tmp',name:'<?= htmlspecialchars($name, ENT_QUOTES, "UTF-8") ?>',body:body,photo:hasPhoto?URL.createObjectURL(photoInput.files[0]):'',likes:0,liked:false,comments:[],created_at:tr('justNow')}), feed.firstChild); }
-          textArea.value=''; if(photoInput){ photoInput.value=''; photoName.textContent=''; }
+          else { /* optimistic local add */ if(feed.querySelector('.social-empty')||feed.querySelector('.social-loading')) feed.innerHTML=''; feed.insertBefore(renderPost({id:'tmp',name:myName,body:body,photo:hasPhoto?URL.createObjectURL(photoInput.files[0]):'',likes:0,liked:false,comments:[],created_at:tr('justNow')}), feed.firstChild); }
+          afterPost(body);
         })
         .catch(function(){
           if(feed.querySelector('.social-empty')||feed.querySelector('.social-loading')) feed.innerHTML='';
-          feed.insertBefore(renderPost({id:'tmp',name:'<?= htmlspecialchars($name, ENT_QUOTES, "UTF-8") ?>',body:body,photo:hasPhoto?URL.createObjectURL(photoInput.files[0]):'',likes:0,liked:false,comments:[],created_at:tr('justNow')}), feed.firstChild);
-          textArea.value=''; if(photoInput){ photoInput.value=''; photoName.textContent=''; }
+          feed.insertBefore(renderPost({id:'tmp',name:myName,body:body,photo:hasPhoto?URL.createObjectURL(photoInput.files[0]):'',likes:0,liked:false,comments:[],created_at:tr('justNow')}), feed.firstChild);
+          afterPost(body);
         });
     });
   }
