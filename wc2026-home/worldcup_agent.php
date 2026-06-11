@@ -77,7 +77,8 @@ if (isset($_GET['api'])) {
     header('Content-Type: application/json; charset=utf-8');
     header('X-Content-Type-Options: nosniff');
     $ep = (string)$_GET['api'];
-    $allow = ['status','fixtures','standings','teams','leagues','predictions','countries','timezone'];
+    $allow = ['status','fixtures','fixtures/events','fixtures/lineups','fixtures/statistics','fixtures/players',
+              'standings','teams','leagues','predictions','injuries','countries','timezone'];
     if (!in_array($ep, $allow, true)) {
         http_response_code(400); echo json_encode(['ok'=>false,'error'=>'Endpoint not allowed.']); exit;
     }
@@ -299,6 +300,10 @@ html[dir="rtl"] .msg.bot{border-bottom-left-radius:16px;border-bottom-right-radi
       <div class="live-controls" id="liveControls">
         <input id="wcLeague" type="number" value="<?= (int)WC_LEAGUE_ID ?>" title="League ID">
         <input id="wcSeason" type="number" value="<?= (int)WC_SEASON ?>" title="Season">
+        <select id="wcWhen" title="Range">
+          <option value="next" data-i18n="upcoming">Upcoming</option>
+          <option value="last" data-i18n="finished">Finished (with stats)</option>
+        </select>
         <button class="btn" type="button" id="liveRefresh" data-i18n="refresh">Refresh</button>
       </div>
       <div id="liveBox"><div class="live-empty" data-i18n="liveLoading">Loading…</div></div>
@@ -328,7 +333,7 @@ const i18n={
   running:'Running agent…',failed:'Failed',done:'Done',error:'Error',nonJson:'Failed: non-JSON response',greeting:'Welcome! Pick a skill, set the details, and run the agent.',
   fan:'Fan Assistant',predict:'Match Predictor',tactical:'Tactical Analyst',summary:'Match Summary',command:'Command Center',
   quickText:{daily:'What should Saudi fans watch today?',predict:'Predict this fixture and explain confidence clearly.',tactical:'Analyze the tactical strengths, weaknesses, and key matchups.',summary:'Summarize this match for social media and fans.',command:'Give executive dashboard insights for today.'},
-  liveTitle:'Live Football Data',liveSub:'Fixtures, standings and connection status — live from API-Football, with official team & league logos.',tabFixtures:'Fixtures',tabStandings:'Standings',tabStatus:'API status',refresh:'Refresh',liveLoading:'Loading…',noFixtures:'No fixtures found for this league/season. Adjust the League ID / Season.',noStandings:'No standings available for this league/season.',apiErr:'API error',plan:'Plan',quota:'Daily quota',account:'Account',team:'Team',
+  liveTitle:'Live Football Data',liveSub:'Fixtures, standings and connection status — live from API-Football, with official team & league logos.',tabFixtures:'Fixtures',tabStandings:'Standings',tabStatus:'API status',refresh:'Refresh',liveLoading:'Loading…',noFixtures:'No fixtures found for this league/season. Adjust the League ID / Season.',noStandings:'No standings available for this league/season.',apiErr:'API error',plan:'Plan',quota:'Daily quota',account:'Account',team:'Team',upcoming:'Upcoming',finished:'Finished (with stats)',
   aiInstruction:'Respond in English with clear, fan-friendly wording. Treat the "LIVE API-FOOTBALL MATCH DATA" section below as ground truth and base your lineups, formations, scorers, stats and prediction analysis on it. Only say a detail is unavailable if it is genuinely absent from that data.'},
  ar:{title:'وكيل جماهير <b>كأس العالم 2026</b>',subtitle:'مساعد ذكي للجماهير مرتبط ببيانات API-Football و Azure OpenAI عبر بوابة الذكاء الاصطناعي المركزية.',
   themeCatrion:'كاتريون',themeSaudi:'السعودية',cardModule:'الوحدة',cardModeLabel:'النمط',cardDateLabel:'التاريخ',cardFixtureLabel:'المباراة',cardTeamLabel:'الفريق',
@@ -338,7 +343,7 @@ const i18n={
   ready:'جاهز.',outputTitle:'مخرجات الوكيل',outputSub:'استجابة من Azure OpenAI باستخدام سياق API-Football.',rawJson:'JSON الخام',running:'جاري التشغيل…',failed:'فشل',done:'تم',error:'خطأ',nonJson:'فشل: الاستجابة ليست JSON',greeting:'مرحبًا! اختر مهارة، حدّد التفاصيل، ثم شغّل الوكيل.',
   fan:'مساعد الجماهير',predict:'متوقّع المباراة',tactical:'محلل تكتيكي',summary:'ملخص المباراة',command:'مركز القيادة',
   quickText:{daily:'ما أهم ما يتابعه المشجع السعودي اليوم؟',predict:'توقّع نتيجة هذه المباراة واشرح مستوى الثقة بوضوح.',tactical:'حلل نقاط القوة والضعف التكتيكية والمواجهات المهمة.',summary:'لخص هذه المباراة للجماهير ووسائل التواصل.',command:'أعطني رؤى تنفيذية ولوحة قيادة لليوم.'},
-  liveTitle:'بيانات كرة القدم الحية',liveSub:'المباريات والترتيب وحالة الاتصال — مباشرة من API-Football مع شعارات الفرق والبطولات الرسمية.',tabFixtures:'المباريات',tabStandings:'الترتيب',tabStatus:'حالة API',refresh:'تحديث',liveLoading:'جارٍ التحميل…',noFixtures:'لا توجد مباريات لهذه البطولة/الموسم. عدّل رقم البطولة/الموسم.',noStandings:'لا يوجد ترتيب متاح لهذه البطولة/الموسم.',apiErr:'خطأ في API',plan:'الباقة',quota:'الحصة اليومية',account:'الحساب',team:'الفريق',
+  liveTitle:'بيانات كرة القدم الحية',liveSub:'المباريات والترتيب وحالة الاتصال — مباشرة من API-Football مع شعارات الفرق والبطولات الرسمية.',tabFixtures:'المباريات',tabStandings:'الترتيب',tabStatus:'حالة API',refresh:'تحديث',liveLoading:'جارٍ التحميل…',noFixtures:'لا توجد مباريات لهذه البطولة/الموسم. عدّل رقم البطولة/الموسم.',noStandings:'لا يوجد ترتيب متاح لهذه البطولة/الموسم.',apiErr:'خطأ في API',plan:'الباقة',quota:'الحصة اليومية',account:'الحساب',team:'الفريق',upcoming:'قادمة',finished:'منتهية (بالإحصاءات)',
   aiInstruction:'أجب بالعربية بأسلوب واضح ومناسب للجماهير. اعتبر قسم "LIVE API-FOOTBALL MATCH DATA" أدناه مصدراً موثوقاً، وابنِ تحليلك للتشكيلات والخطط والأهداف والإحصاءات والتوقعات عليه. لا تقل إن معلومة غير متوفرة إلا إذا كانت غائبة فعلاً عن تلك البيانات.'}
 };
 let lang=localStorage.getItem('wc_agent_lang')||'en';
@@ -364,27 +369,36 @@ function fmtStats(st){return (st||[]).map(s=>((s.team&&s.team.name)||'')+': '+(s
 function fmtPred(p){if(!p)return '';const pr=p.predictions||{},pc=pr.percent||{};return 'winner '+((pr.winner&&pr.winner.name)||'-')+', win-or-draw '+pr.win_or_draw+', under/over '+(pr.under_over||'-')+', advice: '+(pr.advice||'-')+', % H/D/A '+(pc.home||'-')+'/'+(pc.draw||'-')+'/'+(pc.away||'-');}
 function fmtInj(inj){return (inj||[]).slice(0,45).map(i=>(((i.team&&i.team.name)||'')+': '+((i.player&&i.player.name)||'')+' — '+((i.player&&i.player.type)||'')+' '+((i.player&&i.player.reason)||'')).trim()).join('\n');}
 async function buildFixtureContext(fid){
-  const [fxR,prR,injR]=await Promise.all([
-    apiGet('fixtures',{id:fid}),
-    apiGet('predictions',{fixture:fid}).catch(()=>null),
-    apiGet('injuries',{fixture:fid}).catch(()=>null)
-  ]);
+  const fxR=await apiGet('fixtures',{id:fid});
   const f=(fxR&&fxR.response&&fxR.response[0])||null;
   if(!f) return {summary:'',raw:null};
-  const pr=(prR&&prR.response&&prR.response[0])||null;
-  const injuries=(injR&&injR.response)||[];
+  let events=f.events||[], lineups=f.lineups||[], stats=f.statistics||[];
+  const jobs=[
+    apiGet('predictions',{fixture:fid}).catch(()=>null),
+    apiGet('injuries',{fixture:fid}).catch(()=>null)
+  ];
+  /* fall back to the dedicated endpoints when the embedded arrays are empty */
+  if(!events.length)  jobs.push(apiGet('fixtures/events',{fixture:fid}).then(r=>{events=(r&&r.response)||events;}).catch(()=>{}));
+  if(!lineups.length) jobs.push(apiGet('fixtures/lineups',{fixture:fid}).then(r=>{lineups=(r&&r.response)||lineups;}).catch(()=>{}));
+  if(!stats.length)   jobs.push(apiGet('fixtures/statistics',{fixture:fid}).then(r=>{stats=(r&&r.response)||stats;}).catch(()=>{}));
+  const out=await Promise.all(jobs);
+  const pr=(out[0]&&out[0].response&&out[0].response[0])||null;
+  const injuries=(out[1]&&out[1].response)||[];
   const sc=f.score||{},ht=sc.halftime||{};
   const P=[];
   P.push('FIXTURE: '+f.teams.home.name+' vs '+f.teams.away.name+' — '+((f.fixture.status&&f.fixture.status.long)||'')+' | '+f.fixture.date);
   P.push('VENUE: '+((f.fixture.venue&&f.fixture.venue.name)||'-')+((f.fixture.venue&&f.fixture.venue.city)?(', '+f.fixture.venue.city):'')+' | REFEREE: '+(f.fixture.referee||'-'));
   P.push('SCORE: '+(f.goals.home==null?'-':f.goals.home)+'-'+(f.goals.away==null?'-':f.goals.away)+' (HT '+(ht.home==null?'-':ht.home)+'-'+(ht.away==null?'-':ht.away)+')');
-  if(f.events&&f.events.length)      P.push('GOALS / CARDS / SUBS (events):\n'+fmtEvents(f.events));
-  if(f.lineups&&f.lineups.length)    P.push('LINEUPS & FORMATIONS:\n'+fmtLineups(f.lineups));
-  if(f.statistics&&f.statistics.length) P.push('TEAM STATISTICS (shots, possession, passes…):\n'+fmtStats(f.statistics));
-  if(pr)                             P.push('MODEL PREDICTION: '+fmtPred(pr));
-  if(injuries.length)                P.push('INJURIES / SIDELINED:\n'+fmtInj(injuries));
+  if(events.length)   P.push('GOALS / CARDS / SUBS (events):\n'+fmtEvents(events));
+  if(lineups.length)  P.push('LINEUPS & FORMATIONS:\n'+fmtLineups(lineups));
+  if(stats.length)    P.push('TEAM STATISTICS (shots, possession, passes…):\n'+fmtStats(stats));
+  if(pr)              P.push('MODEL PREDICTION: '+fmtPred(pr));
+  if(injuries.length) P.push('INJURIES / SIDELINED:\n'+fmtInj(injuries));
+  if(!events.length && !lineups.length && !stats.length){
+    P.push('DATA AVAILABILITY: detailed events, lineups/formations and team statistics are NOT provided by API-Football for this fixture (it is likely not yet played, or this competition does not cover that data). Do not invent them.');
+  }
   const lean=Object.assign({},f); delete lean.players; // drop the huge per-player array
-  return {summary:P.join('\n\n'), raw:{fixture:lean, predictions:pr, injuries}};
+  return {summary:P.join('\n\n'), raw:{fixture:lean, events, lineups, statistics:stats, predictions:pr, injuries}};
 }
 
 async function runAgent(){
@@ -456,7 +470,9 @@ async function loadStatus(){
 async function loadFixtures(){
   const box=$('liveBox');box.innerHTML='<div class="live-empty">'+t('liveLoading')+'</div>';
   try{
-    const d=await apiGet('fixtures',{league:wcLeague(),season:wcSeason(),next:20});
+    const when=($('wcWhen')&&$('wcWhen').value)||'next';
+    const params={league:wcLeague(),season:wcSeason()}; params[when]=20;
+    const d=await apiGet('fixtures',params);
     if(d&&d.ok===false){box.innerHTML='<div class="live-empty">'+esc(d.error||t('apiErr'))+'</div>';return;}
     const r=(d&&d.response)||[];
     if(!r.length){box.innerHTML='<div class="live-empty">'+t('noFixtures')+'</div>';return;}
