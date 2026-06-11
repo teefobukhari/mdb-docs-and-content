@@ -7699,7 +7699,7 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
     background:#0c1830;border-inline-start:1px solid rgba(168,231,255,.2);border-radius:0;padding:70px 14px 28px;
     box-shadow:-24px 0 60px rgba(0,0,0,.55);transform:translateX(105%) !important;transition:transform .28s ease}
   .top-actions.open{transform:none !important}
-  html[dir="rtl"] .top-actions{inset-inline-end:auto;inset-inline-start:0;border-inline-start:0;border-inline-end:1px solid rgba(168,231,255,.2);box-shadow:24px 0 60px rgba(0,0,0,.55);transform:translateX(-105%) !important}
+  html[dir="rtl"] .top-actions{box-shadow:24px 0 60px rgba(0,0,0,.55);transform:translateX(-105%) !important}
   html[dir="rtl"] .top-actions.open{transform:none !important}
   .top-actions .theme-switch,.top-actions .lang-switch{justify-content:center}
   .top-actions .top-link,.top-actions .logout,.top-actions form{width:100%}
