@@ -2028,7 +2028,7 @@ body{
 .modal{
     position:fixed;
     inset:0;
-    z-index:100;
+    z-index:4000;
     background:rgba(7,26,53,.72);
     display:none;
     align-items:center;

@@ -119,7 +119,8 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
             --chip:#7EF4AE;--pin:#06291a;--btn:#1FB573;
         }
         *{box-sizing:border-box}
-        body{margin:0;font-family:'Inter','Cairo',system-ui,sans-serif;min-height:100vh;color:var(--ink);
+        body{margin:0;font-family:'Inter','Cairo',system-ui,sans-serif;min-height:100vh;color:var(--ink);overflow-x:hidden;
+            display:flex;flex-direction:column;
             background:radial-gradient(circle at 100% 0%,rgba(14,99,230,.18),transparent 38%),linear-gradient(135deg,var(--bg1),var(--bg2) 58%,var(--bg3))}
         html[dir="rtl"] body{font-family:'Cairo','Inter',system-ui,sans-serif}
         a{text-decoration:none}
@@ -188,7 +189,13 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         .dot-caf{background:#ff8b5b}.dot-afc{background:#e94747}.dot-ofc{background:#b78bff}
 
         /* ===== Map stage ===== */
-        .stage{position:relative;height:calc(100vh - 142px);min-height:460px}
+        .stage{position:relative;flex:1 1 auto;min-height:460px;overflow:hidden}
+        /* Footer — matches the CATRION site */
+        .tm-footer{padding:15px 20px;background:linear-gradient(120deg,var(--bar1),var(--bar2));border-top:1px solid var(--line);
+            display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+        .tm-footer b{font-size:12.5px;font-weight:900;color:#fff}
+        .tm-footer .tm-foot-note{font-size:11.5px;color:var(--muted);font-weight:700}
+        @media(max-width:680px){.tm-footer{flex-direction:column;text-align:center;gap:8px}}
         #map{position:absolute;inset:0;z-index:1}
         .leaflet-container{background:radial-gradient(120% 120% at 50% 0%,#123a6b 0%,#0a1f3e 55%,#06152c 100%)}
         html[data-theme="saudi"] .leaflet-container{background:radial-gradient(120% 120% at 50% 0%,#0a3f27 0%,#06291a 55%,#03190f 100%)}
@@ -294,6 +301,11 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
     </div>
 </main>
 
+<footer class="tm-footer">
+    <b>Developed by CATRION &copy; IT Digital &amp; Transformation</b>
+    <span class="tm-foot-note" data-i18n="footerNote">CATRION FIFA World Cup 2026 Challenge</span>
+</footer>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
@@ -312,7 +324,7 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         confUEFA:'Europe', confCONMEBOL:'South America', confCONCACAF:'N. & C. America', confCAF:'Africa', confAFC:'Asia', confOFC:'Oceania',
         hintTitle:'Tap any country', hintText:"Explore the nations of the 2026 World Cup — each team's football story, key players and standout moments.",
         stars:'★ Key players', moments:'🏆 Key moments', wcRecord:'World Cup record', didyouknow:'💡 Did you know?', fixtures:'View fixtures →', soon:'Full team profile coming soon.',
-        group:'Group', host:'Host'
+        group:'Group', host:'Host', footerNote:'CATRION FIFA World Cup 2026 Challenge'
       },
       ar:{
         brandSub:TEAM_COUNT+' منتخباً على الخريطة التفاعلية', hostLabel:'المستضيف:', searchPh:'ابحث عن منتخب…',
@@ -321,7 +333,7 @@ $logoPath = '/WC2026/partials/CATRION%20logo.png';
         confUEFA:'أوروبا', confCONMEBOL:'أمريكا الجنوبية', confCONCACAF:'أمريكا الشمالية والوسطى', confCAF:'أفريقيا', confAFC:'آسيا', confOFC:'أوقيانوسيا',
         hintTitle:'اضغط على أي دولة', hintText:'استكشف منتخبات كأس العالم 2026 — قصة كل منتخب الكروية، وأبرز نجومه، ولحظاته المميزة.',
         stars:'★ أبرز النجوم', moments:'🏆 لحظات مميزة', wcRecord:'سجل كأس العالم', didyouknow:'💡 هل تعلم؟', fixtures:'عرض المباريات ←', soon:'سيتوفر ملف هذا المنتخب قريباً.',
-        group:'المجموعة', host:'مستضيف'
+        group:'المجموعة', host:'مستضيف', footerNote:'تحدي كاتريون لكأس العالم 2026'
       }
     };
     var lang = (function(){ try{ return localStorage.getItem('wc_lang')||'en'; }catch(e){ return 'en'; } })();
