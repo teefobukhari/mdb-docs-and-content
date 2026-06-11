@@ -4534,6 +4534,12 @@ body:before{
 </head>
 
 <body>
+<?php
+/* Is the current participant an admin? (role column on WC2026_Users) */
+$wcIsAdmin = false;
+$wcRoleRows = wc_rows($conn, "SELECT role FROM WC2026_Users WHERE id = ? LIMIT 1", "i", [$userId]);
+if ($wcRoleRows) { $wcIsAdmin = strtolower(trim((string)($wcRoleRows[0]['role'] ?? ''))) === 'admin'; }
+?>
 
 <header class="hero">
     <div class="nav">
@@ -4562,6 +4568,7 @@ body:before{
             <a href="/WC2026/" class="top-link active" data-i18n="navHome">Home</a>
             <a href="/WC2026/matches" class="top-link" data-i18n="navMatches">Matches</a>
             <a href="/WC2026/teams-map/" class="top-link" data-i18n="navTeamsMap">Teams Map</a>
+            <?php if ($wcIsAdmin): ?><a href="/WC2026/admin.php" class="top-link" data-i18n="navAdmin" style="background:linear-gradient(135deg,#F5C85B,#FFE19A);color:#06202e;border-color:transparent;font-weight:900">⚙ Admin</a><?php endif; ?>
             <button type="button" class="top-link icon-link" id="openFanFilterBtn" title="Fan Filter Studio">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6h0a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
                 <span data-i18n="navFanFilter">Fan Filter</span>
