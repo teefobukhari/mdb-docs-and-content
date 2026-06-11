@@ -7995,5 +7995,18 @@ html[dir="rtl"] #fanFilterModal .ff-consent-text,html[dir="rtl"] #fanFilterModal
 })();
 </script>
 
+<style>
+/* Final override — smaller brand logo + title in the header (placed last so it
+   wins over the earlier responsive .logo-card / .brand-title rules). */
+.nav .logo-card{width:108px !important;height:42px !important;border-radius:13px !important}
+.nav .logo-card img{max-width:84px !important;max-height:28px !important}
+.nav .brand-title{font-size:14px !important;line-height:1.15 !important}
+@media(max-width:768px){
+  .nav .logo-card{width:92px !important;height:36px !important;border-radius:11px !important}
+  .nav .logo-card img{max-width:72px !important;max-height:24px !important}
+  .nav .brand-title{font-size:12.5px !important}
+}
+</style>
+
 </body>
 </html>
