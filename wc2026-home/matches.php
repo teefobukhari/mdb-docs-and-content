@@ -356,6 +356,21 @@ $rankRows = wc_rows($conn, "
     ) r WHERE user_id=? LIMIT 1", "i", [$userId]);
 if ($rankRows) $myRank = '#' . (int)$rankRows[0]['rank_no'];
 
+/* ---- Per-match reaction + comment counts (for the card badges) ---- */
+$matchReactCounts   = [];
+$matchCommentCounts = [];
+$mids = [];
+foreach ($matches as $mm) $mids[] = (int)$mm['id'];
+if ($mids) {
+    $inList = implode(',', array_map('intval', $mids)); // ints only -> safe to inline
+    foreach (wc_rows($conn, "SELECT match_id, COUNT(*) AS c FROM WC2026_Match_Reactions WHERE match_id IN ($inList) GROUP BY match_id") as $r) {
+        $matchReactCounts[(int)$r['match_id']] = (int)$r['c'];
+    }
+    foreach (wc_rows($conn, "SELECT match_id, COUNT(*) AS c FROM WC2026_Match_Comments WHERE status='Active' AND match_id IN ($inList) GROUP BY match_id") as $r) {
+        $matchCommentCounts[(int)$r['match_id']] = (int)$r['c'];
+    }
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1477,6 +1492,20 @@ body{
 .status.live{background:rgba(17,163,106,.18) !important;color:#7EF4AE !important;box-shadow:none !important}
 .empty{background:rgba(245,200,91,.12) !important;border-color:rgba(245,200,91,.3) !important;color:#FFE19A !important}
 .details-btn{background:rgba(255,255,255,.12) !important;border:1px solid rgba(168,231,255,.18) !important}
+
+/* Wide layout + full-width banner like home.php */
+.nav,.hero-content,.container{max-width:1680px !important}
+@media(min-width:1500px){.nav,.hero-content,.container{max-width:1720px !important}}
+
+/* Match card: total reactions + comment indicator (always available) */
+.match-social-mini{position:relative;z-index:1;display:flex;gap:10px;flex-wrap:wrap;align-items:center;width:100%;
+    margin-top:12px;padding:9px 11px;border:1px solid rgba(168,231,255,.16);border-radius:14px;
+    background:rgba(255,255,255,.04);color:#fff;cursor:pointer;font:inherit;text-align:start;transition:.2s ease}
+.match-social-mini:hover{background:rgba(245,200,91,.12);border-color:rgba(245,200,91,.5)}
+.msm-pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800}
+.msm-pill b{font-weight:900;color:#FFE19A}
+.msm-comment{color:rgba(255,255,255,.78)}
+.msm-comment.muted{color:rgba(255,255,255,.5)}
 @media(max-width:640px){.hero{padding:22px 18px 86px !important}}
 </style>
 </head>
@@ -1733,6 +1762,16 @@ body{
                                 <br>Last sync: <?= h(date('d M Y h:i A', strtotime((string)$m['last_api_sync']))) ?>
                             <?php endif; ?>
                         </div>
+
+                        <?php $rcCount = (int)($matchReactCounts[(int)$m['id']] ?? 0); $ccCount = (int)($matchCommentCounts[(int)$m['id']] ?? 0); ?>
+                        <button type="button" class="match-social-mini" data-predict-url="/WC2026/predict?match=<?= (int)$m['id'] ?>" title="Open reactions &amp; comments">
+                            <span class="msm-pill msm-react">🔥 <b><?= $rcCount ?></b> <span data-i18n="reactionsWord">reactions</span></span>
+                            <?php if ($ccCount > 0): ?>
+                                <span class="msm-pill msm-comment">💬 <b><?= $ccCount ?></b> <span data-i18n="commentsWord">comments</span></span>
+                            <?php else: ?>
+                                <span class="msm-pill msm-comment muted">💬 <span data-i18n="commentWord">Comment</span></span>
+                            <?php endif; ?>
+                        </button>
 
                         <div class="match-actions">
                             <?php if ($isOpen): ?>
@@ -2001,6 +2040,7 @@ html[dir="rtl"] .nav-actions{direction:rtl}
       heroIntro:'Browse the official World Cup 2026 match list, live status, upcoming fixtures, and final results. Submit predictions before kickoff and climb the leaderboard.',
       statTotal:'Total Matches',statTotalNote:'Synced fixtures',statUpcoming:'Upcoming',statUpcomingNote:'Open for predictions',statLive:'Live Now',statLiveNote:'Currently playing',statFinished:'Finished',statFinishedNote:'Results available',
       tabAll:'All',tabUpcoming:'Upcoming',tabLive:'Live',tabFinished:'Finished',searchPh:'Search team or round...',searchBtn:'Search',
+      reactionsWord:'reactions',commentsWord:'comments',commentWord:'Comment',
       globeKicker:'WORLD CUP 2026',globeTitle:'Nations on the Pitch',globeP:'Tap a nation to jump to its fixtures.',
       footerDev:'Developed by CATRION © IT Digital & Transformation',close:'Close',
       pfType:'User Type',pfDays:'Days Played',statOverall:'Overall Score',statWeekly:'Weekly Score',statRank:'My Rank',
@@ -2016,6 +2056,7 @@ html[dir="rtl"] .nav-actions{direction:rtl}
       heroIntro:'تصفّح قائمة مباريات كأس العالم 2026 الرسمية، والحالة المباشرة، والمباريات القادمة والنتائج النهائية. أرسل توقعاتك قبل انطلاق المباراة وتصدّر لوحة الصدارة.',
       statTotal:'إجمالي المباريات',statTotalNote:'مباريات متزامنة',statUpcoming:'القادمة',statUpcomingNote:'مفتوحة للتوقع',statLive:'مباشر الآن',statLiveNote:'تُلعب حاليًا',statFinished:'منتهية',statFinishedNote:'النتائج متاحة',
       tabAll:'الكل',tabUpcoming:'القادمة',tabLive:'مباشر',tabFinished:'منتهية',searchPh:'ابحث عن فريق أو دور...',searchBtn:'بحث',
+      reactionsWord:'تفاعلات',commentsWord:'تعليقات',commentWord:'تعليق',
       globeKicker:'كأس العالم 2026',globeTitle:'المنتخبات في الملعب',globeP:'انقر منتخبًا للانتقال إلى مبارياته.',
       footerDev:'تطوير كاتريون © تقنية المعلومات والتحول الرقمي',close:'إغلاق',
       pfType:'نوع المستخدم',pfDays:'أيام اللعب',statOverall:'النقاط الإجمالية',statWeekly:'نقاط الأسبوع',statRank:'ترتيبي',
