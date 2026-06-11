@@ -4724,7 +4724,39 @@ body:before{
                             <stop offset="1" stop-color="rgba(14,99,230,.12)"/>
                         </linearGradient>
                     </defs>
-                    <path class="hostmap-land" d="M70,150 C66,180 70,225 84,255 C92,285 104,300 116,312 C150,330 200,345 235,352 C232,388 220,420 238,452 C254,486 286,500 300,478 C312,452 322,430 318,402 C356,414 402,410 442,414 C460,420 466,452 456,476 C470,468 480,448 486,420 C500,392 506,300 500,250 C496,210 488,196 470,196 C440,180 400,172 360,170 C300,164 220,162 160,170 C120,150 96,140 70,150 Z"/>
+                    <!-- Detailed North-America silhouette (Canada • USA • Mexico) -->
+                    <path class="hostmap-land" d="M74,148
+                        C70,168 70,196 78,224
+                        C70,236 70,254 82,262
+                        C86,284 98,300 112,310
+                        C122,318 134,322 150,328
+                        C188,342 214,346 236,350
+                        C234,372 226,392 224,410
+                        C222,432 230,446 240,458
+                        C250,478 270,492 286,492
+                        C300,492 306,476 302,460
+                        C314,452 322,438 320,420
+                        C318,406 322,398 332,398
+                        C356,402 384,400 408,400
+                        C420,402 432,406 440,416
+                        C446,426 446,442 442,456
+                        C440,466 448,470 454,462
+                        C462,448 464,430 462,412
+                        C476,404 488,388 494,366
+                        C504,330 508,288 502,252
+                        C500,228 494,210 482,200
+                        C470,192 452,190 440,196
+                        C420,184 396,178 372,176
+                        C336,172 300,172 268,174
+                        C232,176 196,170 164,168
+                        C140,162 112,154 92,150
+                        C86,148 80,148 74,148 Z"/>
+                    <!-- Baja California peninsula -->
+                    <path class="hostmap-land hostmap-land2" d="M108,312 C104,338 112,372 126,398 C132,410 124,416 116,404 C100,376 96,338 108,312 Z"/>
+                    <!-- Great Lakes (water cut-outs) -->
+                    <ellipse class="hostmap-lake" cx="404" cy="206" rx="20" ry="9"></ellipse>
+                    <ellipse class="hostmap-lake" cx="430" cy="196" rx="12" ry="7"></ellipse>
+                    <ellipse class="hostmap-lake" cx="384" cy="220" rx="13" ry="6"></ellipse>
                     <g class="hostmap-grid">
                         <line x1="0" y1="173" x2="640" y2="173"/><line x1="0" y1="346" x2="640" y2="346"/>
                         <line x1="213" y1="0" x2="213" y2="520"/><line x1="426" y1="0" x2="426" y2="520"/>
@@ -4958,7 +4990,11 @@ body:before{
                                     <?php
                                         $bmStatus = wc_match_status_label($bm);
                                         $bmUpcomingClass = $bmStatus === 'Upcoming' ? 'upcoming' : '';
-                                        $bmVenue = trim((string)($bm['stadium'] ?? '') . (!empty($bm['city']) ? ' • ' . $bm['city'] : ''));
+                                        $bmStadiumRaw = (string)($bm['stadium'] ?? '');
+                                        // Projected fixtures use a placeholder venue; only show a real DB venue.
+                                        $bmVenue = (stripos($bmStadiumRaw, 'Projected') !== false)
+                                            ? ''
+                                            : trim($bmStadiumRaw . (!empty($bm['city']) ? ' • ' . $bm['city'] : ''));
                                         $bmWhen  = date('D, d M Y • h:i A', strtotime((string)$bm['match_datetime']));
                                     ?>
                                     <div class="bracket-match">
@@ -6909,6 +6945,7 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .hostmap-svg{width:100%;flex:1;display:block}
 .hostmap-land{fill:url(#naFill);stroke:rgba(168,231,255,.5);stroke-width:1.4;filter:drop-shadow(0 0 14px rgba(85,183,255,.25))}
 .hostmap-land2{fill:rgba(85,183,255,.16);stroke:rgba(168,231,255,.4);stroke-width:1.2}
+.hostmap-lake{fill:#06203f;stroke:rgba(168,231,255,.22);stroke-width:.8}
 .hostmap-grid line{stroke:rgba(168,231,255,.08);stroke-width:1}
 .hc-label{fill:rgba(255,255,255,.85);font:800 11px Inter,sans-serif;paint-order:stroke;stroke:rgba(6,26,54,.72);stroke-width:2.6}
 .hc-dot{fill:#fff}

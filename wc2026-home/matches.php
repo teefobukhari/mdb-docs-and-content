@@ -1522,7 +1522,6 @@ body{
             </div>
             <div>
                 <div class="brand-title">CATRION FIFA World Cup 2026 Challenge</div>
-                <div class="brand-sub">Real Matches Center</div>
             </div>
         </div>
 
@@ -1556,14 +1555,6 @@ body{
         </div>
     </div>
 
-    <div class="hero-content">
-        <div class="badge"><i></i> <span data-i18n="heroBadge">Reading from Database</span></div>
-        <h1 data-i18n-html="heroTitle">Real Matches.<br><span>Real Results.</span></h1>
-        <p data-i18n="heroIntro">
-            Browse the official World Cup 2026 match list, live status, upcoming fixtures,
-            and final results. Submit predictions before kickoff and climb the leaderboard.
-        </p>
-    </div>
 </header>
 
 <main class="container">
