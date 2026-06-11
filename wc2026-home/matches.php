@@ -1445,15 +1445,17 @@ body{
         linear-gradient(180deg,#04142B 0%,#071F42 45%,#04142B 100%) !important;
     color:#fff !important;
 }
-/* Header to match home.php (dark gradient + KV banner) */
+/* Header to match home.php (same banner size: tall hero, content below it) */
 .hero{
-    min-height:300px;
-    padding:24px 38px 90px !important;
+    min-height:405px !important;
+    padding:24px 38px 44px !important;
     background:
         radial-gradient(circle at 72% 18%, rgba(14,99,230,.34), transparent 32%),
         radial-gradient(circle at 15% 28%, rgba(85,183,255,.16), transparent 30%),
         linear-gradient(135deg,#04142B 0%,#08254D 48%,#0E63E6 100%) !important;
 }
+/* sit content below the banner (no overlap) — like home */
+.container{margin-top:22px !important}
 .hero-banner-layer{
     position:absolute;top:0;left:0;right:0;bottom:0;width:100%;z-index:0;
     background:url('/WC2026/WC-2026-KV.jpg') center center/cover no-repeat;
@@ -1506,7 +1508,7 @@ body{
 .msm-pill b{font-weight:900;color:#FFE19A}
 .msm-comment{color:rgba(255,255,255,.78)}
 .msm-comment.muted{color:rgba(255,255,255,.5)}
-@media(max-width:640px){.hero{padding:22px 18px 86px !important}}
+@media(max-width:640px){.hero{min-height:340px !important;padding:18px 14px 40px !important}}
 </style>
 </head>
 <body>
