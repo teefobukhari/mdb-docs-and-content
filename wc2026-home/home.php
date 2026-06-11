@@ -5227,16 +5227,12 @@ body:before{
 <footer class="wc-footer">
     <div class="wc-footer-inner">
         <div class="wc-foot-brand">
-            <div class="logo-card">
-                <img src="<?= htmlspecialchars($logoPath, ENT_QUOTES, 'UTF-8') ?>" alt="CATRION">
-            </div>
             <div class="wc-foot-by">
-                <b>CATRION &copy; IT Digital &amp; Transformation</b>
-                <span class="wc-odd">One-Day-Delivery</span>
+                <b>Developed by CATRION &copy; IT Digital &amp; Transformation</b>
             </div>
         </div>
         <div class="wc-foot-note" data-i18n="footerNote">
-            CATRION FIFA World Cup 2026 Challenge • Prediction League &amp; Daily Goal Rush
+            CATRION FIFA World Cup 2026 Challenge
         </div>
     </div>
 </footer>
@@ -6220,7 +6216,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       tapToShoot:'Tap the ball to shoot!',tapHintSub:'Use the moving target line and avoid the goalkeeper',
       startGame:'Start Daily Game',shoot:'Shoot',gameTip:'After start, the ball becomes your shoot button.',
       topLeaderboard:'Top Leaderboard',myProfile:'My Profile',pfName:'Name',pfMobile:'Mobile',pfType:'User Type',pfDays:'Days Played',pfParticipants:'Participants',
-      footerNote:'CATRION FIFA World Cup 2026 Challenge • Prediction League & Daily Goal Rush',
+      footerNote:'CATRION FIFA World Cup 2026 Challenge',
       agentName:'WC2026 Fan Agent',agentStatus:'Online • AI-powered',
       agentFan:'Fan Assistant',agentPredict:'Match Predictor',agentTactical:'Tactical Analyst',agentSummary:'Match Summary',agentCommand:'Command Center',
       agentPlaceholder:'Ask about today’s matches…',
@@ -6269,7 +6265,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       tapToShoot:'انقر الكرة للتسديد!',tapHintSub:'استخدم خط التصويب المتحرك وتفادَ الحارس',
       startGame:'ابدأ اللعبة اليومية',shoot:'سدّد',gameTip:'بعد البدء تتحوّل الكرة إلى زر التسديد.',
       topLeaderboard:'لوحة الصدارة',myProfile:'ملفي',pfName:'الاسم',pfMobile:'الجوال',pfType:'نوع المستخدم',pfDays:'أيام اللعب',pfParticipants:'المشاركون',
-      footerNote:'تحدي كأس العالم 2026 • دوري التوقعات وتحدي الأهداف اليومي',
+      footerNote:'تحدي كاتريون لكأس العالم 2026',
       agentName:'وكيل جماهير 2026',agentStatus:'متصل • مدعوم بالذكاء',
       agentFan:'مساعد الجماهير',agentPredict:'متوقّع المباراة',agentTactical:'محلل تكتيكي',agentSummary:'ملخص المباراة',agentCommand:'مركز القيادة',
       agentPlaceholder:'اسأل عن مباريات اليوم…',
