@@ -9,7 +9,16 @@
  * moments (see teams_data.php) so the map popups show real detail when tapped.
  */
 
-require_once __DIR__ . '/teams_data.php';
+/* Football-story dataset. Guarded so a missing/undeployed teams_data.php
+ * degrades gracefully (map still works, popups just omit the extra detail)
+ * instead of fataling the whole page. */
+$wcTeamsDataFile = __DIR__ . '/teams_data.php';
+if (is_file($wcTeamsDataFile)) {
+    require_once $wcTeamsDataFile;
+}
+if (!function_exists('wc_team_meta')) {
+    function wc_team_meta(string $code = ''): array { return []; }
+}
 
 if (!function_exists('wc_tm_country_code')) {
     function wc_tm_country_code(string $name): string {
