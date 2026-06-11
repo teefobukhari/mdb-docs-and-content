@@ -88,7 +88,7 @@ function wc_stage_key(?string $roundName): string {
 
     // Order matters: "Quarter Finals" / "Semi Finals" both contain "FINAL",
     // so check the more specific rounds BEFORE the generic Final.
-    if (str_contains($r, 'THIRD') || str_contains($r, 'PLAY-OFF')) return 'Third Place';
+    if (str_contains($r, 'THIRD') || str_contains($r, '3RD') || str_contains($r, 'PLAY-OFF')) return 'Third Place';
     if (str_contains($r, 'QUARTER')) return 'Quarter Finals';
     if (str_contains($r, 'SEMI')) return 'Semi Finals';
     if (str_contains($r, '16') || str_contains($r, 'LAST_16') || str_contains($r, 'ROUND OF 16')) return 'Round of 16';
@@ -417,6 +417,12 @@ $WC_FIXTURES_SUBQUERY = "
             COALESCE(goals_away, ft_away) AS away_score,
             ht_home AS home_halftime_score,
             ht_away AS away_halftime_score,
+            ft_home AS ft_home,
+            ft_away AS ft_away,
+            et_home AS et_home,
+            et_away AS et_away,
+            pen_home AS pen_home,
+            pen_away AS pen_away,
             NULL AS winner_team_id,
             CASE WHEN status_short IN ('LIVE','1H','HT','2H','ET','BT','P','SUSP','INT') THEN 1 ELSE 0 END AS is_live,
             CASE WHEN status_short IN ('FT','AET','PEN') THEN 1 ELSE 0 END AS is_finished,
@@ -736,8 +742,43 @@ foreach ($knockoutMatches as $km) {
     $knockoutStages[$stageKey][] = $km;
 }
 
+/* ---- Merge REAL knockout fixtures from wc_fixtures (override projected per stage) ---- */
+$realKnockout = wc_rows($conn, "
+    SELECT id, home_team, away_team, home_logo, away_logo, match_datetime, stadium, city,
+           round_name, status_short, status_long, elapsed,
+           home_score, away_score, home_halftime_score, away_halftime_score,
+           ft_home, ft_away, et_home, et_away, pen_home, pen_away,
+           is_live, is_finished
+    FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches
+    WHERE round_name IS NOT NULL
+      AND ( round_name LIKE '%Round of 16%' OR round_name LIKE '%Round of 32%'
+            OR round_name LIKE '%Quarter%'   OR round_name LIKE '%Semi%'
+            OR round_name LIKE '%Final%'      OR round_name LIKE '%3rd Place%'
+            OR round_name LIKE '%Third%' )
+    ORDER BY match_datetime ASC
+");
+if (!empty($realKnockout)) {
+    wc_attach_flags($realKnockout, $flagByName, $flagByCode);
+    $realByStage = [];
+    foreach ($realKnockout as $rk) {
+        $realByStage[wc_stage_key($rk['round_name'] ?? '')][] = $rk;
+    }
+    // A stage with real fixtures replaces its projected placeholders.
+    foreach ($realByStage as $sk => $rows) {
+        if (!empty($rows)) $knockoutStages[$sk] = $rows;
+    }
+}
+
+/* recompute totals across whatever now fills each stage */
+$knockoutMatches = [];
+foreach ($knockoutStages as $stRows) {
+    foreach ($stRows as $r) $knockoutMatches[] = $r;
+}
 $knockoutTotal = count($knockoutMatches);
 $knockoutFinished = 0;
+foreach ($knockoutMatches as $r) {
+    if (!empty($r['is_finished'])) $knockoutFinished++;
+}
 
 $leaderboard = wc_rows($conn, "
     SELECT 
@@ -4825,6 +4866,18 @@ body:before{
         </div>
     </section>
 
+    <!-- (1) Participating Teams Map — the interactive 48-nation map shown as a card -->
+    <section class="card teams-map-card" id="teamsMapCard">
+        <div class="map-head">
+            <div class="map-title"><span class="map-dot"></span> <span data-i18n="teamsMapTitle">Participating Teams Map</span></div>
+            <a href="/WC2026/teams-map/" target="_blank" rel="noopener" class="match-link soft" data-i18n="openTeamsMap">Open Full Map ↗</a>
+        </div>
+        <div class="teams-map-sub" data-i18n="teamsMapSub">Explore all 48 qualified nations — tap any country for its football story, stars and key moments.</div>
+        <div class="teams-map-frame-wrap">
+            <iframe class="teams-map-frame" src="/WC2026/teams-map/" title="World Cup 2026 Teams Map" loading="lazy"></iframe>
+        </div>
+    </section>
+
     <?php /* legacy world-map markup removed in favour of the host-cities board */ if (false): ?>
     <section class="card live-map-card">
         <div class="live-map-bg"></div>
@@ -5005,6 +5058,17 @@ body:before{
                                             ? ''
                                             : trim($bmStadiumRaw . (!empty($bm['city']) ? ' • ' . $bm['city'] : ''));
                                         $bmWhen  = date('D, d M Y • h:i A', strtotime((string)$bm['match_datetime']));
+                                        // Richer wc_fixtures detail for the info popup
+                                        $bmPair = function($a, $b) use ($bm) {
+                                            $va = $bm[$a] ?? null; $vb = $bm[$b] ?? null;
+                                            return (!is_null($va) && !is_null($vb)) ? ((int)$va . ' - ' . (int)$vb) : '';
+                                        };
+                                        $bmHt  = $bmPair('home_halftime_score', 'away_halftime_score');
+                                        $bmFt  = $bmPair('ft_home', 'ft_away');
+                                        $bmEt  = $bmPair('et_home', 'et_away');
+                                        $bmPen = $bmPair('pen_home', 'pen_away');
+                                        $bmStatusLong = (string)($bm['status_long'] ?? '');
+                                        $bmElapsed = $bm['elapsed'] ?? null;
                                     ?>
                                     <div class="bracket-match <?= $bmStatus === 'Finished' ? 'is-finished' : ($bmStatus === 'Live' ? 'is-live' : '') ?>" role="button" tabindex="0" aria-label="Match details"
                                         data-round="<?= htmlspecialchars($stageName, ENT_QUOTES, 'UTF-8') ?>"
@@ -5015,6 +5079,12 @@ body:before{
                                         data-hs="<?= is_null($bm['home_score']) ? '-' : (int)$bm['home_score'] ?>"
                                         data-as="<?= is_null($bm['away_score']) ? '-' : (int)$bm['away_score'] ?>"
                                         data-status="<?= htmlspecialchars($bmStatus, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-statuslong="<?= htmlspecialchars($bmStatusLong, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-elapsed="<?= htmlspecialchars((string)($bmElapsed ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-ht="<?= htmlspecialchars($bmHt, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-ft="<?= htmlspecialchars($bmFt, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-et="<?= htmlspecialchars($bmEt, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-pen="<?= htmlspecialchars($bmPen, ENT_QUOTES, 'UTF-8') ?>"
                                         data-when="<?= htmlspecialchars($bmWhen, ENT_QUOTES, 'UTF-8') ?>"
                                         data-venue="<?= htmlspecialchars($bmVenue, ENT_QUOTES, 'UTF-8') ?>">
                                         <div class="bracket-row">
@@ -5457,6 +5527,10 @@ body:before{
             <div class="bi-row"><span data-i18n="biRoundLbl">Round</span><b id="biRoundLine">—</b></div>
             <div class="bi-row"><span data-i18n="biStatusLbl">Status</span><b id="biStatus">—</b></div>
             <div class="bi-row" id="biScoreRow"><span data-i18n="biScoreLbl">Score</span><b id="biScoreLine">—</b></div>
+            <div class="bi-row" id="biHtRow"><span data-i18n="biHtLbl">Half-time</span><b id="biHt">—</b></div>
+            <div class="bi-row" id="biFtRow"><span data-i18n="biFtLbl">Full-time</span><b id="biFt">—</b></div>
+            <div class="bi-row" id="biEtRow"><span data-i18n="biEtLbl">Extra time</span><b id="biEt">—</b></div>
+            <div class="bi-row" id="biPenRow"><span data-i18n="biPenLbl">Penalties</span><b id="biPen">—</b></div>
             <div class="bi-row"><span data-i18n="biKickoffLbl">Kickoff</span><b id="biWhen">—</b></div>
             <div class="bi-row" id="biVenueRow"><span data-i18n="biVenueLbl">Venue / Location</span><b id="biVenue">—</b></div>
         </div>
@@ -6142,8 +6216,18 @@ document.addEventListener('DOMContentLoaded', function(){
         document.getElementById('biAway').textContent = ds.away || '—';
         document.getElementById('biHomeScore').textContent = numeric ? hs : '-';
         document.getElementById('biAwayScore').textContent = numeric ? as : '-';
-        document.getElementById('biStatus').textContent = ds.status || '—';
+        // Status with live minute / long label from wc_fixtures (projected paths keep the friendly label)
+        var rawLong = ds.statuslong;
+        var st = (rawLong && rawLong!=='Projected') ? rawLong : (ds.status || '—');
+        if((ds.status||'')==='Live' && ds.elapsed) st += " · " + ds.elapsed + "'";
+        document.getElementById('biStatus').textContent = st;
         document.getElementById('biWhen').textContent = ds.when || '—';
+        // Extra score breakdown (half-time / full-time / extra-time / penalties)
+        function setDetail(rowId, valId, val){ var b=document.getElementById(valId); if(b) b.textContent = val||'—'; setRow(rowId, !!val); }
+        setDetail('biHtRow','biHt', ds.ht);
+        setDetail('biFtRow','biFt', ds.ft);
+        setDetail('biEtRow','biEt', ds.et);
+        setDetail('biPenRow','biPen', ds.pen);
         // Score row (only when there is a result)
         if(numeric){ document.getElementById('biScoreLine').textContent = ds.home+' '+hs+' – '+as+' '+ds.away; setRow('biScoreRow', true); }
         else setRow('biScoreRow', false);
@@ -6595,7 +6679,10 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       ptsGoal:'Daily game — score a goal (by zone)',ptsGolden:'Golden ball goal (bonus)',ptsCombo:'Combo streak (every 3 / 5 goals)',ptsMystery:'Daily food bonus roll',
       ptsPredWin:'Predict the match winner',ptsPredScore:'Predict the correct score',ptsChampion:'Predict the champion (Final only)',ptsPhoto:'Fan Filter photo (once per day)',
       ptsNote:'Procedure: 1) Play the daily game and bank your goal + bonus points. 2) Submit predictions before kickoff — points are awarded automatically once the official result is synced. 3) Save your daily Fan Filter photo. Weekly score resets every week; overall score is cumulative across the tournament.',
-      hostUSA:'USA',hostCAN:'Canada',hostMEX:'Mexico',hostCitiesCap:'16 Host Cities · United States · Canada · Mexico',matchesByLoc:'Matches & Locations',noMapMatches:'No synced matches available yet.'
+      hostUSA:'USA',hostCAN:'Canada',hostMEX:'Mexico',hostCitiesCap:'16 Host Cities · United States · Canada · Mexico',matchesByLoc:'Matches & Locations',noMapMatches:'No synced matches available yet.',
+      biHtLbl:'Half-time',biFtLbl:'Full-time',biEtLbl:'Extra time',biPenLbl:'Penalties',
+      teamsMapTitle:'Participating Teams Map',openTeamsMap:'Open Full Map ↗',teamsMapSub:'Explore all 48 qualified nations — tap any country for its football story, stars and key moments.',
+      next24MapTitle:'Next 24 hours',next24Empty:'No matches in the next 24 hours.'
     },
     ar:{
       brandSub:'دوري التوقعات • تحدي الأهداف اليومي',themeCatrion:'كاتريون',themeSaudi:'السعودية',
@@ -6655,7 +6742,10 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       ptsGoal:'اللعبة اليومية — تسجيل هدف (حسب المنطقة)',ptsGolden:'هدف الكرة الذهبية (مكافأة)',ptsCombo:'سلسلة متتالية (كل 3 / 5 أهداف)',ptsMystery:'لفة المكافأة الغذائية اليومية',
       ptsPredWin:'توقّع الفائز بالمباراة',ptsPredScore:'توقّع النتيجة الصحيحة',ptsChampion:'توقّع البطل (النهائي فقط)',ptsPhoto:'صورة فلتر المشجع (مرة يوميًا)',
       ptsNote:'الطريقة: 1) العب اللعبة اليومية واجمع نقاط الأهداف والمكافآت. 2) أرسل التوقعات قبل انطلاق المباراة — تُمنح النقاط تلقائيًا بعد مزامنة النتيجة الرسمية. 3) احفظ صورة فلتر المشجع اليومية. تُصفّر نقاط الأسبوع أسبوعيًا، أما النقاط الإجمالية فتتراكم طوال البطولة.',
-      hostUSA:'أمريكا',hostCAN:'كندا',hostMEX:'المكسيك',hostCitiesCap:'16 مدينة مضيفة · الولايات المتحدة · كندا · المكسيك',matchesByLoc:'المباريات والمواقع',noMapMatches:'لا توجد مباريات متزامنة بعد.'
+      hostUSA:'أمريكا',hostCAN:'كندا',hostMEX:'المكسيك',hostCitiesCap:'16 مدينة مضيفة · الولايات المتحدة · كندا · المكسيك',matchesByLoc:'المباريات والمواقع',noMapMatches:'لا توجد مباريات متزامنة بعد.',
+      biHtLbl:'الشوط الأول',biFtLbl:'الوقت الأصلي',biEtLbl:'الوقت الإضافي',biPenLbl:'ركلات الترجيح',
+      teamsMapTitle:'خريطة المنتخبات المشاركة',openTeamsMap:'فتح الخريطة كاملة ↗',teamsMapSub:'استكشف المنتخبات الـ48 المتأهلة — اضغط على أي دولة لقصتها الكروية ونجومها ولحظاتها المميزة.',
+      next24MapTitle:'خلال 24 ساعة',next24Empty:'لا توجد مباريات خلال الـ24 ساعة القادمة.'
     }
   };
   var lang = (function(){ try{ return localStorage.getItem('wc_lang')||'en'; }catch(e){ return 'en'; } })();
@@ -7063,6 +7153,26 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .host-pin .host-pin-dot{position:absolute;top:50%;left:50%;width:9px;height:9px;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px rgba(255,255,255,.9),0 2px 6px rgba(0,0,0,.5)}
 .host-pin .host-pin-ring{position:absolute;top:50%;left:50%;width:18px;height:18px;border-radius:50%;transform:translate(-50%,-50%);border:2px solid var(--pc,#3A8BF6);opacity:.65;animation:hostPinPulse 2s ease-out infinite}
 @keyframes hostPinPulse{0%{transform:translate(-50%,-50%) scale(.7);opacity:.8}100%{transform:translate(-50%,-50%) scale(1.9);opacity:0}}
+/* Next-24h hover table on map pins */
+.leaflet-tooltip.host-next24-tip{background:#0B2C55;border:1px solid rgba(168,231,255,.28);color:#fff;border-radius:14px;padding:12px 12px 8px;box-shadow:0 16px 36px rgba(0,0,0,.45);font-weight:700;white-space:normal}
+.leaflet-tooltip.host-next24-tip:before{display:none}
+.host-next24-tip h6{margin:0 0 9px;font-size:12px;color:#A8E7FF;text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center;gap:6px}
+.host-next24-tip table{border-collapse:collapse;font-size:11px;min-width:236px;width:100%}
+.host-next24-tip td{padding:5px 6px;border-bottom:1px solid rgba(255,255,255,.07);vertical-align:middle}
+.host-next24-tip tr:last-child td{border-bottom:0}
+.host-next24-tip .n24-time{color:#FFE19A;font-weight:900;white-space:nowrap}
+.host-next24-tip .n24-team{font-weight:800}
+.host-next24-tip .n24-vs{color:rgba(255,255,255,.55);font-weight:800;padding:0 4px}
+.host-next24-tip .n24-city{color:rgba(168,231,255,.75);font-size:10px;font-weight:700}
+.host-next24-tip .n24-empty{padding:6px 2px;color:rgba(255,255,255,.72);font-weight:700}
+
+/* (1) Participating Teams Map card */
+.teams-map-sub{color:rgba(255,255,255,.72);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
+.teams-map-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:#0a1b30;height:560px}
+.teams-map-frame{width:100%;height:100%;border:0;display:block}
+html[dir="rtl"] .teams-map-sub{text-align:right}
+html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22)}
+@media(max-width:768px){.teams-map-frame-wrap{height:460px}}
 .hostmap-ocean{opacity:.96}
 .hostmap-land{fill:url(#naFill);stroke:rgba(255,255,255,.32);stroke-width:1.2;filter:drop-shadow(0 6px 14px rgba(0,0,0,.35))}
 .hostmap-land2{fill:#246A45;stroke:rgba(255,255,255,.3);stroke-width:1}
@@ -7302,6 +7412,31 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
   var cities=<?= $wcHostCitiesJson ?>;
   var colors={usa:'#3A8BF6',can:'#E94747',mex:'#1FB573'};
 
+  /* Upcoming matches within the next 24 hours (shown on pin hover) */
+  var next24=<?= json_encode(array_map(function($m){
+      return [
+        'time'   => date('d M · h:i A', strtotime((string)$m['match_datetime'])),
+        'home'   => wc_safe_team($m['home_team']),
+        'away'   => wc_safe_team($m['away_team']),
+        'city'   => trim((string)($m['city'] ?? '') . (!empty($m['stadium']) ? ' • ' . $m['stadium'] : '')),
+      ];
+  }, $next24Matches), JSON_UNESCAPED_UNICODE) ?>;
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function tt(k,fb){ return (window.wcTr ? window.wcTr(k) : null) || fb; }
+  function next24Html(){
+    var rows;
+    if(!next24.length){
+      rows='<tr><td class="n24-empty" colspan="2">⏳ '+esc(tt('next24Empty','No matches in the next 24 hours.'))+'</td></tr>';
+    } else {
+      rows=next24.map(function(m){
+        return '<tr><td class="n24-time">'+esc(m.time)+'</td>'+
+               '<td><span class="n24-team">'+esc(m.home)+'</span><span class="n24-vs">vs</span><span class="n24-team">'+esc(m.away)+'</span>'+
+               (m.city?'<div class="n24-city">📍 '+esc(m.city)+'</div>':'')+'</td></tr>';
+      }).join('');
+    }
+    return '<h6>⏱ '+esc(tt('next24MapTitle','Next 24 hours'))+'</h6><table>'+rows+'</table>';
+  }
+
   var map=L.map(el,{zoomControl:true,scrollWheelZoom:false,attributionControl:true})
            .setView([39.5,-96.0],3);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
@@ -7318,7 +7453,9 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
       iconSize:[18,18], iconAnchor:[9,9]
     });
     var m=L.marker([c.lat,c.lng],{icon:icon,title:c.name}).addTo(map);
-    m.bindPopup('<strong>'+c.name+'</strong><br><span style="color:'+col+';font-weight:800">'+c.country.toUpperCase()+'</span>');
+    m.bindPopup('<strong>'+esc(c.name)+'</strong><br><span style="color:'+col+';font-weight:800">'+esc(c.country.toUpperCase())+'</span>');
+    // Hover shows the next-24h matches table
+    m.bindTooltip(next24Html(), {direction:'top', sticky:true, opacity:1, className:'host-next24-tip', maxWidth:300, offset:[0,-6]});
     byCity[c.name.toLowerCase()]=m;
     bounds.push([c.lat,c.lng]);
   });
@@ -7583,6 +7720,19 @@ html[dir="rtl"] .wc-agent-panel{inset-inline-end:auto;inset-inline-start:24px}
     window.wcFFStop = function(){ if(stream){ stream.getTracks().forEach(t=>t.stop()); stream=null; hasCameraStarted=false; } };
     function showMessage(t,x){messageBox.className='message '+(t==='ok'?'ok':'err');messageBox.textContent=x;}
     function clearMessage(){messageBox.className='message';messageBox.textContent='';}
+    function downloadFanImage(){
+        // Download as a real image file (object URL keeps the .jpg extension + image MIME reliably across browsers/mobile).
+        try{
+            var ext=(finalImageBlob&&finalImageBlob.type&&finalImageBlob.type.indexOf('png')>=0)?'png':'jpg';
+            var url=finalImageBlob?URL.createObjectURL(finalImageBlob):finalImageData;
+            var a=document.createElement('a');
+            a.download='wc2026-fan-filter.'+ext; a.href=url; a.rel='noopener'; a.style.display='none';
+            document.body.appendChild(a); a.click(); a.remove();
+            if(finalImageBlob) setTimeout(function(){ URL.revokeObjectURL(url); },4000);
+        }catch(e){
+            var a2=document.createElement('a'); a2.download='wc2026-fan-filter.jpg'; a2.href=finalImageData; a2.click();
+        }
+    }
     function escapeHtml(s){return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#039;');}
     function updateFlip(){ if(!flipCameraBtn) return; if(isMobileDevice&&navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){flipCameraBtn.classList.add('show');flipCameraBtn.disabled=!hasCameraStarted;flipCameraBtn.textContent=currentFacingMode==='user'?'🔄 Back Camera':'🔄 Front Camera';}else{flipCameraBtn.classList.remove('show');flipCameraBtn.disabled=true;} }
     function selPlatform(){const el=document.querySelector('#fanFilterModal .platform-choice.active');if(!el)return null;return{id:el.dataset.platformId,name:el.dataset.platformName,code:el.dataset.platformCode,width:parseInt(el.dataset.width||'720',10),height:parseInt(el.dataset.height||'900',10)};}
@@ -7609,7 +7759,7 @@ html[dir="rtl"] .wc-agent-panel{inset-inline-end:auto;inset-inline-start:24px}
     captureBtn.addEventListener('click',()=>{if(!video.srcObject||!video.videoWidth){showMessage('err','Camera is not ready yet.');return;}compose(video);});
     uploadPhoto.addEventListener('change',()=>{const f=uploadPhoto.files&&uploadPhoto.files[0];if(!f)return;if(!f.type.startsWith('image/')){showMessage('err','Please upload an image file.');return;}const rd=new FileReader();rd.onload=()=>{const im=new Image();im.onload=()=>{if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;hasCameraStarted=false;updateFlip();}compose(im);};im.onerror=()=>showMessage('err','Unable to read photo.');im.src=rd.result;};rd.readAsDataURL(f);});
     retakeBtn.addEventListener('click',()=>{finalImageData='';finalImageBlob=null;previewImage.src='';previewImage.style.display='none';saveDownloadBtn.disabled=true;retakeBtn.disabled=true;if(stream){video.style.display='block';updOverlays();cameraEmpty.style.display='none';captureBtn.disabled=false;}else{video.style.display='none';cameraEmpty.style.display='grid';captureBtn.disabled=true;}clearMessage();});
-    saveDownloadBtn.addEventListener('click',async()=>{if(!finalImageData||!finalImageBlob){showMessage('err','Create your photo first.');return;}const p=selPlatform(),c=selCountry(),f=selFrame();if(!p||!c||!f){showMessage('err','Please choose a platform, country and frame first.');return;}saveDownloadBtn.disabled=true;saveDownloadBtn.textContent='Saving…';try{const fd=new FormData();fd.append('csrf',csrf);fd.append('photo',finalImageBlob,'wc2026-fan-filter.jpg');fd.append('country_id',c.id);fd.append('frame_id',f.id);fd.append('platform_id',p.id);const res=await fetch('/WC/api/save_filter_photo.php',{method:'POST',body:fd,credentials:'same-origin'});const data=await res.json();if(!data.ok)throw new Error(data.message||'Unable to save photo.');const a=document.createElement('a');a.download='wc2026-fan-filter.jpg';a.href=finalImageData;a.click();showMessage('ok','Photo saved and downloaded successfully.');}catch(e){const a=document.createElement('a');a.download='wc2026-fan-filter.jpg';a.href=finalImageData;a.click();showMessage('ok','Photo downloaded. (Server save not reachable.)');}finally{saveDownloadBtn.disabled=false;saveDownloadBtn.textContent='⚽ Save & Download';}});
+    saveDownloadBtn.addEventListener('click',async()=>{if(!finalImageData||!finalImageBlob){showMessage('err','Create your photo first.');return;}const p=selPlatform(),c=selCountry(),f=selFrame();if(!p||!c||!f){showMessage('err','Please choose a platform, country and frame first.');return;}saveDownloadBtn.disabled=true;saveDownloadBtn.textContent='Saving…';try{const fd=new FormData();fd.append('csrf',csrf);fd.append('photo',finalImageBlob,'wc2026-fan-filter.jpg');fd.append('country_id',c.id);fd.append('frame_id',f.id);fd.append('platform_id',p.id);const res=await fetch('/WC/api/save_filter_photo.php',{method:'POST',body:fd,credentials:'same-origin'});const data=await res.json();if(!data.ok)throw new Error(data.message||'Unable to save photo.');downloadFanImage();showMessage('ok','Photo saved and downloaded successfully.');}catch(e){downloadFanImage();showMessage('ok','Photo downloaded. (Server save not reachable.)');}finally{saveDownloadBtn.disabled=false;saveDownloadBtn.textContent='⚽ Save & Download';}});
     window.addEventListener('resize',()=>updFlagOverlay());
     filterFrames();updOverlays();updateFlip();
 })();
