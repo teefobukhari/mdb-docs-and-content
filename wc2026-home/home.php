@@ -25,9 +25,9 @@ $mobile = $_SESSION['MOBILE'] ?? '';
 $logoPath = "/WC2026/partials/CATRION%20logo.png";
 $iconPath = "/WC2026/partials/CATRION%20Icon.png";
 
-/* Optional top background banner. Drop an image at this path to show it;
-   if it is missing the gradient hero is used as a graceful fallback. */
-$bannerPath = "/WC2026/partials/banner.png";
+/* Top background banner (Key Visual 3800x700). If the file is missing the
+   gradient hero is used as a graceful fallback. */
+$bannerPath = "/WC2026/WC-2026-KV.jpg";
 
 /* ----------------------------------------------------------------------
  * Scoring rules (single source of truth). Applied server-side wherever
@@ -4405,7 +4405,10 @@ body:before{
             </div>
             <a href="/WC2026/" class="top-link active" data-i18n="navHome">Home</a>
             <a href="/WC2026/matches" class="top-link" data-i18n="navMatches">Matches</a>
-            <a href="#fanFilterSection" class="top-link" data-i18n="navFanFilter">Fan Filter</a>
+            <button type="button" class="top-link icon-link" id="openFanFilterBtn" title="Fan Filter Studio">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6h0a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+                <span data-i18n="navFanFilter">Fan Filter</span>
+            </button>
             <button type="button" class="top-link" id="openProfileBtn" data-i18n="navProfile">My Profile</button>
             <form method="POST" action="/WC2026/" style="margin:0;">
                 <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
@@ -4570,6 +4573,33 @@ body:before{
                 <?php endif; ?>
             </div>
             <a class="news-view" href="/WC2026/matches">View all →</a>
+        </div>
+    </section>
+
+    <!-- (2)+(10) Comments & engagement — placed directly under Match News -->
+    <section class="card social-card" id="socialWall">
+        <h2 class="card-title">
+            <span data-i18n="socialTitle">Fan Wall</span>
+            <small data-i18n="socialSub">Share your moment • comment • like</small>
+        </h2>
+        <form class="social-composer" id="socialComposer">
+            <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
+            <div class="social-input-row">
+                <span class="social-ava"><?= htmlspecialchars(mb_substr((string)$name, 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                <textarea id="socialText" name="body" rows="2" data-i18n-ph="socialPlaceholder" placeholder="Say something about the World Cup…"></textarea>
+            </div>
+            <div class="social-actions">
+                <label class="social-attach" for="socialPhoto">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+                    <span data-i18n="attachPhoto">Add photo</span>
+                </label>
+                <input type="file" id="socialPhoto" name="photo" accept="image/*" hidden>
+                <span class="social-attach-name" id="socialPhotoName"></span>
+                <button type="submit" class="match-link primary" data-i18n="post">Post</button>
+            </div>
+        </form>
+        <div class="social-feed" id="socialFeed" data-endpoint="/WC2026/api/social_feed.php">
+            <div class="social-loading" data-i18n="socialLoading">Loading the fan wall…</div>
         </div>
     </section>
 
@@ -4904,43 +4934,6 @@ body:before{
         </div>
     </section>
 
-    <!-- (10) Social engagement wall (UI scaffold; posts to /WC2026/api/* endpoints) -->
-    <section class="card social-card" id="socialWall">
-        <h2 class="card-title">
-            <span data-i18n="socialTitle">Fan Wall</span>
-            <small data-i18n="socialSub">Share your moment • comment • like</small>
-        </h2>
-        <form class="social-composer" id="socialComposer">
-            <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
-            <div class="social-input-row">
-                <span class="social-ava"><?= htmlspecialchars(mb_substr((string)$name, 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
-                <textarea id="socialText" name="body" rows="2" data-i18n-ph="socialPlaceholder" placeholder="Say something about the World Cup…"></textarea>
-            </div>
-            <div class="social-actions">
-                <label class="social-attach" for="socialPhoto">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
-                    <span data-i18n="attachPhoto">Add photo</span>
-                </label>
-                <input type="file" id="socialPhoto" name="photo" accept="image/*" hidden>
-                <span class="social-attach-name" id="socialPhotoName"></span>
-                <button type="submit" class="match-link primary" data-i18n="post">Post</button>
-            </div>
-        </form>
-        <div class="social-feed" id="socialFeed" data-endpoint="/WC2026/api/social_feed.php">
-            <div class="social-loading" data-i18n="socialLoading">Loading the fan wall…</div>
-        </div>
-    </section>
-
-    <!-- (8) Fan Filter embedded via iframe -->
-    <section class="card fanfilter-card" id="fanFilterSection">
-        <h2 class="card-title">
-            <span data-i18n="fanFilterTitle">Fan Filter Studio</span>
-            <a href="/WC/fan_filter.php" target="_blank" rel="noopener" class="match-link soft" data-i18n="openFull">Open full page</a>
-        </h2>
-        <div class="fanfilter-frame">
-            <iframe src="/WC/fan_filter.php" title="Fan Filter Studio" loading="lazy" referrerpolicy="same-origin"></iframe>
-        </div>
-    </section>
 
 </main>
 
@@ -5007,6 +5000,22 @@ body:before{
         </div>
         <br>
         <button class="primary-btn" type="button" id="closeProfileBtn" data-i18n="close">Close</button>
+    </div>
+</div>
+
+<!-- (1) Fan Filter Studio pop-up (opens from the nav icon; iframe loads on first open) -->
+<div class="modal" id="fanFilterModal">
+    <div class="modal-card fanfilter-modal-card">
+        <div class="fanfilter-modal-head">
+            <div class="modal-kicker" data-i18n="fanFilterTitle">Fan Filter Studio</div>
+            <div class="fanfilter-modal-tools">
+                <a href="/WC/fan_filter.php" target="_blank" rel="noopener" class="match-link soft" data-i18n="openFull">Open full page</a>
+                <button type="button" class="ff-close" id="closeFanFilterBtn" aria-label="Close">✕</button>
+            </div>
+        </div>
+        <div class="fanfilter-frame">
+            <iframe id="fanFilterFrame" data-src="/WC/fan_filter.php" title="Fan Filter Studio" referrerpolicy="same-origin"></iframe>
+        </div>
     </div>
 </div>
 
@@ -5564,6 +5573,10 @@ if (startBtn) startBtn.addEventListener('click', startGame);
 if (shootBtn) shootBtn.addEventListener('click', shoot);
 if (ball) ball.addEventListener('click', shoot);
 document.addEventListener('keydown', e => {
+    // Don't hijack Space while the user is typing in a field (chatbot, fan wall, comments…)
+    const t = e.target;
+    const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+    if (typing) return;
     if (e.code === 'Space') {
         e.preventDefault();
         shoot();
@@ -6103,15 +6116,17 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
 
 <!-- ===================== v4 FEATURES (banner, next24, online, social, fan-filter, profile, audit) ===================== -->
 <style>
-/* (1) top background banner layer */
-.hero-banner-layer{position:absolute;inset:0;z-index:0;background:url('<?= htmlspecialchars($bannerPath, ENT_QUOTES, 'UTF-8') ?>') center/cover no-repeat;opacity:.30;pointer-events:none;mix-blend-mode:luminosity}
+/* (1) top background banner layer (Key Visual) */
+.hero-banner-layer{position:absolute;inset:0;z-index:0;background:url('<?= htmlspecialchars($bannerPath, ENT_QUOTES, 'UTF-8') ?>') center top/cover no-repeat;opacity:.55;pointer-events:none}
+/* dark overlay so hero text stays readable over the KV */
+.hero-banner-layer::after{content:"";position:absolute;inset:0;background:linear-gradient(135deg,rgba(4,20,43,.72),rgba(8,37,77,.55) 55%,rgba(14,99,230,.45))}
 /* (2) hide Challenge Hub + single-column hero */
 .daily-card{display:none !important}
 .hero-content.hero-single{grid-template-columns:1fr !important;max-width:860px !important}
 .top-actions button.top-link{font-family:inherit}
 
-/* (3) next-24h matches */
-.next24-wrap{width:min(1680px,calc(100vw - (var(--wide-pad,32px) * 2)));margin:-46px auto 6px;position:relative;z-index:6}
+/* (3)+(4) next-24h matches — normal flow, no overlap */
+.next24-wrap{width:min(1680px,calc(100vw - 80px));margin:22px auto;position:relative;z-index:1}
 .next24-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px;flex-wrap:wrap}
 .next24-title{display:flex;align-items:center;gap:9px;color:#fff;font-size:20px;font-weight:900;margin:0;letter-spacing:-.3px}
 .next24-dot{width:9px;height:9px;border-radius:50%;background:#22C55E;box-shadow:0 0 18px rgba(34,197,94,.9)}
@@ -6165,11 +6180,17 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
 .s-comment-form input{flex:1;min-height:36px;border-radius:10px;border:1px solid rgba(168,231,255,.18);background:rgba(255,255,255,.05);color:#fff;font:inherit;font-size:13px;padding:0 11px}
 .s-comment-form button{border:0;border-radius:10px;padding:0 13px;background:rgba(245,200,91,.9);color:#06202e;font-weight:900;cursor:pointer}
 
-/* (8) fan filter iframe */
-.fanfilter-card .card-title .match-link{margin-inline-start:auto}
-.fanfilter-frame{border-radius:18px;overflow:hidden;border:1px solid rgba(168,231,255,.18);background:#05162F}
-.fanfilter-frame iframe{width:100%;height:720px;border:0;display:block}
-@media(max-width:768px){.fanfilter-frame iframe{height:560px}.next24-wrap{margin-top:-30px}}
+/* (1) fan filter pop-up */
+.top-link.icon-link{display:inline-flex;align-items:center;gap:6px}
+.top-link.icon-link svg{width:16px;height:16px}
+.fanfilter-modal-card{max-width:min(980px,96vw);width:100%;padding:16px}
+.fanfilter-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.fanfilter-modal-tools{display:flex;align-items:center;gap:10px}
+.ff-close{width:34px;height:34px;border:0;border-radius:10px;cursor:pointer;background:rgba(255,255,255,.12);color:#fff;font-size:15px;font-weight:900;line-height:1}
+.ff-close:hover{background:rgba(255,255,255,.2)}
+.fanfilter-frame{border-radius:18px;overflow:hidden;border:1px solid rgba(168,231,255,.18);background:#05162F;height:74vh}
+.fanfilter-frame iframe{width:100%;height:100%;border:0;display:block}
+@media(max-width:768px){.next24-wrap{margin:16px auto}.fanfilter-frame{height:68vh}}
 </style>
 
 <script>
@@ -6205,8 +6226,15 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
 
   /* (3) audit prediction clicks */
   d.querySelectorAll('.next24-actions a.primary').forEach(function(a){ a.addEventListener('click', function(){ wcAudit('open_prediction', a.getAttribute('href')||''); }); });
-  /* (8) audit fan-filter open */
-  var ff=d.getElementById('fanFilterSection'); if(ff){ var io=('IntersectionObserver' in window)?new IntersectionObserver(function(es){ es.forEach(function(en){ if(en.isIntersecting){ wcAudit('view_fan_filter'); io.disconnect(); } }); },{threshold:.4}):null; if(io) io.observe(ff); }
+
+  /* (1) fan filter studio pop-up — iframe loads only on first open */
+  var ffModal=d.getElementById('fanFilterModal'), ffFrame=d.getElementById('fanFilterFrame');
+  function openFanFilter(){ if(!ffModal) return; if(ffFrame && !ffFrame.src){ ffFrame.src=ffFrame.dataset.src; } ffModal.classList.add('active'); wcAudit('open_fan_filter'); }
+  function closeFanFilter(){ if(ffModal) ffModal.classList.remove('active'); }
+  var offb=d.getElementById('openFanFilterBtn'); if(offb) offb.addEventListener('click', openFanFilter);
+  var cffb=d.getElementById('closeFanFilterBtn'); if(cffb) cffb.addEventListener('click', closeFanFilter);
+  if(ffModal) ffModal.addEventListener('click', function(e){ if(e.target===ffModal) closeFanFilter(); });
+  d.addEventListener('keydown', function(e){ if(e.key==='Escape') closeFanFilter(); });
 
   /* (10) social wall — UI scaffold posting to /WC2026/api endpoints, degrades gracefully */
   var feed=d.getElementById('socialFeed'), composer=d.getElementById('socialComposer'),
