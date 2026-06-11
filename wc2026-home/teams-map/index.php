@@ -26,19 +26,22 @@ if (!function_exists('wc_rows')) {
     }
 }
 
-/* Link to real tournament data: the actual qualified teams from wc_fixtures,
-   enriched with their story/stars/moments. Falls back to the full static
-   dataset if the DB is unavailable or empty, so the page always renders. */
-$nations = [];
-$wcCfg = __DIR__ . '/../connections/config.php';
-if (is_file($wcCfg)) {
-    try {
-        require_once $wcCfg; // expected to define $conn (mysqli)
-        if (isset($conn) && $conn instanceof mysqli) {
-            $nations = wc_teams_map_nations($conn);
+/* Data source: the curated wc2026_countries() dataset (data/countries.php) —
+   Arabic + English names, flags, confederation, group, host — enriched with
+   each team's story/stars/moments. Falls back to the real DB fixtures, then to
+   the full static list, so the page always shows data. */
+$nations = wc_countries_nations();
+if (!$nations) {
+    $wcCfg = __DIR__ . '/../connections/config.php';
+    if (is_file($wcCfg)) {
+        try {
+            require_once $wcCfg; // expected to define $conn (mysqli)
+            if (isset($conn) && $conn instanceof mysqli) {
+                $nations = wc_teams_map_nations($conn);
+            }
+        } catch (Throwable $e) {
+            $nations = [];
         }
-    } catch (Throwable $e) {
-        $nations = [];
     }
 }
 if (!$nations) { $nations = wc_tm_all_nations(); }
@@ -184,11 +187,12 @@ $nationsJson = json_encode($nations, JSON_UNESCAPED_UNICODE);
     var panel=document.getElementById('panel'), body=document.getElementById('panel-body'), hint=document.getElementById('hint');
     var markers={}, bounds=[];
 
+    function nm(n){ return n.nameAr || n.name; }
     function openPanel(n){
         var h='';
         h+='<img class="p-flag" src="https://flagcdn.com/w80/'+esc(n.code)+'.png" alt="">';
-        h+='<h2 class="p-name">'+esc(n.name)+'</h2>';
-        if(n.confed) h+='<span class="p-confed">'+esc(n.confed)+'</span>';
+        h+='<h2 class="p-name">'+esc(nm(n))+'</h2>';
+        if(n.confed) h+='<span class="p-confed">'+esc(n.confed)+(n.group?' · '+esc(n.group):'')+(n.host?' · مستضيف':'')+'</span>';
         h+='<p class="p-story">'+esc(n.storyAr || n.story || 'سيتوفر ملف هذا المنتخب قريباً.')+'</p>';
         if(n.stars && n.stars.length){
             h+='<div class="p-sec"><span class="p-lbl">★ أبرز النجوم</span><div class="p-chips">';
@@ -213,7 +217,7 @@ $nationsJson = json_encode($nations, JSON_UNESCAPED_UNICODE);
         var icon=L.divIcon({className:'tm-pin-wrap',
             html:'<span class="tm-pin"><img src="https://flagcdn.com/w40/'+esc(n.code)+'.png" alt="" loading="lazy"></span>',
             iconSize:[30,30],iconAnchor:[15,15]});
-        var m=L.marker([n.lat,n.lng],{icon:icon,title:n.name}).addTo(map);
+        var m=L.marker([n.lat,n.lng],{icon:icon,title:nm(n)}).addTo(map);
         m.on('click',function(){ openPanel(n); map.flyTo([n.lat,n.lng],Math.max(map.getZoom(),4),{duration:.6}); });
         markers[n.code]=m;
         bounds.push([n.lat,n.lng]);
@@ -238,10 +242,10 @@ $nationsJson = json_encode($nations, JSON_UNESCAPED_UNICODE);
     input.addEventListener('input',function(){
         var q=input.value.trim().toLowerCase();
         if(!q){ results.hidden=true; results.innerHTML=''; return; }
-        var hits=NATIONS.filter(function(n){ return n.name.toLowerCase().indexOf(q)>-1; }).slice(0,8);
+        var hits=NATIONS.filter(function(n){ return nm(n).toLowerCase().indexOf(q)>-1 || (n.name||'').toLowerCase().indexOf(q)>-1; }).slice(0,8);
         if(!hits.length){ results.hidden=true; results.innerHTML=''; return; }
         results.innerHTML=hits.map(function(n){
-            return '<li data-code="'+esc(n.code)+'"><img src="https://flagcdn.com/w40/'+esc(n.code)+'.png" alt="">'+esc(n.name)+'</li>';
+            return '<li data-code="'+esc(n.code)+'"><img src="https://flagcdn.com/w40/'+esc(n.code)+'.png" alt="">'+esc(nm(n))+'</li>';
         }).join('');
         results.hidden=false;
     });
@@ -250,7 +254,7 @@ $nationsJson = json_encode($nations, JSON_UNESCAPED_UNICODE);
         var code=li.getAttribute('data-code');
         var n=NATIONS.filter(function(x){ return x.code===code; })[0];
         if(n){ openPanel(n); map.flyTo([n.lat,n.lng],4,{duration:.7}); }
-        results.hidden=true; input.value=n?n.name:'';
+        results.hidden=true; input.value=n?nm(n):'';
     });
     document.addEventListener('click',function(e){ if(!e.target.closest('.searchbox')) results.hidden=true; });
 

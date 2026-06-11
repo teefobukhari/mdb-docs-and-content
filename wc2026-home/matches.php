@@ -1646,7 +1646,11 @@ body{
          match grid stays right below.
          ===================================================================== -->
     <!-- [WC2026] Participating Teams Map — native interactive Leaflet map (same as home.php) -->
-    <?php require_once __DIR__ . '/_teams_map.php'; $teamsMapNations = wc_teams_map_nations($conn); if (!$teamsMapNations) { $teamsMapNations = wc_tm_all_nations(); } ?>
+    <?php require_once __DIR__ . '/_teams_map.php';
+        $teamsMapNations = wc_countries_nations();
+        if (!$teamsMapNations) { $teamsMapNations = wc_teams_map_nations($conn); }
+        if (!$teamsMapNations) { $teamsMapNations = wc_tm_all_nations(); }
+    ?>
     <section class="card teams-map-card" id="teamsMapCard" aria-label="World Cup 2026 nations map">
         <div class="tm-head">
             <div class="tm-title"><span class="tm-dot"></span> <span data-i18n="teamsMapTitle">Participating Teams Map</span></div>
@@ -1962,18 +1966,20 @@ html[dir="rtl"] .nav-actions{direction:rtl}
 
 /* [WC2026] Participating Teams Map card */
 .teams-map-card{padding:22px}
-/* Participating Teams Map — light card, navy text */
+/* Participating Teams Map — dark navy, cohesive with the map inside */
 .card.teams-map-card{
-    background:linear-gradient(160deg,#FFFFFF 0%,#F3F8FF 100%) !important;
-    border:1px solid #DCE8F6 !important;color:#06234B !important;
-    box-shadow:0 18px 44px rgba(7,42,85,.10) !important;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(14,99,230,.22), transparent 36%),
+        linear-gradient(135deg,#061A36 0%,#08254D 58%,#0A3A76 100%) !important;
+    border:1px solid rgba(168,231,255,.20) !important;color:#EAF4FF !important;
+    box-shadow:0 28px 70px rgba(0,0,0,.30) !important;
 }
 .tm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px;flex-wrap:wrap}
-.tm-title{color:#06234B !important;font-weight:900;font-size:16px;display:flex;align-items:center;gap:8px}
-.tm-dot{width:10px;height:10px;border-radius:50%;background:#0E63E6;box-shadow:0 0 12px rgba(14,99,230,.7)}
-.tm-open{color:#0E63E6 !important;text-decoration:none;font-weight:800;font-size:13px;white-space:nowrap}
+.tm-title{color:#FFFFFF !important;font-weight:900;font-size:16px;display:flex;align-items:center;gap:8px}
+.tm-dot{width:10px;height:10px;border-radius:50%;background:#7EF4AE;box-shadow:0 0 12px rgba(126,244,174,.8)}
+.tm-open{color:#A8E7FF !important;text-decoration:none;font-weight:800;font-size:13px;white-space:nowrap}
 .tm-open:hover{text-decoration:underline}
-.tm-sub{color:#50647F;font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
+.tm-sub{color:rgba(234,244,255,.82);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
 .tm-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:radial-gradient(120% 120% at 50% 0%,#123a6b 0%,#0a1f3e 55%,#06152c 100%);height:560px}
 .tm-frame{width:100%;height:100%;border:0;display:block}
 .tm-leaflet{width:100%;height:100%;z-index:1}
@@ -2478,9 +2484,10 @@ html[dir="rtl"] .match-social-mini,html[dir="rtl"] .match-meta{text-align:right}
     var story=(ar && n.storyAr) ? n.storyAr : (n.story||'');
     var L1=ar?{stars:'أبرز النجوم',moments:'لحظات بارزة',fixtures:'عرض المباريات ←',soon:'سيتوفر ملف هذا المنتخب قريباً.'}
              :{stars:'Key players',moments:'Key moments',fixtures:'View fixtures →',soon:'Full team profile coming soon.'};
+    var nm=(ar && n.nameAr) ? n.nameAr : n.name;
     var h='<div class="tm-pop"'+(ar?' dir="rtl"':'')+'>';
     h+='<div class="tm-pop-head"><img class="tm-pop-flag" src="https://flagcdn.com/w40/'+esc(n.code)+'.png" alt="">'
-      +'<div class="tm-pop-title"><strong>'+esc(n.name)+'</strong>'
+      +'<div class="tm-pop-title"><strong>'+esc(nm)+'</strong>'
       +(n.confed?'<span class="tm-pop-confed">'+esc(n.confed)+'</span>':'')+'</div></div>';
     h+='<p class="tm-pop-story">'+esc(story||L1.soon)+'</p>';
     if(n.stars&&n.stars.length){

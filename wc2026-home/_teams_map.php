@@ -54,9 +54,9 @@ if (!function_exists('wc_tm_latlng')) {
     }
 }
 
-if (!function_exists('wc_tm_name')) {
-    /** English display name for a flag code (used by the standalone Teams-Map page). */
-    function wc_tm_name(string $code): string {
+if (!function_exists('wc_tm_names')) {
+    /** Full flag-code => English display-name map (single source of truth). */
+    function wc_tm_names(): array {
         static $n = [
             'us'=>'United States','ca'=>'Canada','mx'=>'Mexico','cr'=>'Costa Rica','pa'=>'Panama','jm'=>'Jamaica','hn'=>'Honduras','sv'=>'El Salvador','gt'=>'Guatemala','cw'=>'Curaçao','tt'=>'Trinidad & Tobago','ht'=>'Haiti','sr'=>'Suriname',
             'ar'=>'Argentina','br'=>'Brazil','uy'=>'Uruguay','co'=>'Colombia','cl'=>'Chile','pe'=>'Peru','py'=>'Paraguay','ec'=>'Ecuador','ve'=>'Venezuela','bo'=>'Bolivia',
@@ -65,7 +65,15 @@ if (!function_exists('wc_tm_name')) {
             'ma'=>'Morocco','sn'=>'Senegal','gh'=>'Ghana','ng'=>'Nigeria','cm'=>'Cameroon','eg'=>'Egypt','dz'=>'Algeria','tn'=>'Tunisia','ci'=>'Ivory Coast','za'=>'South Africa','ml'=>'Mali','cv'=>'Cape Verde','gn'=>'Guinea','cd'=>'DR Congo','ga'=>'Gabon','ao'=>'Angola','zm'=>'Zambia','bf'=>'Burkina Faso','gq'=>'Equatorial Guinea',
             'nz'=>'New Zealand','fj'=>'Fiji','pg'=>'Papua New Guinea','nc'=>'New Caledonia','pf'=>'Tahiti',
         ];
+        return $n;
+    }
+}
+
+if (!function_exists('wc_tm_name')) {
+    /** English display name for a flag code. */
+    function wc_tm_name(string $code): string {
         $code = strtolower(trim($code));
+        $n = wc_tm_names();
         return $n[$code] ?? strtoupper($code);
     }
 }
@@ -78,11 +86,14 @@ if (!function_exists('wc_tm_all_nations')) {
      */
     function wc_tm_all_nations(): array {
         $out = [];
-        foreach (wc_team_meta() as $code => $meta) {
+        /* Iterate the full name map (always available) — NOT wc_team_meta(),
+           so the list is never empty even if teams_data.php isn't deployed. */
+        foreach (wc_tm_names() as $code => $name) {
             $ll = wc_tm_latlng($code);
             if (!$ll) continue;
+            $meta = wc_team_meta($code);
             $out[] = [
-                'name'    => wc_tm_name($code),
+                'name'    => $name,
                 'code'    => $code,
                 'lat'     => $ll[0],
                 'lng'     => $ll[1],
@@ -91,6 +102,44 @@ if (!function_exists('wc_tm_all_nations')) {
                 'storyAr' => $meta['story_ar']?? '',
                 'stars'   => $meta['stars']   ?? [],
                 'moments' => $meta['moments'] ?? [],
+            ];
+        }
+        usort($out, fn($a,$b)=>strcmp($a['name'],$b['name']));
+        return $out;
+    }
+}
+
+if (!function_exists('wc_countries_nations')) {
+    /**
+     * Primary nation source for the Participating Teams Map: the curated
+     * wc2026_countries() dataset (teams-map/data/countries.php) — Arabic +
+     * English names, flag, confederation, group, host, coordinates — enriched
+     * with each team's story/stars/moments. Returns [] if the file is absent.
+     * @return array<int,array<string,mixed>>
+     */
+    function wc_countries_nations(): array {
+        $file = __DIR__ . '/teams-map/data/countries.php';
+        if (is_file($file)) require_once $file;
+        if (!function_exists('wc2026_countries')) return [];
+        $out = [];
+        foreach (wc2026_countries() as $code => $c) {
+            $code = strtolower(trim((string)($c['flag'] ?? $code)));
+            $ll   = $c['coords'] ?? wc_tm_latlng($code);
+            if (!$ll || !isset($ll[0], $ll[1])) continue;
+            $meta = wc_team_meta($code);
+            $out[] = [
+                'name'    => (string)($c['name_en'] ?? wc_tm_name($code)),
+                'nameAr'  => (string)($c['name_ar'] ?? ''),
+                'code'    => $code,
+                'lat'     => (float)$ll[0],
+                'lng'     => (float)$ll[1],
+                'confed'  => (string)($c['confed'] ?? ($meta['confed'] ?? '')),
+                'group'   => (string)($c['group'] ?? ''),
+                'host'    => !empty($c['host']),
+                'story'   => $meta['story']    ?? '',
+                'storyAr' => $meta['story_ar'] ?? '',
+                'stars'   => $meta['stars']    ?? [],
+                'moments' => $meta['moments']  ?? [],
             ];
         }
         usort($out, fn($a,$b)=>strcmp($a['name'],$b['name']));

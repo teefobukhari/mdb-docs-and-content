@@ -4904,7 +4904,14 @@ body:before{
     </section>
 
     <!-- (1) Participating Teams Map — native interactive Leaflet map of the qualified nations -->
-    <?php require_once __DIR__ . '/_teams_map.php'; $teamsMapNations = wc_teams_map_nations($conn); if (!$teamsMapNations) { $teamsMapNations = wc_tm_all_nations(); } ?>
+    <?php require_once __DIR__ . '/_teams_map.php';
+        /* Primary source: the curated wc2026_countries() dataset (data/countries.php),
+           enriched with story/stars/moments. Falls back to DB fixtures, then the
+           full static list, so the card is never blank. */
+        $teamsMapNations = wc_countries_nations();
+        if (!$teamsMapNations) { $teamsMapNations = wc_teams_map_nations($conn); }
+        if (!$teamsMapNations) { $teamsMapNations = wc_tm_all_nations(); }
+    ?>
     <section class="card teams-map-card" id="teamsMapCard">
         <div class="map-head">
             <div class="map-title"><span class="map-dot"></span> <span data-i18n="teamsMapTitle">Participating Teams Map</span></div>
@@ -7283,17 +7290,19 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .host-next24-tip .n24-city{color:rgba(168,231,255,.75);font-size:10px;font-weight:700}
 .host-next24-tip .n24-empty{padding:6px 2px;color:rgba(255,255,255,.72);font-weight:700}
 
-/* (1) Participating Teams Map card — light card, navy text */
+/* (1) Participating Teams Map card — dark navy, cohesive with the map inside */
 .layout .card.teams-map-card{
-    color:#06234B !important;
-    background:linear-gradient(160deg,#FFFFFF 0%,#F3F8FF 100%) !important;
-    border:1px solid #DCE8F6 !important;
-    box-shadow:0 18px 44px rgba(7,42,85,.10) !important;
+    color:#EAF4FF !important;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(14,99,230,.22), transparent 36%),
+        linear-gradient(135deg,#061A36 0%,#08254D 58%,#0A3A76 100%) !important;
+    border:1px solid rgba(168,231,255,.20) !important;
+    box-shadow:0 28px 70px rgba(0,0,0,.30) !important;
 }
-.teams-map-card .map-title{color:#06234B !important}
-.teams-map-card .map-dot{background:#0E63E6 !important;box-shadow:0 0 16px rgba(14,99,230,.7) !important}
-.teams-map-card .match-link.soft{color:#0E63E6 !important}
-.teams-map-sub{color:#50647F;font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
+.teams-map-card .map-title{color:#FFFFFF !important}
+.teams-map-card .map-dot{background:#7EF4AE !important;box-shadow:0 0 16px rgba(126,244,174,.8) !important}
+.teams-map-card .match-link.soft{color:#A8E7FF !important}
+.teams-map-sub{color:rgba(234,244,255,.82);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
 .teams-map-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:radial-gradient(120% 120% at 50% 0%,#123a6b 0%,#0a1f3e 55%,#06152c 100%);height:560px}
 .teams-map-frame{width:100%;height:100%;border:0;display:block}
 .teams-map-leaflet{width:100%;height:100%;z-index:1}
@@ -7637,9 +7646,10 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
     var story=(ar && n.storyAr) ? n.storyAr : (n.story||'');
     var L1=ar?{stars:'أبرز النجوم',moments:'لحظات بارزة',fixtures:'عرض المباريات ←',soon:'سيتوفر ملف هذا المنتخب قريباً.'}
              :{stars:'Key players',moments:'Key moments',fixtures:'View fixtures →',soon:'Full team profile coming soon.'};
+    var nm=(ar && n.nameAr) ? n.nameAr : n.name;
     var h='<div class="tm-pop"'+(ar?' dir="rtl"':'')+'>';
     h+='<div class="tm-pop-head"><img class="tm-pop-flag" src="https://flagcdn.com/w40/'+esc(n.code)+'.png" alt="">'
-      +'<div class="tm-pop-title"><strong>'+esc(n.name)+'</strong>'
+      +'<div class="tm-pop-title"><strong>'+esc(nm)+'</strong>'
       +(n.confed?'<span class="tm-pop-confed">'+esc(n.confed)+'</span>':'')+'</div></div>';
     h+='<p class="tm-pop-story">'+esc(story||L1.soon)+'</p>';
     if(n.stars&&n.stars.length){
