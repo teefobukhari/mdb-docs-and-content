@@ -627,6 +627,26 @@ body.popup-mode .card{background:transparent !important}
 .notice.warn{background:rgba(245,200,91,.14) !important;color:#FFE19A !important;border-color:rgba(245,200,91,.3) !important}
 .notice.bad{background:rgba(233,71,71,.16) !important;color:#FFB4B4 !important;border-color:rgba(233,71,71,.3) !important}
 .match-box{border:1px solid rgba(168,231,255,.18)}
+
+/* (4) Tighter fit for the prediction pop-up on mobile */
+@media(max-width:640px){
+    body.popup-mode .container{padding:14px 12px 22px !important}
+    .match-box{padding:14px !important;border-radius:18px !important}
+    .team-logo{width:46px !important;height:46px !important}
+    .team-name{font-size:12px !important}
+    .vs{width:40px !important;height:40px !important;font-size:12px !important}
+    .form-title{font-size:18px !important;margin:16px 0 10px !important}
+    .score-input input{min-height:54px !important;font-size:26px !important;border-radius:16px !important}
+    .score-input label{font-size:10px !important}
+    .score-sep{padding-top:18px !important}
+    .btn{min-height:46px;font-size:14px}
+    .prediction-summary{font-size:12px !important;padding:13px !important}
+    .ms-reacts{gap:8px !important}
+    .ms-react{padding:8px 11px !important;font-size:14px !important}
+    .ms-form input{font-size:14px !important}
+    .ms-list{max-height:220px !important}
+    .match-social{margin-top:16px !important}
+}
 </style>
 </head>
 

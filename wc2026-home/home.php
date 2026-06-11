@@ -4720,10 +4720,17 @@ body:before{
                 <svg viewBox="0 0 640 520" class="hostmap-svg" preserveAspectRatio="xMidYMid meet" aria-label="2026 host cities">
                     <defs>
                         <linearGradient id="naFill" x1="0" y1="0" x2="1" y2="1">
-                            <stop offset="0" stop-color="rgba(85,183,255,.20)"/>
-                            <stop offset="1" stop-color="rgba(14,99,230,.12)"/>
+                            <stop offset="0" stop-color="#2E7D52"/>
+                            <stop offset="0.55" stop-color="#246A45"/>
+                            <stop offset="1" stop-color="#1B5236"/>
                         </linearGradient>
+                        <radialGradient id="naOcean" cx="50%" cy="42%" r="75%">
+                            <stop offset="0" stop-color="#0a3a6b"/>
+                            <stop offset="0.6" stop-color="#07294f"/>
+                            <stop offset="1" stop-color="#041b39"/>
+                        </radialGradient>
                     </defs>
+                    <rect class="hostmap-ocean" x="-20" y="-20" width="680" height="560" fill="url(#naOcean)"></rect>
                     <!-- Detailed North-America silhouette (Canada • USA • Mexico) -->
                     <path class="hostmap-land" d="M74,148
                         C70,168 70,196 78,224
@@ -4997,18 +5004,17 @@ body:before{
                                             : trim($bmStadiumRaw . (!empty($bm['city']) ? ' • ' . $bm['city'] : ''));
                                         $bmWhen  = date('D, d M Y • h:i A', strtotime((string)$bm['match_datetime']));
                                     ?>
-                                    <div class="bracket-match">
-                                        <button type="button" class="bracket-info" aria-label="Match details"
-                                            data-round="<?= htmlspecialchars($stageName, ENT_QUOTES, 'UTF-8') ?>"
-                                            data-home="<?= htmlspecialchars(wc_safe_team($bm['home_team']), ENT_QUOTES, 'UTF-8') ?>"
-                                            data-away="<?= htmlspecialchars(wc_safe_team($bm['away_team']), ENT_QUOTES, 'UTF-8') ?>"
-                                            data-hlogo="<?= htmlspecialchars((string)($bm['home_logo'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                            data-alogo="<?= htmlspecialchars((string)($bm['away_logo'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
-                                            data-hs="<?= is_null($bm['home_score']) ? '-' : (int)$bm['home_score'] ?>"
-                                            data-as="<?= is_null($bm['away_score']) ? '-' : (int)$bm['away_score'] ?>"
-                                            data-status="<?= htmlspecialchars($bmStatus, ENT_QUOTES, 'UTF-8') ?>"
-                                            data-when="<?= htmlspecialchars($bmWhen, ENT_QUOTES, 'UTF-8') ?>"
-                                            data-venue="<?= htmlspecialchars($bmVenue, ENT_QUOTES, 'UTF-8') ?>">i</button>
+                                    <div class="bracket-match <?= $bmStatus === 'Finished' ? 'is-finished' : ($bmStatus === 'Live' ? 'is-live' : '') ?>" role="button" tabindex="0" aria-label="Match details"
+                                        data-round="<?= htmlspecialchars($stageName, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-home="<?= htmlspecialchars(wc_safe_team($bm['home_team']), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-away="<?= htmlspecialchars(wc_safe_team($bm['away_team']), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-hlogo="<?= htmlspecialchars((string)($bm['home_logo'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-alogo="<?= htmlspecialchars((string)($bm['away_logo'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                        data-hs="<?= is_null($bm['home_score']) ? '-' : (int)$bm['home_score'] ?>"
+                                        data-as="<?= is_null($bm['away_score']) ? '-' : (int)$bm['away_score'] ?>"
+                                        data-status="<?= htmlspecialchars($bmStatus, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-when="<?= htmlspecialchars($bmWhen, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-venue="<?= htmlspecialchars($bmVenue, ENT_QUOTES, 'UTF-8') ?>">
                                         <div class="bracket-row">
                                             <div class="bracket-team">
                                                 <?php if (!empty($bm['home_logo'])): ?>
@@ -5442,10 +5448,13 @@ body:before{
                 <div class="bi-name" id="biAway">—</div>
             </div>
         </div>
+        <div class="bi-result" id="biResultRow"><span class="bi-result-badge" id="biResult">—</span></div>
         <div class="bi-meta">
-            <div class="bi-row"><span>Status</span><b id="biStatus">—</b></div>
-            <div class="bi-row"><span>Kickoff</span><b id="biWhen">—</b></div>
-            <div class="bi-row" id="biVenueRow"><span>Venue</span><b id="biVenue">—</b></div>
+            <div class="bi-row"><span data-i18n="biRoundLbl">Round</span><b id="biRoundLine">—</b></div>
+            <div class="bi-row"><span data-i18n="biStatusLbl">Status</span><b id="biStatus">—</b></div>
+            <div class="bi-row" id="biScoreRow"><span data-i18n="biScoreLbl">Score</span><b id="biScoreLine">—</b></div>
+            <div class="bi-row"><span data-i18n="biKickoffLbl">Kickoff</span><b id="biWhen">—</b></div>
+            <div class="bi-row" id="biVenueRow"><span data-i18n="biVenueLbl">Venue / Location</span><b id="biVenue">—</b></div>
         </div>
         <button class="primary-btn" type="button" id="biClose" data-i18n="close">Close</button>
     </div>
@@ -6078,31 +6087,87 @@ document.addEventListener('DOMContentLoaded', function(){
         if(!el) return;
         el.innerHTML = src ? '<img src="'+src+'" alt="">' : (name||'?').trim().charAt(0);
     }
-    function openInfo(btn){
+    function setRow(id, val){ var r=document.getElementById(id); if(r) r.style.display = val ? '' : 'none'; }
+    function openInfo(box){
         if(!biModal) return;
-        var ds = btn.dataset;
+        var ds = box.dataset;
+        var hs = ds.hs, as = ds.as, finished = (ds.status||'')==='Finished';
+        var numeric = hs!=='-' && as!=='-' && hs!=='' && as!=='';
         document.getElementById('biRound').textContent = ds.round || 'Match';
+        document.getElementById('biRoundLine').textContent = ds.round || '—';
         document.getElementById('biHome').textContent = ds.home || '—';
         document.getElementById('biAway').textContent = ds.away || '—';
-        document.getElementById('biHomeScore').textContent = ds.hs || '-';
-        document.getElementById('biAwayScore').textContent = ds.as || '-';
+        document.getElementById('biHomeScore').textContent = numeric ? hs : '-';
+        document.getElementById('biAwayScore').textContent = numeric ? as : '-';
         document.getElementById('biStatus').textContent = ds.status || '—';
         document.getElementById('biWhen').textContent = ds.when || '—';
-        var venueRow = document.getElementById('biVenueRow');
-        if(ds.venue){ document.getElementById('biVenue').textContent = ds.venue; venueRow.style.display=''; }
-        else { venueRow.style.display='none'; }
+        // Score row (only when there is a result)
+        if(numeric){ document.getElementById('biScoreLine').textContent = ds.home+' '+hs+' – '+as+' '+ds.away; setRow('biScoreRow', true); }
+        else setRow('biScoreRow', false);
+        // Result / winner badge
+        var rb=document.getElementById('biResult');
+        if(finished && numeric){
+            var win = (parseInt(hs,10)>parseInt(as,10)) ? ds.home : ((parseInt(as,10)>parseInt(hs,10)) ? ds.away : null);
+            rb.textContent = win ? ('🏆 '+win+' won') : ('🤝 Draw '+hs+'–'+as);
+            rb.className='bi-result-badge win'; setRow('biResultRow', true);
+        } else if((ds.status||'')==='Live'){
+            rb.textContent='🔴 Live now'; rb.className='bi-result-badge live'; setRow('biResultRow', true);
+        } else {
+            rb.textContent='⏳ '+(ds.when||'Upcoming'); rb.className='bi-result-badge soon'; setRow('biResultRow', true);
+        }
+        // Venue
+        if(ds.venue){ document.getElementById('biVenue').textContent = ds.venue; setRow('biVenueRow', true); }
+        else setRow('biVenueRow', false);
         setLogo(document.getElementById('biHomeLogo'), ds.hlogo, ds.home);
         setLogo(document.getElementById('biAwayLogo'), ds.alogo, ds.away);
         biModal.classList.add('active');
     }
     function closeInfo(){ if(biModal) biModal.classList.remove('active'); }
-    document.querySelectorAll('.bracket-info').forEach(function(btn){
-        btn.addEventListener('click', function(e){ e.stopPropagation(); openInfo(btn); });
+    document.querySelectorAll('#knockoutBracketCard .bracket-match[data-round]').forEach(function(box){
+        box.addEventListener('click', function(){ openInfo(box); });
+        box.addEventListener('keydown', function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); openInfo(box); } });
     });
     var biClose = document.getElementById('biClose');
     if(biClose) biClose.addEventListener('click', closeInfo);
     if(biModal) biModal.addEventListener('click', function(e){ if(e.target===biModal) closeInfo(); });
     document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeInfo(); });
+
+    /* (1) draw connector lines between bracket boxes (elbow connectors) */
+    var grid = document.querySelector('#knockoutBracketCard .bracket-grid');
+    function drawConnectors(){
+        if(!grid) return;
+        grid.querySelectorAll('.bracket-svg').forEach(function(s){ s.remove(); });
+        var cols = [].slice.call(grid.querySelectorAll('.bracket-col')).map(function(c){ return [].slice.call(c.querySelectorAll('.bracket-match')); });
+        var gr = grid.getBoundingClientRect();
+        var W = grid.scrollWidth, H = grid.scrollHeight;
+        var svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+        svg.setAttribute('class','bracket-svg'); svg.setAttribute('width',W); svg.setAttribute('height',H);
+        svg.style.cssText='position:absolute;left:0;top:0;pointer-events:none;z-index:0;overflow:visible';
+        function rc(el){ var r=el.getBoundingClientRect(); return {x:r.left-gr.left+grid.scrollLeft, y:r.top-gr.top+grid.scrollTop, w:r.width, h:r.height}; }
+        for(var c=0;c<cols.length-1;c++){
+            var A=cols[c], B=cols[c+1];
+            if(!A.length || !B.length || A.length !== 2*B.length) continue; // only true halving rounds
+            for(var j=0;j<B.length;j++){
+                var a1=rc(A[2*j]), a2=rc(A[2*j+1]), nb=rc(B[j]);
+                var ax=a1.x+a1.w, ay=a1.y+a1.h/2, by=a2.y+a2.h/2, nx=nb.x, ny=nb.y+nb.h/2;
+                var midX=(ax+nx)/2;
+                var d='M'+ax+','+ay+' H'+midX+' M'+ax+','+by+' H'+midX+' M'+midX+','+ay+' V'+by+' M'+midX+','+ny+' H'+nx;
+                var p=document.createElementNS('http://www.w3.org/2000/svg','path');
+                p.setAttribute('d',d); p.setAttribute('fill','none');
+                p.setAttribute('stroke','rgba(168,231,255,.4)'); p.setAttribute('stroke-width','2'); p.setAttribute('stroke-linecap','round');
+                svg.appendChild(p);
+            }
+        }
+        grid.style.position='relative';
+        grid.insertBefore(svg, grid.firstChild);
+    }
+    var rT;
+    function scheduleDraw(){ clearTimeout(rT); rT=setTimeout(drawConnectors, 120); }
+    window.addEventListener('load', scheduleDraw);
+    window.addEventListener('resize', scheduleDraw);
+    if(card){ card.addEventListener('transitionend', scheduleDraw); }
+    [moreBtn, showFullBtn].forEach(function(b){ if(b) b.addEventListener('click', function(){ setTimeout(drawConnectors, 360); }); });
+    setTimeout(drawConnectors, 300); setTimeout(drawConnectors, 900);
 })();
 </script>
 
@@ -6943,9 +7008,11 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
     background:radial-gradient(circle at 50% 26%,rgba(14,99,230,.20),transparent 60%),linear-gradient(160deg,#061A36,#08254D);
     border:1px solid rgba(168,231,255,.16)}
 .hostmap-svg{width:100%;flex:1;display:block}
-.hostmap-land{fill:url(#naFill);stroke:rgba(168,231,255,.5);stroke-width:1.4;filter:drop-shadow(0 0 14px rgba(85,183,255,.25))}
-.hostmap-land2{fill:rgba(85,183,255,.16);stroke:rgba(168,231,255,.4);stroke-width:1.2}
-.hostmap-lake{fill:#06203f;stroke:rgba(168,231,255,.22);stroke-width:.8}
+.hostmap-ocean{opacity:.96}
+.hostmap-land{fill:url(#naFill);stroke:rgba(255,255,255,.32);stroke-width:1.2;filter:drop-shadow(0 6px 14px rgba(0,0,0,.35))}
+.hostmap-land2{fill:#246A45;stroke:rgba(255,255,255,.3);stroke-width:1}
+.hostmap-lake{fill:#0a3a6b;stroke:rgba(255,255,255,.18);stroke-width:.7}
+.hostmap-grid line{stroke:rgba(255,255,255,.07) !important}
 .hostmap-grid line{stroke:rgba(168,231,255,.08);stroke-width:1}
 .hc-label{fill:rgba(255,255,255,.85);font:800 11px Inter,sans-serif;paint-order:stroke;stroke:rgba(6,26,54,.72);stroke-width:2.6}
 .hc-dot{fill:#fff}
@@ -7231,12 +7298,37 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
   #knockoutBracketCard.bracket-preview-mode .bracket-shell{max-height:440px !important}
 }
 
-/* (1) Hero title — "Cheer with" white, "CATRION" CATRION-blue (override the animated gradient) */
+/* (5) Hero title — "Cheer with" white, "CATRION" animated white↔blue motion */
 .hero h1{color:#fff !important}
-.hero h1 span{background:none !important;-webkit-text-fill-color:#3A8BF6 !important;color:#3A8BF6 !important;animation:none !important}
+.hero h1 span{
+    background:linear-gradient(90deg,#ffffff,#3A8BF6,#A8E7FF,#3A8BF6,#ffffff) !important;
+    background-size:220% auto !important;
+    -webkit-background-clip:text !important;background-clip:text !important;
+    -webkit-text-fill-color:transparent !important;color:transparent !important;
+    animation:wcGrad 6s linear infinite !important;
+}
+@keyframes wcCatrionFlow{0%{background-position:0% 50%}100%{background-position:220% 50%}}
+.hero h1 span{animation:wcCatrionFlow 6s linear infinite !important}
 
 /* (B) Fan Filter Studio pop-up — comfortable large size */
 #fanFilterModal .modal-card.ff-native{max-width:min(1180px,96vw) !important;width:96vw;max-height:94vh}
+
+/* (1) collapsed, clickable bracket boxes + SVG connector lines */
+#knockoutBracketCard .bracket-match{cursor:pointer;position:relative;z-index:1;min-height:auto !important;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease}
+#knockoutBracketCard .bracket-match:hover,#knockoutBracketCard .bracket-match:focus-visible{transform:translateY(-2px);border-color:rgba(245,200,91,.55) !important;box-shadow:0 14px 30px rgba(0,0,0,.32) !important;outline:none}
+#knockoutBracketCard .bracket-match .bracket-status{display:none}     /* collapsed: details live in the pop-up */
+#knockoutBracketCard .bracket-match:after,#knockoutBracketCard .bracket-match:before{display:none !important} /* old CSS stubs off; SVG draws the lines */
+#knockoutBracketCard .bracket-row{padding:4px 0 !important}
+#knockoutBracketCard .bracket-match.is-finished{border-color:rgba(126,244,174,.42) !important}
+#knockoutBracketCard .bracket-match.is-live{border-color:rgba(233,71,71,.55) !important;box-shadow:0 0 0 1px rgba(233,71,71,.4)}
+#knockoutBracketCard .bracket-grid .bracket-svg{position:absolute;left:0;top:0;pointer-events:none;z-index:0}
+
+/* (2) bracket info pop-up — result badge + extra rows */
+.bi-result{margin:0 0 14px;text-align:center}
+.bi-result-badge{display:inline-block;padding:8px 14px;border-radius:999px;font-weight:900;font-size:13px}
+.bi-result-badge.win{background:rgba(126,244,174,.16);color:#7EF4AE;border:1px solid rgba(126,244,174,.35)}
+.bi-result-badge.live{background:rgba(233,71,71,.16);color:#FFB4B4;border:1px solid rgba(233,71,71,.35)}
+.bi-result-badge.soon{background:rgba(245,200,91,.14);color:#FFE19A;border:1px solid rgba(245,200,91,.3)}
 
 /* (2) All cards adopt the selected (Saudi) theme */
 html[data-theme="saudi"] .next24-card,
