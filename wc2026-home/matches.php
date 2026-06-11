@@ -1526,7 +1526,11 @@ body{
             </div>
         </div>
 
-        <div class="nav-actions top-actions">
+        <button type="button" class="nav-burger" id="navBurger" aria-label="Menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+
+        <div class="nav-actions top-actions" id="topActions">
             <div class="theme-switch" role="group" aria-label="Theme">
                 <button type="button" class="theme-btn" data-theme-set="catrion">CATRION</button>
                 <button type="button" class="theme-btn" data-theme-set="saudi">Saudi</button>
@@ -2096,6 +2100,41 @@ html[dir="rtl"] .nav-actions{direction:rtl}
   d.addEventListener('keydown', function(e){ if(e.key==='Escape') d.querySelectorAll('.wc-modal.active').forEach(function(m){ m.classList.remove('active'); }); });
 
   applyTheme(theme); applyLang(lang);
+})();
+</script>
+
+<style>
+/* Mobile: hamburger nav + scrollable tabs */
+.nav-burger{display:none;width:44px;height:44px;flex:none;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);color:#fff;border-radius:12px;cursor:pointer;align-items:center;justify-content:center}
+.nav-burger svg{width:22px;height:22px}
+@media(max-width:768px){
+  .nav{flex-wrap:wrap;position:relative}
+  .nav-burger{display:inline-flex}
+  .top-actions{position:absolute;top:calc(100% + 8px);inset-inline:0;z-index:40;flex-direction:column !important;align-items:stretch;gap:8px;
+    background:#0c1830;border:1px solid rgba(168,231,255,.2);border-radius:16px;padding:12px;box-shadow:0 24px 60px rgba(0,0,0,.5);display:none !important}
+  .top-actions.open{display:flex !important}
+  .top-actions .theme-switch,.top-actions .lang-switch{justify-content:center}
+  .top-actions .nav-link,.top-actions .logout,.top-actions form{width:100%}
+  .top-actions .nav-link,.top-actions .logout{text-align:center;justify-content:center}
+  .top-actions form button{width:100%}
+  .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto}
+  .toolbar{flex-direction:column;align-items:stretch}
+  .search{width:100%}
+  .wc-foot-inner{flex-direction:column;text-align:center}
+}
+</style>
+<script>
+(function(){
+  var b=document.getElementById('navBurger'), a=document.getElementById('topActions');
+  if(!b||!a) return;
+  b.addEventListener('click', function(e){ e.stopPropagation(); var open=a.classList.toggle('open'); b.setAttribute('aria-expanded', open?'true':'false'); });
+  document.addEventListener('click', function(e){ if(a.classList.contains('open') && !a.contains(e.target) && !b.contains(e.target)) a.classList.remove('open'); });
+  a.querySelectorAll('a, button').forEach(function(el){
+    if(el.classList.contains('theme-btn')||el.classList.contains('lang-btn')) return;
+    el.addEventListener('click', function(){ if(window.matchMedia('(max-width:768px)').matches) a.classList.remove('open'); });
+  });
 })();
 </script>
 

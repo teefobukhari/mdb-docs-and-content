@@ -4418,7 +4418,11 @@ body:before{
             </div>
         </div>
 
-        <div class="top-actions">
+        <button type="button" class="nav-burger" id="navBurger" aria-label="Menu" aria-expanded="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+
+        <div class="top-actions" id="topActions">
             <div class="theme-switch" role="group" aria-label="Theme">
                 <button type="button" class="theme-btn" data-theme-set="catrion" data-i18n="themeCatrion">CATRION</button>
                 <button type="button" class="theme-btn" data-theme-set="saudi" data-i18n="themeSaudi">Saudi</button>
@@ -7114,6 +7118,35 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
       var city=c.dataset.city;
       hcs.forEach(function(g){ var on=match(g.dataset.city, city); g.classList.toggle('active', on); g.classList.toggle('dim', !on); });
     });
+  });
+})();
+</script>
+
+<style>
+/* Mobile: collapse the header buttons into a hamburger menu */
+.nav-burger{display:none;width:44px;height:44px;flex:none;border:1px solid rgba(255,255,255,.22);background:rgba(255,255,255,.12);color:#fff;border-radius:12px;cursor:pointer;align-items:center;justify-content:center}
+.nav-burger svg{width:22px;height:22px}
+@media(max-width:768px){
+  .nav{flex-wrap:wrap}
+  .nav-burger{display:inline-flex}
+  .top-actions{position:absolute;top:calc(100% + 8px);inset-inline:0;z-index:40;flex-direction:column;align-items:stretch;gap:8px;
+    background:#0c1830;border:1px solid rgba(168,231,255,.2);border-radius:16px;padding:12px;box-shadow:0 24px 60px rgba(0,0,0,.5);display:none}
+  .top-actions.open{display:flex}
+  .top-actions .theme-switch,.top-actions .lang-switch{justify-content:center}
+  .top-actions .top-link,.top-actions .logout,.top-actions form{width:100%}
+  .top-actions .top-link,.top-actions .logout{text-align:center;justify-content:center}
+  .top-actions form button{width:100%}
+}
+</style>
+<script>
+(function(){
+  var b=document.getElementById('navBurger'), a=document.getElementById('topActions');
+  if(!b||!a) return;
+  b.addEventListener('click', function(e){ e.stopPropagation(); var open=a.classList.toggle('open'); b.setAttribute('aria-expanded', open?'true':'false'); });
+  document.addEventListener('click', function(e){ if(a.classList.contains('open') && !a.contains(e.target) && !b.contains(e.target)) a.classList.remove('open'); });
+  a.querySelectorAll('a, button').forEach(function(el){
+    if(el.classList.contains('theme-btn')||el.classList.contains('lang-btn')) return;
+    el.addEventListener('click', function(){ if(window.matchMedia('(max-width:768px)').matches) a.classList.remove('open'); });
   });
 })();
 </script>
