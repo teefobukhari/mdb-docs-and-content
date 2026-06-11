@@ -4867,7 +4867,7 @@ body:before{
     </section>
 
     <!-- (1) Participating Teams Map — native interactive Leaflet map of the qualified nations -->
-    <?php require_once __DIR__ . '/_teams_map.php'; $teamsMapNations = wc_teams_map_nations($conn); ?>
+    <?php require_once __DIR__ . '/_teams_map.php'; $teamsMapNations = wc_teams_map_nations($conn); if (!$teamsMapNations) { $teamsMapNations = wc_tm_all_nations(); } ?>
     <section class="card teams-map-card" id="teamsMapCard">
         <div class="map-head">
             <div class="map-title"><span class="map-dot"></span> <span data-i18n="teamsMapTitle">Participating Teams Map</span></div>
@@ -5390,13 +5390,11 @@ body:before{
                         </div>
                         <canvas id="canvas" width="1080" height="1350"></canvas>
                         <img id="previewImage" alt="Preview">
-                        <div class="camera-empty" id="cameraEmpty"><div><b>Ready to create?</b>Start the camera or upload a photo.</div></div>
+                        <div class="camera-empty" id="cameraEmpty"><div><b>Ready to create?</b>Start the camera to capture your Fan Filter.</div></div>
                     </div>
                     <div class="controls">
                         <button type="button" class="btn btn-primary" id="startCameraBtn">📷 Start Camera</button>
                         <button type="button" class="btn btn-soft flip-camera-btn" id="flipCameraBtn">🔄 Flip Camera</button>
-                        <label class="btn btn-soft" for="uploadPhoto">⬆️ Upload Photo</label>
-                        <input class="upload-input" type="file" id="uploadPhoto" accept="image/*">
                         <button type="button" class="btn btn-gold" id="captureBtn" disabled>⚽ Capture</button>
                         <button type="button" class="btn btn-soft" id="retakeBtn" disabled>↩️ Retake</button>
                         <button type="button" class="btn btn-green" id="saveDownloadBtn" disabled style="grid-column:1 / -1;">⚽ Save &amp; Download</button>
@@ -5475,6 +5473,15 @@ body:before{
                         Selected platform: <strong><?= htmlspecialchars($ffSelectedPlatform['platform_name'] ?? '-', ENT_QUOTES, 'UTF-8') ?></strong><br>
                         Selected country: <strong><?= htmlspecialchars($ffSelectedCountry['country_name'] ?? '-', ENT_QUOTES, 'UTF-8') ?></strong><br>
                         Selected frame: <strong>-</strong>
+                    </div>
+
+                    <div class="ff-consent-card" id="ffConsentCard">
+                        <div class="ff-consent-title">📸 Photo Capture Consent</div>
+                        <p class="ff-consent-text">By proceeding, you provide explicit consent to display your photo on the internal Fan Wall during the World Cup. Images will be stored temporarily and deleted after the event. CATRION is not responsible for content shared publicly by employees.</p>
+                        <label class="ff-consent-check">
+                            <input type="checkbox" id="ffConsentCheck">
+                            <span>I agree — activate capture</span>
+                        </label>
                     </div>
                 </aside>
             </div>
@@ -7240,10 +7247,10 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 
 /* (1) Participating Teams Map card */
 .teams-map-sub{color:rgba(255,255,255,.72);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
-.teams-map-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:#0a1b30;height:560px}
+.teams-map-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:radial-gradient(120% 120% at 50% 0%,#123a6b 0%,#0a1f3e 55%,#06152c 100%);height:560px}
 .teams-map-frame{width:100%;height:100%;border:0;display:block}
 .teams-map-leaflet{width:100%;height:100%;z-index:1}
-.teams-map-leaflet .leaflet-container{background:#0a1b30}
+.teams-map-leaflet .leaflet-container{background:radial-gradient(120% 120% at 50% 0%,#123a6b 0%,#0a1f3e 55%,#06152c 100%)}
 .teams-map-leaflet .leaflet-control-attribution{background:rgba(6,26,54,.7);color:rgba(255,255,255,.55)}
 .teams-map-leaflet .leaflet-control-attribution a{color:rgba(168,231,255,.8)}
 .teams-map-leaflet .leaflet-popup-content-wrapper{background:#0B2C55;color:#fff;border:1px solid rgba(168,231,255,.22);border-radius:14px}
@@ -7617,6 +7624,7 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
   var map=L.map(el,{zoomControl:true,scrollWheelZoom:false,worldCopyJump:true}).setView([25,10],2);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
     maxZoom:9,minZoom:1,
+    errorTileUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==',
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
   }).addTo(map);
   var bounds=[];
@@ -7801,6 +7809,13 @@ html[dir="rtl"] .wc-agent-panel{inset-inline-end:auto;inset-inline-start:24px}
 #fanFilterModal .camera-empty{position:absolute;inset:0;z-index:5;display:grid;place-items:center;color:rgba(255,255,255,.78);text-align:center;padding:22px}
 #fanFilterModal .camera-empty b{display:block;color:#fff;font-size:22px;margin-bottom:8px}
 #fanFilterModal .controls{margin:16px auto 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+/* Fan Filter — Photo Capture Consent card (right-side, bottom) */
+#fanFilterModal .ff-consent-card{margin-top:14px;border:1px solid #DCE8F6;background:linear-gradient(160deg,#F4F9FF,#EAF3FE);border-radius:18px;padding:14px 16px}
+#fanFilterModal .ff-consent-title{font-size:13px;font-weight:900;color:#0E63E6;margin-bottom:7px;display:flex;align-items:center;gap:7px}
+#fanFilterModal .ff-consent-text{margin:0 0 12px;font-size:12px;line-height:1.65;color:#42556E;font-weight:600}
+#fanFilterModal .ff-consent-check{display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:12.5px;font-weight:800;color:#102033;user-select:none}
+#fanFilterModal .ff-consent-check input{width:18px;height:18px;flex:none;margin-top:1px;accent-color:#0E63E6;cursor:pointer}
+html[dir="rtl"] #fanFilterModal .ff-consent-text,html[dir="rtl"] #fanFilterModal .ff-consent-check{text-align:right}
 #fanFilterModal .btn{border:0;border-radius:999px;padding:12px 16px;font-family:inherit;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:46px;text-align:center}
 #fanFilterModal .btn-primary{background:linear-gradient(135deg,#0E63E6,#0847B8);color:#fff}
 #fanFilterModal .btn-gold{background:linear-gradient(135deg,#F5C85B,#E7A90C);color:#2A2105}
@@ -7921,7 +7936,7 @@ html[dir="rtl"] .wc-agent-panel{inset-inline-end:auto;inset-inline-start:24px}
     startCameraBtn.addEventListener('click',()=>startCamera(currentFacingMode));
     if(flipCameraBtn)flipCameraBtn.addEventListener('click',async()=>{if(!isMobileDevice)return;const nf=currentFacingMode==='user'?'environment':'user';flipCameraBtn.disabled=true;try{await startCamera(nf);}finally{updateFlip();}});
     captureBtn.addEventListener('click',()=>{if(!video.srcObject||!video.videoWidth){showMessage('err','Camera is not ready yet.');return;}compose(video);});
-    uploadPhoto.addEventListener('change',()=>{const f=uploadPhoto.files&&uploadPhoto.files[0];if(!f)return;if(!f.type.startsWith('image/')){showMessage('err','Please upload an image file.');return;}const rd=new FileReader();rd.onload=()=>{const im=new Image();im.onload=()=>{if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;hasCameraStarted=false;updateFlip();}compose(im);};im.onerror=()=>showMessage('err','Unable to read photo.');im.src=rd.result;};rd.readAsDataURL(f);});
+    if(uploadPhoto){uploadPhoto.addEventListener('change',()=>{const f=uploadPhoto.files&&uploadPhoto.files[0];if(!f)return;if(!f.type.startsWith('image/')){showMessage('err','Please upload an image file.');return;}const rd=new FileReader();rd.onload=()=>{const im=new Image();im.onload=()=>{if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;hasCameraStarted=false;updateFlip();}compose(im);};im.onerror=()=>showMessage('err','Unable to read photo.');im.src=rd.result;};rd.readAsDataURL(f);});}
     retakeBtn.addEventListener('click',()=>{finalImageData='';finalImageBlob=null;previewImage.src='';previewImage.style.display='none';saveDownloadBtn.disabled=true;retakeBtn.disabled=true;if(stream){video.style.display='block';updOverlays();cameraEmpty.style.display='none';captureBtn.disabled=false;}else{video.style.display='none';cameraEmpty.style.display='grid';captureBtn.disabled=true;}clearMessage();});
     saveDownloadBtn.addEventListener('click',async()=>{if(!finalImageData||!finalImageBlob){showMessage('err','Create your photo first.');return;}const p=selPlatform(),c=selCountry(),f=selFrame();if(!p||!c||!f){showMessage('err','Please choose a platform, country and frame first.');return;}saveDownloadBtn.disabled=true;saveDownloadBtn.textContent='Saving…';try{const fd=new FormData();fd.append('csrf',csrf);fd.append('photo',finalImageBlob,'wc2026-fan-filter.jpg');fd.append('country_id',c.id);fd.append('frame_id',f.id);fd.append('platform_id',p.id);const res=await fetch('/WC/api/save_filter_photo.php',{method:'POST',body:fd,credentials:'same-origin'});const data=await res.json();if(!data.ok)throw new Error(data.message||'Unable to save photo.');downloadFanImage();showMessage('ok','Photo saved and downloaded successfully.');}catch(e){downloadFanImage();showMessage('ok','Photo downloaded. (Server save not reachable.)');}finally{saveDownloadBtn.disabled=false;saveDownloadBtn.textContent='⚽ Save & Download';}});
     window.addEventListener('resize',()=>updFlagOverlay());

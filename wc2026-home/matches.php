@@ -1646,7 +1646,7 @@ body{
          match grid stays right below.
          ===================================================================== -->
     <!-- [WC2026] Participating Teams Map — native interactive Leaflet map (same as home.php) -->
-    <?php require_once __DIR__ . '/_teams_map.php'; $teamsMapNations = wc_teams_map_nations($conn); ?>
+    <?php require_once __DIR__ . '/_teams_map.php'; $teamsMapNations = wc_teams_map_nations($conn); if (!$teamsMapNations) { $teamsMapNations = wc_tm_all_nations(); } ?>
     <section class="card teams-map-card" id="teamsMapCard" aria-label="World Cup 2026 nations map">
         <div class="tm-head">
             <div class="tm-title"><span class="tm-dot"></span> <span data-i18n="teamsMapTitle">Participating Teams Map</span></div>
@@ -1968,10 +1968,10 @@ html[dir="rtl"] .nav-actions{direction:rtl}
 .tm-open{color:#A8E7FF;text-decoration:none;font-weight:800;font-size:13px;white-space:nowrap}
 .tm-open:hover{text-decoration:underline}
 .tm-sub{color:rgba(255,255,255,.72);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
-.tm-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:#0a1b30;height:560px}
+.tm-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:radial-gradient(120% 120% at 50% 0%,#123a6b 0%,#0a1f3e 55%,#06152c 100%);height:560px}
 .tm-frame{width:100%;height:100%;border:0;display:block}
 .tm-leaflet{width:100%;height:100%;z-index:1}
-.tm-leaflet .leaflet-container{background:#0a1b30}
+.tm-leaflet .leaflet-container{background:radial-gradient(120% 120% at 50% 0%,#123a6b 0%,#0a1f3e 55%,#06152c 100%)}
 .tm-leaflet .leaflet-control-attribution{background:rgba(6,26,54,.7);color:rgba(255,255,255,.55)}
 .tm-leaflet .leaflet-control-attribution a{color:rgba(168,231,255,.8)}
 .tm-leaflet .leaflet-popup-content-wrapper{background:#0B2C55;color:#fff;border:1px solid rgba(168,231,255,.22);border-radius:14px}
@@ -2494,6 +2494,7 @@ html[dir="rtl"] .match-social-mini,html[dir="rtl"] .match-meta{text-align:right}
   var map=L.map(el,{zoomControl:true,scrollWheelZoom:false,worldCopyJump:true}).setView([25,10],2);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
     maxZoom:9,minZoom:1,
+    errorTileUrl:'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==',
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
   }).addTo(map);
   var bounds=[];
