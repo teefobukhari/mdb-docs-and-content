@@ -434,6 +434,10 @@ $ffSelectedCountry = $ffCountries[0] ?? null;
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 
+<!-- Leaflet (native Participating Teams Map) -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+
 <style>
 :root{
     --navy:#071A35;
@@ -1641,15 +1645,16 @@ body{
          (?q=Country), so no logic/data flow changes. The full functional
          match grid stays right below.
          ===================================================================== -->
-    <!-- [WC2026] Participating Teams Map — real interactive teams map (same as home.php) -->
+    <!-- [WC2026] Participating Teams Map — native interactive Leaflet map (same as home.php) -->
+    <?php require_once __DIR__ . '/_teams_map.php'; $teamsMapNations = wc_teams_map_nations($conn); ?>
     <section class="card teams-map-card" id="teamsMapCard" aria-label="World Cup 2026 nations map">
         <div class="tm-head">
             <div class="tm-title"><span class="tm-dot"></span> <span data-i18n="teamsMapTitle">Participating Teams Map</span></div>
             <a href="/WC2026/teams-map/" target="_blank" rel="noopener" class="tm-open" data-i18n="openTeamsMap">Open Full Map ↗</a>
         </div>
-        <div class="tm-sub" data-i18n="teamsMapSub">Explore all 48 qualified nations on a real world map — tap any country for its football story, stars and key moments.</div>
+        <div class="tm-sub" data-i18n="teamsMapSub"><?= count($teamsMapNations) ?> qualified nations on a real world map — tap any country to jump to its fixtures.</div>
         <div class="tm-frame-wrap">
-            <iframe class="tm-frame" src="/WC2026/teams-map/" title="World Cup 2026 Teams Map" loading="lazy"></iframe>
+            <div id="teamsLeafletMap" class="tm-leaflet" aria-label="Participating teams map"></div>
         </div>
     </section>
 
@@ -1760,7 +1765,7 @@ body{
                         </div>
 
                         <?php $rcCount = (int)($matchReactCounts[(int)$m['id']] ?? 0); $ccCount = (int)($matchCommentCounts[(int)$m['id']] ?? 0); ?>
-                        <button type="button" class="match-social-mini" data-predict-url="/WC2026/predict?match=<?= (int)$m['id'] ?>" title="Open reactions &amp; comments">
+                        <button type="button" class="match-social-mini" data-predict-url="/WC2026/predict?match=<?= (int)$m['id'] ?>&view=details" title="Open reactions &amp; comments">
                             <span class="msm-pill msm-react">🔥 <b><?= $rcCount ?></b> <span data-i18n="reactionsWord">reactions</span></span>
                             <?php if ($ccCount > 0): ?>
                                 <span class="msm-pill msm-comment">💬 <b><?= $ccCount ?></b> <span data-i18n="commentsWord">comments</span></span>
@@ -1783,7 +1788,7 @@ body{
                                     Prediction Closed
                                 </button>
                             <?php endif; ?>
-                            <button type="button" class="details-btn" data-predict-url="/WC2026/predict?match=<?= (int)$m['id'] ?>">Details</button>
+                            <button type="button" class="details-btn" data-predict-url="/WC2026/predict?match=<?= (int)$m['id'] ?>&view=details">Details</button>
                         </div>
                     </article>
                 <?php endforeach; ?>
@@ -1965,6 +1970,16 @@ html[dir="rtl"] .nav-actions{direction:rtl}
 .tm-sub{color:rgba(255,255,255,.72);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
 .tm-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:#0a1b30;height:560px}
 .tm-frame{width:100%;height:100%;border:0;display:block}
+.tm-leaflet{width:100%;height:100%;z-index:1}
+.tm-leaflet .leaflet-container{background:#0a1b30}
+.tm-leaflet .leaflet-control-attribution{background:rgba(6,26,54,.7);color:rgba(255,255,255,.55)}
+.tm-leaflet .leaflet-control-attribution a{color:rgba(168,231,255,.8)}
+.tm-leaflet .leaflet-popup-content-wrapper{background:#0B2C55;color:#fff;border:1px solid rgba(168,231,255,.22);border-radius:14px}
+.tm-leaflet .leaflet-popup-tip{background:#0B2C55}
+.tm-leaflet .leaflet-popup-content{font-weight:800;font-size:13px;margin:10px 14px}
+.tm-leaflet .leaflet-popup-content a{color:#A8E7FF;font-weight:900;text-decoration:none}
+.tm-pin{border:2px solid rgba(255,255,255,.9);border-radius:50%;overflow:hidden;background:#0B2C55;box-shadow:0 3px 10px rgba(0,0,0,.5)}
+.tm-pin img{width:100%;height:100%;object-fit:cover;display:block}
 html[dir="rtl"] .tm-sub{text-align:right}
 html[data-theme="saudi"] .tm-frame-wrap{border-color:rgba(126,244,174,.22)}
 @media(max-width:768px){.tm-frame-wrap{height:460px}}
@@ -2419,6 +2434,37 @@ html[dir="rtl"] .match-social-mini,html[dir="rtl"] .match-meta{text-align:right}
     saveDownloadBtn.addEventListener('click',async()=>{if(!finalImageData||!finalImageBlob){showMessage('err','Create your photo first.');return;}const p=selPlatform(),c=selCountry(),f=selFrame();if(!p||!c||!f){showMessage('err','Please choose a platform, country and frame first.');return;}saveDownloadBtn.disabled=true;saveDownloadBtn.textContent='Saving…';try{const fd=new FormData();fd.append('csrf',csrf);fd.append('photo',finalImageBlob,'wc2026-fan-filter.jpg');fd.append('country_id',c.id);fd.append('frame_id',f.id);fd.append('platform_id',p.id);const res=await fetch('/WC/api/save_filter_photo.php',{method:'POST',body:fd,credentials:'same-origin'});const data=await res.json();if(!data.ok)throw new Error(data.message||'Unable to save photo.');downloadFanImage();showMessage('ok','Photo saved and downloaded successfully.');}catch(e){downloadFanImage();showMessage('ok','Photo downloaded. (Server save not reachable.)');}finally{saveDownloadBtn.disabled=false;saveDownloadBtn.textContent='⚽ Save & Download';}});
     window.addEventListener('resize',()=>updFlagOverlay());
     filterFrames();updOverlays();updateFlip();
+})();
+</script>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>
+/* Participating Teams Map — native Leaflet map of the qualified nations */
+(function(){
+  var el=document.getElementById('teamsLeafletMap');
+  if(!el || typeof L==='undefined') return;
+  var nations=<?= json_encode($teamsMapNations ?? [], JSON_UNESCAPED_UNICODE) ?>;
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  var map=L.map(el,{zoomControl:true,scrollWheelZoom:false,worldCopyJump:true}).setView([25,10],2);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    maxZoom:9,minZoom:1,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  }).addTo(map);
+  var bounds=[];
+  nations.forEach(function(n){
+    var icon=L.divIcon({
+      className:'tm-pin-wrap',
+      html:'<span class="tm-pin" style="display:block;width:30px;height:30px"><img src="https://flagcdn.com/w40/'+esc(n.code)+'.png" alt="" loading="lazy"></span>',
+      iconSize:[30,30], iconAnchor:[15,15]
+    });
+    var m=L.marker([n.lat,n.lng],{icon:icon,title:n.name}).addTo(map);
+    m.bindPopup('<strong>'+esc(n.name)+'</strong><br><a href="/WC2026/matches?q='+encodeURIComponent(n.name)+'">View fixtures →</a>');
+    bounds.push([n.lat,n.lng]);
+  });
+  if(bounds.length) map.fitBounds(bounds,{padding:[30,30],maxZoom:4});
+  setTimeout(function(){ map.invalidateSize(); }, 300);
+  window.addEventListener('resize', function(){ map.invalidateSize(); });
 })();
 </script>
 

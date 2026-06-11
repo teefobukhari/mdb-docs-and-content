@@ -4866,15 +4866,16 @@ body:before{
         </div>
     </section>
 
-    <!-- (1) Participating Teams Map — the interactive 48-nation map shown as a card -->
+    <!-- (1) Participating Teams Map — native interactive Leaflet map of the qualified nations -->
+    <?php require_once __DIR__ . '/_teams_map.php'; $teamsMapNations = wc_teams_map_nations($conn); ?>
     <section class="card teams-map-card" id="teamsMapCard">
         <div class="map-head">
             <div class="map-title"><span class="map-dot"></span> <span data-i18n="teamsMapTitle">Participating Teams Map</span></div>
             <a href="/WC2026/teams-map/" target="_blank" rel="noopener" class="match-link soft" data-i18n="openTeamsMap">Open Full Map ↗</a>
         </div>
-        <div class="teams-map-sub" data-i18n="teamsMapSub">Explore all 48 qualified nations — tap any country for its football story, stars and key moments.</div>
+        <div class="teams-map-sub" data-i18n="teamsMapSub"><?= count($teamsMapNations) ?> qualified nations on the map — tap any country to jump to its fixtures.</div>
         <div class="teams-map-frame-wrap">
-            <iframe class="teams-map-frame" src="/WC2026/teams-map/" title="World Cup 2026 Teams Map" loading="lazy"></iframe>
+            <div id="teamsLeafletMap" class="teams-map-leaflet" aria-label="Participating teams map"></div>
         </div>
     </section>
 
@@ -5075,9 +5076,17 @@ body:before{
                                         $bmPen = $bmPair('pen_home', 'pen_away');
                                         $bmStatusLong = (string)($bm['status_long'] ?? '');
                                         $bmElapsed = $bm['elapsed'] ?? null;
+                                        $bmId = (int)($bm['id'] ?? 0);
+                                        $bmSource = (string)($bm['source_rule'] ?? '');
+                                        $bmKickoffDate = date('D, d M Y', strtotime((string)$bm['match_datetime']));
+                                        $bmKickoffTime = date('h:i A', strtotime((string)$bm['match_datetime']));
                                     ?>
                                     <div class="bracket-match <?= $bmStatus === 'Finished' ? 'is-finished' : ($bmStatus === 'Live' ? 'is-live' : '') ?>" role="button" tabindex="0" aria-label="Match details"
                                         data-round="<?= htmlspecialchars($stageName, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-id="<?= $bmId ?>"
+                                        data-source="<?= htmlspecialchars($bmSource, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-kdate="<?= htmlspecialchars($bmKickoffDate, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-ktime="<?= htmlspecialchars($bmKickoffTime, ENT_QUOTES, 'UTF-8') ?>"
                                         data-home="<?= htmlspecialchars(wc_safe_team($bm['home_team']), ENT_QUOTES, 'UTF-8') ?>"
                                         data-away="<?= htmlspecialchars(wc_safe_team($bm['away_team']), ENT_QUOTES, 'UTF-8') ?>"
                                         data-hlogo="<?= htmlspecialchars((string)($bm['home_logo'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
@@ -5537,10 +5546,16 @@ body:before{
             <div class="bi-row" id="biFtRow"><span data-i18n="biFtLbl">Full-time</span><b id="biFt">—</b></div>
             <div class="bi-row" id="biEtRow"><span data-i18n="biEtLbl">Extra time</span><b id="biEt">—</b></div>
             <div class="bi-row" id="biPenRow"><span data-i18n="biPenLbl">Penalties</span><b id="biPen">—</b></div>
+            <div class="bi-row" id="biDateRow"><span data-i18n="biDateLbl">Date</span><b id="biDate">—</b></div>
+            <div class="bi-row" id="biTimeRow"><span data-i18n="biTimeLbl">Local Time</span><b id="biTime">—</b></div>
             <div class="bi-row"><span data-i18n="biKickoffLbl">Kickoff</span><b id="biWhen">—</b></div>
             <div class="bi-row" id="biVenueRow"><span data-i18n="biVenueLbl">Venue / Location</span><b id="biVenue">—</b></div>
+            <div class="bi-row" id="biPathRow"><span data-i18n="biPathLbl">Projected Path</span><b id="biPath">—</b></div>
         </div>
-        <button class="primary-btn" type="button" id="biClose" data-i18n="close">Close</button>
+        <div class="bi-actions">
+            <a class="bi-open" id="biOpen" href="#" target="_blank" rel="noopener" style="display:none" data-i18n="biOpenMatch">Open Match Center ↗</a>
+            <button class="primary-btn" type="button" id="biClose" data-i18n="close">Close</button>
+        </div>
     </div>
 </div>
 
@@ -6283,6 +6298,19 @@ document.addEventListener('DOMContentLoaded', function(){
         // Venue
         if(ds.venue){ document.getElementById('biVenue').textContent = ds.venue; setRow('biVenueRow', true); }
         else setRow('biVenueRow', false);
+        // Date / local time
+        setDetail('biDateRow','biDate', ds.kdate);
+        setDetail('biTimeRow','biTime', ds.ktime);
+        // Projected path (qualification rule) — only for projected fixtures
+        setDetail('biPathRow','biPath', ds.source);
+        // "Open Match Center" link — only for real fixtures (id > 0)
+        var biOpen = document.getElementById('biOpen');
+        if(biOpen){
+            if(ds.id && parseInt(ds.id,10) > 0){
+                biOpen.href = '/WC2026/predict?match=' + parseInt(ds.id,10) + '&view=details';
+                biOpen.style.display = '';
+            } else { biOpen.style.display = 'none'; }
+        }
         setLogo(document.getElementById('biHomeLogo'), ds.hlogo, ds.home);
         setLogo(document.getElementById('biAwayLogo'), ds.alogo, ds.away);
         biModal.classList.add('active');
@@ -6720,6 +6748,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       ptsNote:'Procedure: 1) Play the daily game and bank your goal + bonus points. 2) Submit predictions before kickoff — points are awarded automatically once the official result is synced. 3) Save your daily Fan Filter photo. Weekly score resets every week; overall score is cumulative across the tournament.',
       hostUSA:'USA',hostCAN:'Canada',hostMEX:'Mexico',hostCitiesCap:'16 Host Cities · United States · Canada · Mexico',matchesByLoc:'Matches & Locations',noMapMatches:'No synced matches available yet.',
       biHtLbl:'Half-time',biFtLbl:'Full-time',biEtLbl:'Extra time',biPenLbl:'Penalties',
+      biDateLbl:'Date',biTimeLbl:'Local Time',biPathLbl:'Projected Path',biOpenMatch:'Open Match Center ↗',
       teamsMapTitle:'Participating Teams Map',openTeamsMap:'Open Full Map ↗',teamsMapSub:'Explore all 48 qualified nations — tap any country for its football story, stars and key moments.',
       next24MapTitle:'Next 24 hours',next24Empty:'No matches in the next 24 hours.'
     },
@@ -6783,6 +6812,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       ptsNote:'الطريقة: 1) العب اللعبة اليومية واجمع نقاط الأهداف والمكافآت. 2) أرسل التوقعات قبل انطلاق المباراة — تُمنح النقاط تلقائيًا بعد مزامنة النتيجة الرسمية. 3) احفظ صورة فلتر المشجع اليومية. تُصفّر نقاط الأسبوع أسبوعيًا، أما النقاط الإجمالية فتتراكم طوال البطولة.',
       hostUSA:'أمريكا',hostCAN:'كندا',hostMEX:'المكسيك',hostCitiesCap:'16 مدينة مضيفة · الولايات المتحدة · كندا · المكسيك',matchesByLoc:'المباريات والمواقع',noMapMatches:'لا توجد مباريات متزامنة بعد.',
       biHtLbl:'الشوط الأول',biFtLbl:'الوقت الأصلي',biEtLbl:'الوقت الإضافي',biPenLbl:'ركلات الترجيح',
+      biDateLbl:'التاريخ',biTimeLbl:'التوقيت المحلي',biPathLbl:'المسار المتوقع',biOpenMatch:'فتح مركز المباراة ↗',
       teamsMapTitle:'خريطة المنتخبات المشاركة',openTeamsMap:'فتح الخريطة كاملة ↗',teamsMapSub:'استكشف المنتخبات الـ48 المتأهلة — اضغط على أي دولة لقصتها الكروية ونجومها ولحظاتها المميزة.',
       next24MapTitle:'خلال 24 ساعة',next24Empty:'لا توجد مباريات خلال الـ24 ساعة القادمة.'
     }
@@ -7124,6 +7154,9 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .bi-row:last-child{border-bottom:0}
 .bi-row span{color:rgba(255,255,255,.66);font-weight:700}.bi-row b{color:#fff;font-weight:900;text-align:end}
 #bracketInfoModal .primary-btn{width:100%}
+#bracketInfoModal .bi-actions{display:flex;flex-direction:column;gap:10px;margin-top:4px}
+#bracketInfoModal .bi-open{display:inline-flex;align-items:center;justify-content:center;width:100%;padding:12px 16px;border-radius:14px;background:rgba(168,231,255,.14);border:1px solid rgba(168,231,255,.3);color:#A8E7FF;font-weight:900;font-size:14px;text-decoration:none}
+#bracketInfoModal .bi-open:hover{background:rgba(168,231,255,.22)}
 
 /* ===== v6 ===== */
 /* (1) stop Next Matches from overlapping the banner: drop the hero/container overlap */
@@ -7209,6 +7242,16 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .teams-map-sub{color:rgba(255,255,255,.72);font-weight:700;font-size:13px;margin:2px 0 14px;line-height:1.6}
 .teams-map-frame-wrap{position:relative;border-radius:20px;overflow:hidden;border:1px solid rgba(168,231,255,.16);background:#0a1b30;height:560px}
 .teams-map-frame{width:100%;height:100%;border:0;display:block}
+.teams-map-leaflet{width:100%;height:100%;z-index:1}
+.teams-map-leaflet .leaflet-container{background:#0a1b30}
+.teams-map-leaflet .leaflet-control-attribution{background:rgba(6,26,54,.7);color:rgba(255,255,255,.55)}
+.teams-map-leaflet .leaflet-control-attribution a{color:rgba(168,231,255,.8)}
+.teams-map-leaflet .leaflet-popup-content-wrapper{background:#0B2C55;color:#fff;border:1px solid rgba(168,231,255,.22);border-radius:14px}
+.teams-map-leaflet .leaflet-popup-tip{background:#0B2C55}
+.teams-map-leaflet .leaflet-popup-content{font-weight:800;font-size:13px;margin:10px 14px}
+.teams-map-leaflet .leaflet-popup-content a{color:#A8E7FF;font-weight:900;text-decoration:none}
+.tm-pin{border:2px solid rgba(255,255,255,.9);border-radius:50%;overflow:hidden;background:#0B2C55;box-shadow:0 3px 10px rgba(0,0,0,.5)}
+.tm-pin img{width:100%;height:100%;object-fit:cover;display:block}
 html[dir="rtl"] .teams-map-sub{text-align:right}
 html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22)}
 @media(max-width:768px){.teams-map-frame-wrap{height:460px}}
@@ -7518,6 +7561,33 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
       if(mk){ map.setView(mk.getLatLng(), 5, {animate:true}); mk.openPopup(); }
     });
   });
+})();
+
+/* (1) Participating Teams Map — native Leaflet map of the qualified nations */
+(function(){
+  var el=document.getElementById('teamsLeafletMap');
+  if(!el || typeof L==='undefined') return;
+  var nations=<?= json_encode($teamsMapNations ?? [], JSON_UNESCAPED_UNICODE) ?>;
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  var map=L.map(el,{zoomControl:true,scrollWheelZoom:false,worldCopyJump:true}).setView([25,10],2);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    maxZoom:9,minZoom:1,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  }).addTo(map);
+  var bounds=[];
+  nations.forEach(function(n){
+    var icon=L.divIcon({
+      className:'tm-pin-wrap',
+      html:'<span class="tm-pin" style="display:block;width:30px;height:30px"><img src="https://flagcdn.com/w40/'+esc(n.code)+'.png" alt="" loading="lazy"></span>',
+      iconSize:[30,30], iconAnchor:[15,15]
+    });
+    var m=L.marker([n.lat,n.lng],{icon:icon,title:n.name}).addTo(map);
+    m.bindPopup('<strong>'+esc(n.name)+'</strong><br><a href="/WC2026/matches?q='+encodeURIComponent(n.name)+'">View fixtures →</a>');
+    bounds.push([n.lat,n.lng]);
+  });
+  if(bounds.length) map.fitBounds(bounds,{padding:[30,30],maxZoom:4});
+  setTimeout(function(){ map.invalidateSize(); }, 300);
+  window.addEventListener('resize', function(){ map.invalidateSize(); });
 })();
 </script>
 

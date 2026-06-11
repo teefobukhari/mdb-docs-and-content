@@ -91,6 +91,7 @@ $matchRows = wc_rows(
     "
     SELECT
         id,
+        round_name,
         home_team,
         home_logo,
         away_team,
@@ -100,6 +101,12 @@ $matchRows = wc_rows(
         city,
         status_short,
         status_long,
+        elapsed,
+        home_score,
+        away_score,
+        home_halftime_score,
+        away_halftime_score,
+        ft_home, ft_away, et_home, et_away, pen_home, pen_away,
         is_live,
         is_finished
     FROM (
@@ -124,6 +131,9 @@ $matchRows = wc_rows(
             COALESCE(goals_away, ft_away) AS away_score,
             ht_home AS home_halftime_score,
             ht_away AS away_halftime_score,
+            ft_home AS ft_home, ft_away AS ft_away,
+            et_home AS et_home, et_away AS et_away,
+            pen_home AS pen_home, pen_away AS pen_away,
             NULL AS winner_team_id,
             CASE WHEN status_short IN ('LIVE','1H','HT','2H','ET','BT','P','SUSP','INT') THEN 1 ELSE 0 END AS is_live,
             CASE WHEN status_short IN ('FT','AET','PEN') THEN 1 ELSE 0 END AS is_finished,
@@ -145,6 +155,21 @@ if (!$matchRows) {
 $match = $matchRows[0];
 $matchStarted = strtotime((string)$match['match_datetime']) <= time();
 $isClosed = !empty($match['is_live']) || !empty($match['is_finished']) || $matchStarted;
+
+/* "Details" opens the same page in a read-only detail view (no prediction form) */
+$detailsMode = (($_GET['view'] ?? '') === 'details');
+
+/* Helpers for the details panel */
+$matchStatusLabel = !empty($match['is_finished']) ? 'Finished'
+    : (!empty($match['is_live']) ? 'Live' : ($matchStarted ? 'In Progress' : 'Upcoming'));
+$pairScore = static function (?int $a, ?int $b): string {
+    return (!is_null($a) && !is_null($b)) ? ((int)$a . ' - ' . (int)$b) : '';
+};
+$detHt  = $pairScore($match['home_halftime_score'] ?? null, $match['away_halftime_score'] ?? null);
+$detFt  = $pairScore($match['ft_home'] ?? null, $match['ft_away'] ?? null);
+$detEt  = $pairScore($match['et_home'] ?? null, $match['et_away'] ?? null);
+$detPen = $pairScore($match['pen_home'] ?? null, $match['pen_away'] ?? null);
+$detHasScore = !is_null($match['home_score'] ?? null) && !is_null($match['away_score'] ?? null);
 
 $existingRows = wc_rows(
     $conn,
@@ -224,7 +249,7 @@ $predAway = $existing ? (int)$existing['predicted_away_score'] : 0;
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Predict Match - CATRION FIFA World Cup 2026 Challenge</title>
+<title><?= $detailsMode ? 'Match Details' : 'Predict Match' ?> - CATRION FIFA World Cup 2026 Challenge</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <link rel="icon" type="image/png" href="<?= h($iconPath) ?>">
@@ -646,7 +671,29 @@ body.popup-mode .card{background:transparent !important}
     .ms-form input{font-size:14px !important}
     .ms-list{max-height:220px !important}
     .match-social{margin-top:16px !important}
+    .md-bigscore b{font-size:30px !important}
 }
+
+/* Details view (read-only) */
+.match-details{margin-top:6px}
+.md-status{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:999px;font-weight:900;font-size:13px;background:rgba(255,255,255,.08);border:1px solid rgba(168,231,255,.2);color:#fff;margin:2px 0 14px}
+.md-status-dot{width:9px;height:9px;border-radius:50%;background:#A8E7FF}
+.md-status.md-live{background:rgba(233,71,71,.16);border-color:rgba(233,71,71,.4);color:#FFB4B4}
+.md-status.md-live .md-status-dot{background:#E94747;animation:mdPulse 1.1s ease infinite}
+.md-status.md-finished{background:rgba(126,244,174,.14);border-color:rgba(126,244,174,.34);color:#7EF4AE}
+.md-status.md-finished .md-status-dot{background:#7EF4AE}
+@keyframes mdPulse{0%,100%{opacity:1}50%{opacity:.35}}
+.md-bigscore{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;margin:6px 0 16px;text-align:center}
+.md-bigscore span{font-weight:800;color:#fff;font-size:14px}
+.md-bigscore b{font-size:38px;font-weight:900;color:#FFE19A;white-space:nowrap}
+.md-bigscore b i{color:rgba(255,255,255,.5);font-style:normal;padding:0 4px}
+.md-rows{display:flex;flex-direction:column;gap:0;border-radius:18px;overflow:hidden;border:1px solid rgba(168,231,255,.16)}
+.md-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 15px;background:rgba(255,255,255,.04)}
+.md-row + .md-row{border-top:1px solid rgba(168,231,255,.12)}
+.md-row span{color:rgba(255,255,255,.62);font-weight:800;font-size:12px;text-transform:uppercase;letter-spacing:.4px}
+.md-row b{color:#fff;font-weight:900;font-size:14px;text-align:right}
+.match-details .actions{margin-top:16px}
+.match-details .actions .btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
 </style>
 </head>
 
@@ -718,7 +765,49 @@ body.popup-mode .card{background:transparent !important}
             </div>
         <?php endif; ?>
 
-        <?php if ($isClosed): ?>
+        <?php if ($detailsMode): ?>
+            <!-- DETAILS view (read-only) — distinct from the Predict form -->
+            <div class="match-details">
+                <h2 class="form-title">Match Details</h2>
+
+                <div class="md-status md-<?= h(strtolower($matchStatusLabel)) ?>">
+                    <span class="md-status-dot"></span>
+                    <?= h($matchStatusLabel) ?>
+                    <?php if (!empty($match['is_live']) && !empty($match['elapsed'])): ?>
+                        · <?= (int)$match['elapsed'] ?>'
+                    <?php elseif (!empty($match['status_long'])): ?>
+                        · <?= h($match['status_long']) ?>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($detHasScore): ?>
+                    <div class="md-bigscore">
+                        <span><?= h($match['home_team']) ?></span>
+                        <b><?= (int)$match['home_score'] ?> <i>:</i> <?= (int)$match['away_score'] ?></b>
+                        <span><?= h($match['away_team']) ?></span>
+                    </div>
+                <?php endif; ?>
+
+                <div class="md-rows">
+                    <?php if (!empty($match['round_name'])): ?>
+                        <div class="md-row"><span>Round</span><b><?= h($match['round_name']) ?></b></div>
+                    <?php endif; ?>
+                    <div class="md-row"><span>Kickoff</span><b><?= h(date('D, d M Y - h:i A', strtotime((string)$match['match_datetime']))) ?></b></div>
+                    <?php if ($detHt !== ''): ?><div class="md-row"><span>Half-time</span><b><?= h($detHt) ?></b></div><?php endif; ?>
+                    <?php if ($detFt !== ''): ?><div class="md-row"><span>Full-time</span><b><?= h($detFt) ?></b></div><?php endif; ?>
+                    <?php if ($detEt !== ''): ?><div class="md-row"><span>Extra time</span><b><?= h($detEt) ?></b></div><?php endif; ?>
+                    <?php if ($detPen !== ''): ?><div class="md-row"><span>Penalties</span><b><?= h($detPen) ?></b></div><?php endif; ?>
+                    <?php $detVenue = trim((string)($match['stadium'] ?? '') . (!empty($match['city']) ? ' • ' . $match['city'] : '')); ?>
+                    <?php if ($detVenue !== ''): ?><div class="md-row"><span>Venue / Location</span><b><?= h($detVenue) ?></b></div><?php endif; ?>
+                </div>
+
+                <?php if (!$isClosed): ?>
+                    <div class="actions">
+                        <a class="btn btn-primary" href="/WC2026/predict?match=<?= (int)$matchId ?><?= $isPopup ? '&popup=1' : '' ?>"><?= $existing ? '✎ Update Prediction' : '⚽ Predict This Match' ?></a>
+                    </div>
+                <?php endif; ?>
+            </div>
+        <?php elseif ($isClosed): ?>
             <div class="notice warn">
                 Prediction is closed for this match because the match has already started or finished.
             </div>
