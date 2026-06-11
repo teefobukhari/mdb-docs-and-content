@@ -1403,11 +1403,75 @@ body{
     .hud-chip b{font-size:14px}
 }
 /* ============ [/WC2026 UI ENHANCEMENT styles] ============ */
+
+/* =====================================================================
+   [WC2026] Match home.php header + dark colour scheme.
+   Applied last so it overrides the light theme above. The globe stage
+   (already dark) and the white flag badges stay intact.
+   ===================================================================== */
+html{background:#04142B}
+body{
+    background:
+        radial-gradient(circle at 8% 8%, rgba(85,183,255,.16), transparent 30%),
+        radial-gradient(circle at 92% 8%, rgba(14,99,230,.28), transparent 34%),
+        radial-gradient(circle at 50% 76%, rgba(245,200,91,.07), transparent 30%),
+        linear-gradient(180deg,#04142B 0%,#071F42 45%,#04142B 100%) !important;
+    color:#fff !important;
+}
+/* Header to match home.php (dark gradient + KV banner) */
+.hero{
+    min-height:300px;
+    padding:24px 38px 90px !important;
+    background:
+        radial-gradient(circle at 72% 18%, rgba(14,99,230,.34), transparent 32%),
+        radial-gradient(circle at 15% 28%, rgba(85,183,255,.16), transparent 30%),
+        linear-gradient(135deg,#04142B 0%,#08254D 48%,#0E63E6 100%) !important;
+}
+.hero-banner-layer{
+    position:absolute;top:0;left:0;right:0;bottom:0;width:100%;z-index:0;
+    background:url('/WC2026/WC-2026-KV.jpg') center center/cover no-repeat;
+    opacity:.9;pointer-events:none;
+}
+.hero-banner-layer::after{
+    content:"";position:absolute;inset:0;
+    background:linear-gradient(135deg,rgba(4,20,43,.66),rgba(8,37,77,.42) 55%,rgba(14,99,230,.32));
+}
+.hero .nav,.hero .hero-content{position:relative;z-index:2}
+.brand-title{color:#fff}
+.brand-sub{color:rgba(255,255,255,.78)}
+
+/* Stat cards stay light (same as home), content cards go dark */
+.stat{background:linear-gradient(180deg,#FFFFFF,#F7FAFF) !important;box-shadow:0 18px 48px rgba(0,0,0,.20) !important}
+.card{
+    background:linear-gradient(135deg,#061A36,#08254D 58%,#0A3A76) !important;
+    border:1px solid rgba(168,231,255,.18) !important;color:#fff !important;
+    box-shadow:0 24px 60px rgba(0,0,0,.28) !important;
+}
+.card-title{color:#fff !important}
+.tab{background:rgba(255,255,255,.08) !important;color:#fff !important;border:1px solid rgba(168,231,255,.18)}
+.tab.active{background:linear-gradient(135deg,#F5C85B,#FFE19A) !important;color:#071A35 !important}
+.search input{background:rgba(255,255,255,.06) !important;border:1px solid rgba(168,231,255,.2) !important;color:#fff !important}
+.search input::placeholder{color:rgba(255,255,255,.5)}
+.search button{background:linear-gradient(135deg,#F5C85B,#FFE19A) !important;color:#071A35 !important}
+
+/* Match cards dark with readable text */
+.match-card{background:linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.02)) !important;border:1px solid rgba(168,231,255,.16) !important}
+.match-card:before{display:none}
+.round{color:rgba(255,255,255,.6) !important}
+.team-name{color:#fff !important}
+.match-meta{color:rgba(255,255,255,.62) !important;border-top:1px solid rgba(168,231,255,.12) !important}
+.status.upcoming{background:rgba(85,183,255,.18) !important;color:#A8E7FF !important}
+.status.finished{background:rgba(255,255,255,.1) !important;color:rgba(255,255,255,.72) !important}
+.status.live{background:rgba(17,163,106,.18) !important;color:#7EF4AE !important;box-shadow:none !important}
+.empty{background:rgba(245,200,91,.12) !important;border-color:rgba(245,200,91,.3) !important;color:#FFE19A !important}
+.details-btn{background:rgba(255,255,255,.12) !important;border:1px solid rgba(168,231,255,.18) !important}
+@media(max-width:640px){.hero{padding:22px 18px 86px !important}}
 </style>
 </head>
 <body>
 
 <header class="hero">
+    <div class="hero-banner-layer"></div>
     <div class="nav">
         <div class="brand">
             <div class="logo-card">
