@@ -242,6 +242,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $savedNow = ($_SERVER['REQUEST_METHOD'] === 'POST' && $success !== '' && $isPopup);
 
+/* ---- Award prediction points once the match is finished (idempotent) ----
+   The points_calculated=0 guard means this runs at most once per prediction and
+   never double-awards, even if a separate scoring job also runs. */
+if (!defined('WC_PTS_PREDICT_WINNER')) define('WC_PTS_PREDICT_WINNER', 3);
+if (!defined('WC_PTS_PREDICT_SCORE'))  define('WC_PTS_PREDICT_SCORE', 5);
+
+if ($existing
+    && !empty($match['is_finished'])
+    && !is_null($match['home_score'] ?? null) && !is_null($match['away_score'] ?? null)
+    && (int)($existing['points_calculated'] ?? 0) === 0) {
+
+    $aH = (int)$match['home_score'];
+    $aA = (int)$match['away_score'];
+    $pH = (int)$existing['predicted_home_score'];
+    $pA = (int)$existing['predicted_away_score'];
+    $actualWinner = winnerFromScores($aH, $aA);
+    $predWinner   = (string)($existing['predicted_winner'] ?? winnerFromScores($pH, $pA));
+
+    $awardPts = 0;
+    if ($pH === $aH && $pA === $aA) {
+        $awardPts = WC_PTS_PREDICT_SCORE;        // exact score (includes the winner)
+    } elseif ($predWinner === $actualWinner) {
+        $awardPts = WC_PTS_PREDICT_WINNER;       // correct winner only
+    }
+
+    $upStmt = $conn->prepare("
+        UPDATE WC2026_Predictions
+        SET points_awarded = ?, points_calculated = 1, updated_at = NOW()
+        WHERE user_id = ? AND match_id = ? AND points_calculated = 0
+    ");
+    if ($upStmt) {
+        $upStmt->bind_param("iii", $awardPts, $userId, $matchId);
+        if ($upStmt->execute() && $upStmt->affected_rows > 0) {
+            $existing['points_awarded']    = $awardPts;
+            $existing['points_calculated'] = 1;
+        }
+    }
+}
+
 $predHome = $existing ? (int)$existing['predicted_home_score'] : 0;
 $predAway = $existing ? (int)$existing['predicted_away_score'] : 0;
 ?>
