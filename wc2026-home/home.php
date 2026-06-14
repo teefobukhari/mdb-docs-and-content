@@ -710,14 +710,72 @@ if (!$standingsRows) {
     ");
 }
 
-/* ---- Country flags from WC2026_Filter_Countries (matched by name or code) ---- */
+/* ---- Country flags — single source of truth: db_form.WC2026_Filter_Countries.
+   Matched by name or code, with accent-stripping + alias normalization so
+   bracket/standings team names (e.g. "Türkiye", "USA", "Korea Republic") still
+   resolve to the right flag_path in that table. ---- */
+
+/* Normalize a country/team name to an accent-free, alnum-only token. */
+function wc_norm_country(string $s): string {
+    $s = trim($s);
+    if ($s === '') return '';
+    if (function_exists('iconv')) {
+        $t = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $s);
+        if ($t !== false && $t !== '') $s = $t;
+    }
+    $s = mb_strtolower($s);
+    $s = preg_replace('/[^a-z0-9]+/', '', $s);
+    return (string)$s;
+}
+
+/* All equivalent normalized tokens for a country (so either spelling resolves). */
+function wc_country_aliases(string $norm): array {
+    static $map = null;
+    if ($map === null) {
+        $groups = [
+            ['usa','us','unitedstates','unitedstatesofamerica'],
+            ['turkiye','turkey'],
+            ['southkorea','korearepublic','korea'],
+            ['northkorea','koreadpr','koreademocraticpeoplesrepublic'],
+            ['ivorycoast','cotedivoire'],
+            ['czechia','czechrepublic'],
+            ['iran','iranislamicrepublic'],
+            ['china','chinapr'],
+            ['drcongo','congodr','democraticrepublicofthecongo','congokinshasa'],
+            ['congo','congorepublic','congobrazzaville'],
+            ['caboverde','capeverde'],
+            ['bosniaandherzegovina','bosnia','bosniaherzegovina'],
+            ['unitedarabemirates','uae'],
+            ['netherlands','holland'],
+            ['russia','russianfederation'],
+            ['bolivia','boliviaplurinationalstateof'],
+            ['venezuela','venezuelabolivarianrepublicof'],
+            ['moldova','republicofmoldova'],
+            ['syria','syrianarabrepublic'],
+            ['tanzania','unitedrepublicoftanzania'],
+            ['saudiarabia','ksa'],
+        ];
+        $map = [];
+        foreach ($groups as $g) { foreach ($g as $tok) $map[$tok] = $g; }
+    }
+    if ($norm === '') return [];
+    return $map[$norm] ?? [$norm];
+}
+
 $flagByName = [];
 $flagByCode = [];
 foreach (wc_rows($conn, "SELECT country_name, country_code, flag_path FROM WC2026_Filter_Countries WHERE status='Active'") as $fr) {
     $fp = trim((string)($fr['flag_path'] ?? ''));
     if ($fp === '') continue;
-    $flagByName[mb_strtolower(trim((string)($fr['country_name'] ?? '')))] = $fp;
-    $flagByCode[strtolower(trim((string)($fr['country_code'] ?? '')))]   = $fp;
+    $nm = trim((string)($fr['country_name'] ?? ''));
+    $cd = trim((string)($fr['country_code'] ?? ''));
+    if ($nm !== '') $flagByName[mb_strtolower($nm)] = $fp;
+    if ($cd !== '') $flagByCode[strtolower($cd)]    = $fp;
+    /* Register under every normalized alias so lookups resolve regardless of
+       spelling/accents on the bracket/standings side. */
+    foreach (wc_country_aliases(wc_norm_country($nm)) as $tok) {
+        if ($tok !== '' && !isset($flagByName[$tok])) $flagByName[$tok] = $fp;
+    }
 }
 
 function wc_flag(string $team, array $byName, array $byCode): string {
@@ -725,6 +783,9 @@ function wc_flag(string $team, array $byName, array $byCode): string {
     if ($k === '') return '';
     if (isset($byName[$k])) return $byName[$k];
     if (isset($byCode[$k])) return $byCode[$k];
+    foreach (wc_country_aliases(wc_norm_country($team)) as $tok) {
+        if (isset($byName[$tok])) return $byName[$tok];
+    }
     return '';
 }
 
@@ -964,6 +1025,11 @@ if (!empty($realKnockout)) {
 $knockoutMatches = [];
 foreach ($knockoutStages as $stRows) {
     foreach ($stRows as $r) $knockoutMatches[] = $r;
+}
+/* Final pass: guarantee every bracket team's flag comes from WC2026_Filter_Countries. */
+wc_attach_flags($knockoutMatches, $flagByName, $flagByCode);
+foreach ($knockoutStages as $sk => $stRows) {
+    wc_attach_flags($knockoutStages[$sk], $flagByName, $flagByCode);
 }
 $knockoutTotal = count($knockoutMatches);
 $knockoutFinished = 0;
