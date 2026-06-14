@@ -426,11 +426,15 @@ $ffCountries = wc_rows($conn, "
 $ffSelectedCountry = $ffCountries[0] ?? null;
 
 /* Team flags come from WC2026_Filter_Countries (single source of truth). Reuse
-   the rows already loaded above to build name/code maps for the match cards. */
-require_once __DIR__ . '/_flags.php';
-$wcFlagMaps  = wc_flag_maps_from_rows($ffCountries);
-$wcFlagByName = $wcFlagMaps['byName'];
-$wcFlagByCode = $wcFlagMaps['byCode'];
+   the rows already loaded above. Defensive: if the helper is unavailable the
+   cards simply fall back to flagcdn instead of breaking the page. */
+$wcFlagByName = []; $wcFlagByCode = [];
+if (is_file(__DIR__ . '/_flags.php')) require_once __DIR__ . '/_flags.php';
+if (function_exists('wc_flag_maps_from_rows')) {
+    $wcFlagMaps   = wc_flag_maps_from_rows($ffCountries);
+    $wcFlagByName = $wcFlagMaps['byName'];
+    $wcFlagByCode = $wcFlagMaps['byCode'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1717,9 +1721,9 @@ body{
                         $awayEmoji = wc_flag_emoji($awayCode);
                         // Flag source priority: DB logo -> WC2026_Filter_Countries.flag_path -> flagcdn.
                         $homeFlagSrc = !empty($m['home_logo']) ? (string)$m['home_logo']
-                            : wc_asset_path(wc_flag((string)($m['home_team'] ?? ''), $wcFlagByName, $wcFlagByCode));
+                            : (function_exists('wc_flag') ? wc_asset_path(wc_flag((string)($m['home_team'] ?? ''), $wcFlagByName, $wcFlagByCode)) : '');
                         $awayFlagSrc = !empty($m['away_logo']) ? (string)$m['away_logo']
-                            : wc_asset_path(wc_flag((string)($m['away_team'] ?? ''), $wcFlagByName, $wcFlagByCode));
+                            : (function_exists('wc_flag') ? wc_asset_path(wc_flag((string)($m['away_team'] ?? ''), $wcFlagByName, $wcFlagByCode)) : '');
                     ?>
                     <article class="match-card">
                         <!-- [WC2026 UI ENHANCEMENT] Faint football watermark (decorative only) -->

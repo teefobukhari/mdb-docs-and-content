@@ -756,12 +756,18 @@ body.popup-mode .card{background:transparent !important}
                 $homeEmoji = wc_flag_emoji($homeCode);
                 $awayEmoji = wc_flag_emoji($awayCode);
                 // Flags from WC2026_Filter_Countries (single source) -> flagcdn fallback.
-                require_once __DIR__ . '/_flags.php';
-                $pFlag = wc_load_flag_maps($conn);
+                // Defensive: guard the include + use the proven wc_rows helper.
+                $pFlagByName = []; $pFlagByCode = [];
+                if (is_file(__DIR__ . '/_flags.php')) require_once __DIR__ . '/_flags.php';
+                if (function_exists('wc_flag_maps_from_rows')) {
+                    $pCountryRows = wc_rows($conn, "SELECT country_name, country_code, flag_path FROM WC2026_Filter_Countries WHERE status='Active'");
+                    $pf = wc_flag_maps_from_rows($pCountryRows);
+                    $pFlagByName = $pf['byName']; $pFlagByCode = $pf['byCode'];
+                }
                 $homeFlagSrc = !empty($match['home_logo']) ? (string)$match['home_logo']
-                    : wc_flag((string)($match['home_team'] ?? ''), $pFlag['byName'], $pFlag['byCode']);
+                    : (function_exists('wc_flag') ? wc_flag((string)($match['home_team'] ?? ''), $pFlagByName, $pFlagByCode) : '');
                 $awayFlagSrc = !empty($match['away_logo']) ? (string)$match['away_logo']
-                    : wc_flag((string)($match['away_team'] ?? ''), $pFlag['byName'], $pFlag['byCode']);
+                    : (function_exists('wc_flag') ? wc_flag((string)($match['away_team'] ?? ''), $pFlagByName, $pFlagByCode) : '');
             ?>
             <div class="teams">
                 <div class="team">
