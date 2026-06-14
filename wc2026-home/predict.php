@@ -245,8 +245,10 @@ $savedNow = ($_SERVER['REQUEST_METHOD'] === 'POST' && $success !== '' && $isPopu
 /* ---- Award prediction points once the match is finished (idempotent) ----
    The points_calculated=0 guard means this runs at most once per prediction and
    never double-awards, even if a separate scoring job also runs. */
-if (!defined('WC_PTS_PREDICT_WINNER')) define('WC_PTS_PREDICT_WINNER', 300);
-if (!defined('WC_PTS_PREDICT_SCORE'))  define('WC_PTS_PREDICT_SCORE', 500);
+if (!defined('WC_PTS_PREDICT_WINNER'))   define('WC_PTS_PREDICT_WINNER', 300);
+if (!defined('WC_PTS_PREDICT_SCORE'))    define('WC_PTS_PREDICT_SCORE', 500);
+if (!defined('WC_PTS_PREDICT_CHAMPION')) define('WC_PTS_PREDICT_CHAMPION', 5000);
+if (!defined('WC_PTS_PHOTO'))            define('WC_PTS_PHOTO', 1000);
 
 if ($existing
     && !empty($match['is_finished'])
@@ -512,6 +514,14 @@ body.popup-mode .popup-title{
 .predict-pts-hint b{color:#F5C85B;font-weight:900}
 .predict-pts-hint i{color:rgba(234,244,255,.4);font-style:normal}
 .predict-pts-hint span{color:rgba(234,244,255,.8)}
+
+.pts-info{margin:22px auto 0;max-width:560px}
+.pts-info-title{margin:0 0 10px;font-size:14px;font-weight:900;color:#fff}
+.pts-table{width:100%;border-collapse:collapse;font-size:13px}
+.pts-table td{padding:9px 10px;border-bottom:1px solid rgba(168,231,255,.14);color:rgba(234,244,255,.9);font-weight:700}
+.pts-table tr:last-child td{border-bottom:0}
+.pts-table td:last-child{text-align:end;white-space:nowrap}
+.pts-table b{color:#F5C85B;font-weight:900}
 
 .score-sep{
     color:var(--muted);
@@ -918,6 +928,21 @@ body.popup-mode .card{background:transparent !important}
                 </div>
             </form>
         <?php endif; ?>
+
+        <!-- How points work (full scoring list) -->
+        <section class="pts-info">
+            <h3 class="pts-info-title">How to collect points</h3>
+            <table class="pts-table">
+                <tr><td>🥅 Daily game — score a goal (by zone)</td><td><b>+10 / +20 / +30</b></td></tr>
+                <tr><td>⭐ Golden ball goal (bonus)</td><td><b>+50</b></td></tr>
+                <tr><td>🔥 Combo streak (every 3 / 5 goals)</td><td><b>+20 / +50</b></td></tr>
+                <tr><td>🎁 Daily food bonus roll</td><td><b>+10 → +100</b></td></tr>
+                <tr><td>🎯 Predict the match winner</td><td><b>+<?= number_format(WC_PTS_PREDICT_WINNER) ?></b></td></tr>
+                <tr><td>✅ Predict the correct score</td><td><b>+<?= number_format(WC_PTS_PREDICT_SCORE) ?></b></td></tr>
+                <tr><td>🏆 Predict the champion (Final only)</td><td><b>+<?= number_format(WC_PTS_PREDICT_CHAMPION) ?></b></td></tr>
+                <tr><td>📸 Fan Filter photo (once per day)</td><td><b>+<?= number_format(WC_PTS_PHOTO) ?></b></td></tr>
+            </table>
+        </section>
 
         <!-- Per-match fan reactions & comments -->
         <section class="match-social" id="matchSocial" data-match="<?= (int)$matchId ?>">
