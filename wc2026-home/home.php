@@ -807,7 +807,11 @@ wc_attach_flags($mapMatches, $flagByName, $flagByCode);
 function wc_group_letter_from_name(?string $groupName): string {
     $g = strtoupper(trim((string)$groupName));
 
-    if (preg_match('/GROUP\s+([A-Z])/', $g, $m)) return $m[1];
+    // Ignore the generic "GROUP STAGE" label (not a specific group A–L).
+    if ($g === 'GROUP STAGE') return '';
+
+    // Require a standalone A–L letter so "GROUP STAGE" can't read as group "S".
+    if (preg_match('/GROUP\s+([A-L])\b/', $g, $m)) return $m[1];
     if (preg_match('/\b([A-L])\b/', $g, $m)) return $m[1];
 
     return '';
@@ -5399,6 +5403,8 @@ body:before{
         <?php
             $bracketGroups = [];
             foreach ($standingsRows as $sr) {
+                $gname = strtolower(trim((string)($sr['group_name'] ?? '')));
+                if ($gname === 'group stage') continue; // generic label, not a real group
                 $gl = strtoupper(trim((string)($sr['group_letter'] ?? '')));
                 if ($gl === '') continue;
                 $bracketGroups[$gl][] = $sr;
