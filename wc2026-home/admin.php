@@ -116,6 +116,15 @@ function dWhere(string $col, string &$types, array &$params): string {
 
 /* Points awarded per distinct day a user uses the Fan Studio (one award/day). */
 if (!defined('WC_STUDIO_DAILY_PTS')) define('WC_STUDIO_DAILY_PTS', 3);
+if (!defined('WC_PTS_PHOTO')) define('WC_PTS_PHOTO', 10); // Fan Filter photo (once per day) per the scoring rules
+
+/** Total earned points for a behaviour row: predictions (winner+score+champion,
+ *  already in points_awarded) + game score + studio photos (once/day × WC_PTS_PHOTO). */
+function behaviorPoints(array $r): int {
+    return (int)($r['game_score'] ?? 0)
+         + (int)($r['pred_points'] ?? 0)
+         + (int)($r['studio_days'] ?? 0) * WC_PTS_PHOTO;
+}
 
 /* Detect the real timestamp / FK columns so KPIs + charts can date-filter and
    join correctly regardless of the exact schema naming. */
@@ -192,11 +201,11 @@ function userBehavior(int $limit = 500): array {
     $dLg   = dWhere('created_at', $types, $params);                               // logins (audit)
 
     /* Studio photos: only join when the table/timestamp exist (else show 0). */
-    $phSel = '0 AS studio_photos'; $phJoin = '';
+    $phSel = '0 AS studio_photos, 0 AS studio_days'; $phJoin = '';
     if ($photoTs !== '') {
         $dPh   = dWhere("`{$photoTs}`", $types, $params);
-        $phSel = 'COALESCE(ph.cnt,0) AS studio_photos';
-        $phJoin = "LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Filter_Photos WHERE 1=1 {$dPh} GROUP BY user_id) ph ON ph.user_id = u.id";
+        $phSel = 'COALESCE(ph.cnt,0) AS studio_photos, COALESCE(ph.days,0) AS studio_days';
+        $phJoin = "LEFT JOIN (SELECT user_id, COUNT(*) cnt, COUNT(DISTINCT DATE(`{$photoTs}`)) days FROM WC2026_Filter_Photos WHERE 1=1 {$dPh} GROUP BY user_id) ph ON ph.user_id = u.id";
     }
 
     $uw = uWhere('u', $types, $params); // outer user-attribute filters bind last
@@ -208,6 +217,7 @@ function userBehavior(int $limit = 500): array {
             COALESCE(gs.pts,0)    AS game_score,
             COALESCE(pr.correct_score,0)  AS correct_score,
             COALESCE(pr.correct_winner,0) AS correct_winner,
+            COALESCE(pr.pred_points,0)    AS pred_points,
             COALESCE(re.cnt,0)    AS reactions,
             COALESCE(co.cnt,0)    AS comments,
             COALESCE(fw.cnt,0)    AS wall_posts,
@@ -215,7 +225,7 @@ function userBehavior(int $limit = 500): array {
             {$phSel}
         FROM WC2026_Users u
         LEFT JOIN (SELECT user_id, COUNT(*) plays, COALESCE(SUM(total_points),0) pts FROM WC2026_Game_Sessions WHERE 1=1 {$dGame} GROUP BY user_id) gs ON gs.user_id = u.id
-        LEFT JOIN (SELECT user_id, SUM(CASE WHEN points_awarded >= 5 THEN 1 ELSE 0 END) correct_score, SUM(CASE WHEN points_awarded > 0 THEN 1 ELSE 0 END) correct_winner FROM WC2026_Predictions WHERE 1=1 {$dPred} GROUP BY user_id) pr ON pr.user_id = u.id
+        LEFT JOIN (SELECT user_id, SUM(CASE WHEN points_awarded = 5 THEN 1 ELSE 0 END) correct_score, SUM(CASE WHEN points_awarded > 0 THEN 1 ELSE 0 END) correct_winner, COALESCE(SUM(points_awarded),0) pred_points FROM WC2026_Predictions WHERE 1=1 {$dPred} GROUP BY user_id) pr ON pr.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Match_Reactions WHERE 1=1 {$dRe} GROUP BY user_id) re ON re.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Fan_Wall_Comments WHERE 1=1 {$dCo} GROUP BY user_id) co ON co.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Fan_Wall WHERE 1=1 {$dFw} GROUP BY user_id) fw ON fw.user_id = u.id
@@ -343,12 +353,13 @@ if (isset($_GET['export'])) {
 
     if ($ex === 'behavior') {
         $rows = userBehavior(0); // all users
+        usort($rows, fn($a, $b) => behaviorPoints($b) <=> behaviorPoints($a));
         $headers = ['ID','PRN','Full name','Department','Location','Role','Status','Last login',
-                    'Correct score','Correct winner','Reactions','Comments','Wall posts','Game score','Game plays','Logins','Studio photos'];
+                    'Correct score','Correct winner','Reactions','Comments','Wall posts','Game score','Game plays','Logins','Studio photos','Total points'];
         $data = array_map(function ($r) {
             return [$r['id'],$r['prn'] ?? '',$r['full_name'],$r['department'],$r['location'],$r['role'],$r['status'],$r['last_login_at'],
                     $r['correct_score'],$r['correct_winner'],$r['reactions'],$r['comments'],$r['wall_posts'],
-                    $r['game_score'],$r['game_plays'],$r['logins'],$r['studio_photos']];
+                    $r['game_score'],$r['game_plays'],$r['logins'],$r['studio_photos'],behaviorPoints($r)];
         }, $rows);
         if (strtolower((string)($_GET['fmt'] ?? '')) === 'xlsx') {
             xlsx_out("wc2026_behavior_{$date}.xlsx", $headers, $data);
@@ -492,6 +503,7 @@ $leaders = participants(15);
 
 /* Per-user behaviour & experience (all metrics, one row per user — all users) */
 $behavior = userBehavior(0);
+usort($behavior, fn($a, $b) => behaviorPoints($b) <=> behaviorPoints($a));
 
 /* ---------- actual records: comments / reactions / predictions ---------- */
 /* fixture_id -> "Home vs Away" label (defensive: blank if wc_fixtures absent). */
@@ -528,14 +540,15 @@ $recentReactions = q("SELECT r.reaction, r.match_id, r.`{$rTs}` AS ts, u.full_na
                       WHERE 1=1 {$dw}
                       ORDER BY r.`{$rTs}` DESC LIMIT 60", $t,$p);
 
-/* Recent predictions — actual rows with user + match + points + scored flag. */
+/* Recent predictions — actual rows with user + match + points. Only CORRECT ones
+   (points_awarded > 0: correct winner / score / champion). */
 $pTs = $predTs !== '' ? $predTs : 'id';
 $t=''; $p=[]; $dw=$predTs!==''?dWhere("p.`{$predTs}`",$t,$p):'';
 $recentPredictions = q("SELECT p.match_id, p.predicted_home_score, p.predicted_away_score, p.predicted_winner,
                                p.points_awarded, p.points_calculated, p.`{$pTs}` AS ts, u.full_name
                         FROM WC2026_Predictions p
                         LEFT JOIN WC2026_Users u ON u.id = p.user_id
-                        WHERE 1=1 {$dw}
+                        WHERE p.points_awarded > 0 {$dw}
                         ORDER BY p.`{$pTs}` DESC LIMIT 60", $t,$p);
 
 $reactEmoji = ['like'=>'👍','fire'=>'🔥','goal'=>'⚽','heart'=>'❤️','love'=>'❤️','wow'=>'😮','clap'=>'👏'];
@@ -819,6 +832,7 @@ td{font-weight:700;color:#eaf6ff}
                 <th>Reactions</th><th>Comments</th><th>Wall</th>
                 <th title="Game score (points)">Game score</th><th title="Game plays">Plays</th>
                 <th>Logins</th><th>Studio photos</th>
+                <th title="Predictions (winner/score/champion) + game score + studio photos">Total points</th>
             </tr></thead>
             <tbody>
             <?php if ($behavior): foreach ($behavior as $i => $r): ?>
@@ -837,9 +851,10 @@ td{font-weight:700;color:#eaf6ff}
                     <td><?= number_format((int)$r['game_plays']) ?></td>
                     <td><?= number_format((int)$r['logins']) ?></td>
                     <td><?= number_format((int)$r['studio_photos']) ?></td>
+                    <td class="pts"><?= number_format(behaviorPoints($r)) ?></td>
                 </tr>
             <?php endforeach; else: ?>
-                <tr><td colspan="14" class="empty">No user data for the selected filters.</td></tr>
+                <tr><td colspan="15" class="empty">No user data for the selected filters.</td></tr>
             <?php endif; ?>
             </tbody>
         </table>
@@ -848,7 +863,7 @@ td{font-weight:700;color:#eaf6ff}
     </div>
 
     <!-- Actual records: predictions / reactions / comments -->
-    <h2 class="section">Predictions <small style="font-weight:700;color:var(--muted);font-size:11px">(latest 60)</small></h2>
+    <h2 class="section">Correct predictions <small style="font-weight:700;color:var(--muted);font-size:11px">(scored only · latest 60)</small></h2>
     <div class="card col-12">
         <div class="table-scroll">
         <table>
@@ -866,7 +881,7 @@ td{font-weight:700;color:#eaf6ff}
                     <td><?= h(adminWhen($r['ts'])) ?></td>
                 </tr>
             <?php endforeach; else: ?>
-                <tr><td colspan="8" class="empty">No predictions yet.</td></tr>
+                <tr><td colspan="8" class="empty">No correct predictions yet.</td></tr>
             <?php endif; ?>
             </tbody>
         </table>
