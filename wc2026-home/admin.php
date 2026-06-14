@@ -223,7 +223,7 @@ function userBehavior(int $limit = 500): array {
         {$phJoin}
         WHERE 1=1 {$uw}
         ORDER BY (COALESCE(gs.pts,0) + COALESCE(pr.preds,0) + COALESCE(re.cnt,0) + COALESCE(co.cnt,0) + COALESCE(fw.cnt,0)) DESC, u.full_name ASC
-        LIMIT " . (int)$limit . "
+        " . ($limit > 0 ? ('LIMIT ' . (int)$limit) : '') . "
     ", $types, $params);
 }
 
@@ -237,6 +237,70 @@ function csv_out(string $filename, array $headers, array $rows): void {
     fputcsv($out, $headers);
     foreach ($rows as $r) fputcsv($out, $r);
     fclose($out);
+    exit;
+}
+
+/* ---------- XLSX export (real .xlsx via ZipArchive; no library needed) ---------- */
+function xlsx_out(string $filename, array $headers, array $rows): void {
+    while (ob_get_level()) { ob_end_clean(); }
+    if (!class_exists('ZipArchive')) { // graceful fallback
+        csv_out(preg_replace('/\.xlsx$/i', '.csv', $filename), $headers, $rows);
+        return;
+    }
+    $esc = fn($v) => htmlspecialchars((string)$v, ENT_QUOTES | ENT_XML1, 'UTF-8');
+    $colRef = function (int $n): string { $s = ''; $n++; while ($n > 0) { $m = ($n - 1) % 26; $s = chr(65 + $m) . $s; $n = intdiv($n - 1, 26); } return $s; };
+
+    $buildRow = function (array $cells, int $rowNum) use ($esc, $colRef): string {
+        $out = '<row r="' . $rowNum . '">';
+        $ci = 0;
+        foreach (array_values($cells) as $v) {
+            $ref = $colRef($ci) . $rowNum; $ci++;
+            $isNum = is_int($v) || is_float($v) || (is_string($v) && $v !== '' && preg_match('/^-?\d+(\.\d+)?$/', $v));
+            if ($isNum) $out .= '<c r="' . $ref . '"><v>' . $esc($v) . '</v></c>';
+            else        $out .= '<c r="' . $ref . '" t="inlineStr"><is><t xml:space="preserve">' . $esc($v) . '</t></is></c>';
+        }
+        return $out . '</row>';
+    };
+
+    $sheetData = $buildRow($headers, 1);
+    $rn = 2;
+    foreach ($rows as $r) { $sheetData .= $buildRow($r, $rn); $rn++; }
+
+    $tmp = tempnam(sys_get_temp_dir(), 'xlsx');
+    $zip = new ZipArchive();
+    $zip->open($tmp, ZipArchive::OVERWRITE);
+    $zip->addFromString('[Content_Types].xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      . '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+      . '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+      . '<Default Extension="xml" ContentType="application/xml"/>'
+      . '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+      . '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+      . '</Types>');
+    $zip->addFromString('_rels/.rels',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'
+      . '</Relationships>');
+    $zip->addFromString('xl/workbook.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      . '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+      . '<sheets><sheet name="Data" sheetId="1" r:id="rId1"/></sheets></workbook>');
+    $zip->addFromString('xl/_rels/workbook.xml.rels',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      . '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+      . '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
+      . '</Relationships>');
+    $zip->addFromString('xl/worksheets/sheet1.xml',
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      . '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' . $sheetData . '</sheetData></worksheet>');
+    $zip->close();
+
+    header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    header('Content-Length: ' . filesize($tmp));
+    readfile($tmp);
+    @unlink($tmp);
     exit;
 }
 
@@ -278,7 +342,7 @@ if (isset($_GET['export'])) {
     }
 
     if ($ex === 'behavior') {
-        $rows = userBehavior(100000);
+        $rows = userBehavior(0); // all users
         $headers = ['ID','PRN','Full name','Department','Location','Role','Status','Last login',
                     'Predictions','Correct','Reactions','Comments','Wall posts','Game score','Game plays','Logins','Studio photos'];
         $data = array_map(function ($r) {
@@ -286,6 +350,9 @@ if (isset($_GET['export'])) {
                     $r['predictions'],$r['predictions_correct'],$r['reactions'],$r['comments'],$r['wall_posts'],
                     $r['game_score'],$r['game_plays'],$r['logins'],$r['studio_photos']];
         }, $rows);
+        if (strtolower((string)($_GET['fmt'] ?? '')) === 'xlsx') {
+            xlsx_out("wc2026_behavior_{$date}.xlsx", $headers, $data);
+        }
         csv_out("wc2026_behavior_{$date}.csv", $headers, $data);
     }
 }
@@ -423,8 +490,8 @@ if ($photoCty !== '') {
 /* Top participants (leaderboard) */
 $leaders = participants(15);
 
-/* Per-user behaviour & experience (all metrics, one row per user) */
-$behavior = userBehavior(500);
+/* Per-user behaviour & experience (all metrics, one row per user — all users) */
+$behavior = userBehavior(0);
 
 /* ---------- actual records: comments / reactions / predictions ---------- */
 /* fixture_id -> "Home vs Away" label (defensive: blank if wc_fixtures absent). */
@@ -574,6 +641,12 @@ td{font-weight:700;color:#eaf6ff}
 .behav-search::placeholder{color:rgba(234,244,255,.5)}
 .behav-count{font-size:12px;font-weight:800;color:var(--muted)}
 #behavTable tbody tr.hide{display:none}
+.score-card h3{margin:0 0 10px}
+.score-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
+.score-list li{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid var(--line)}
+.score-ico{font-size:18px;flex:0 0 auto;width:26px;text-align:center}
+.score-label{flex:1;font-size:12.5px;font-weight:800;color:#eaf6ff}
+.score-pts{flex:0 0 auto;font-weight:900;font-size:12.5px;color:#06202e;background:linear-gradient(135deg,#F5C85B,#FFE19A);padding:4px 11px;border-radius:999px;white-space:nowrap}
 @media(max-width:1100px){.col-8,.col-6,.col-4,.col-3{grid-column:span 6}}
 @media(max-width:680px){.col-12,.col-8,.col-6,.col-4,.col-3{grid-column:span 12}.wrap{padding:14px}}
 </style>
@@ -618,7 +691,8 @@ td{font-weight:700;color:#eaf6ff}
         <a class="btn btn-gold" href="?export=users&<?= h(qstr()) ?>">⬇ Export users</a>
         <a class="btn btn-gold" href="?export=participants&<?= h(qstr()) ?>">⬇ Export participants</a>
         <a class="btn btn-gold" href="?export=studio&<?= h(qstr()) ?>">⬇ Export studio</a>
-        <a class="btn btn-gold" href="?export=behavior&<?= h(qstr()) ?>">⬇ Export behaviour</a>
+        <a class="btn btn-gold" href="?export=behavior&<?= h(qstr()) ?>">⬇ Behaviour CSV</a>
+        <a class="btn btn-gold" href="?export=behavior&fmt=xlsx&<?= h(qstr()) ?>">⬇ Behaviour Excel</a>
     </form>
 
     <!-- KPIs -->
@@ -691,12 +765,51 @@ td{font-weight:700;color:#eaf6ff}
         </div>
     </div>
 
+    <!-- Scoring system reference -->
+    <?php
+        $scoringGroups = [
+            'Daily Game' => [
+                ['🥅', 'Score a goal (by zone)', '+10 / +20 / +30'],
+                ['⭐', 'Golden ball goal (bonus)', '+50'],
+                ['🔥', 'Combo streak (every 3 / 5 goals)', '+20 / +50'],
+                ['🎁', 'Daily food bonus roll', '+10 → +100'],
+            ],
+            'Predictions' => [
+                ['🎯', 'Predict the match winner', '+3'],
+                ['✅', 'Predict the correct score', '+5'],
+                ['🏆', 'Predict the champion (Final only)', '+15'],
+            ],
+            'Fan Studio' => [
+                ['📸', 'Fan Filter photo (once per day)', '+10'],
+            ],
+        ];
+    ?>
+    <h2 class="section">Scoring system <small style="font-weight:700;color:var(--muted);font-size:11px">(how points are earned)</small></h2>
+    <div class="grid">
+        <?php foreach ($scoringGroups as $groupName => $rules): ?>
+            <div class="card col-4 score-card">
+                <h3><?= h($groupName) ?></h3>
+                <ul class="score-list">
+                    <?php foreach ($rules as $rule): ?>
+                        <li>
+                            <span class="score-ico"><?= $rule[0] ?></span>
+                            <span class="score-label"><?= h($rule[1]) ?></span>
+                            <span class="score-pts"><?= h($rule[2]) ?></span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        <?php endforeach; ?>
+    </div>
+
     <!-- User behaviour & experience -->
     <h2 class="section">User behaviour &amp; experience</h2>
     <div class="card col-12">
         <div class="behav-toolbar">
             <input type="search" id="behavSearch" class="behav-search" placeholder="🔎 Search name / PRN / department / location…" autocomplete="off">
             <span class="behav-count" id="behavCount"><?= count($behavior) ?> users</span>
+            <a class="btn btn-gold" href="?export=behavior&fmt=xlsx&<?= h(qstr()) ?>">⬇ Save as Excel (.xlsx)</a>
+            <a class="btn" href="?export=behavior&<?= h(qstr()) ?>">⬇ CSV</a>
         </div>
         <div class="table-scroll">
         <table id="behavTable">
