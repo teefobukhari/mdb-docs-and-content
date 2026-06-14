@@ -368,6 +368,7 @@ td{font-weight:700;color:#eaf6ff}
 
     <!-- Filters -->
     <form method="GET" class="filters" id="filterForm">
+        <input type="hidden" name="view" value="admin"><!-- keep the admin view when served via /WC2026/?view=admin -->
         <div class="fld"><label>From</label><input type="date" name="from" value="<?= h($f_from) ?>"></div>
         <div class="fld"><label>To</label><input type="date" name="to" value="<?= h($f_to) ?>"></div>
         <div class="fld"><label>Department</label><select name="dept"><option value="">All</option>
@@ -379,7 +380,7 @@ td{font-weight:700;color:#eaf6ff}
         <div class="fld"><label>Status</label><select name="status"><option value="">All</option>
             <?php foreach ($optStats as $o): ?><option value="<?= h($o['v']) ?>" <?= $f_stat===$o['v']?'selected':'' ?>><?= h($o['v']) ?></option><?php endforeach; ?></select></div>
         <button class="btn btn-blue" type="submit">Apply filters</button>
-        <a class="btn" href="/WC2026/admin">Reset</a>
+        <a class="btn" href="/WC2026/?view=admin">Reset</a>
         <span style="flex:1"></span>
         <a class="btn btn-gold" href="?export=users&<?= h(qstr()) ?>">⬇ Export users</a>
         <a class="btn btn-gold" href="?export=participants&<?= h(qstr()) ?>">⬇ Export participants</a>
