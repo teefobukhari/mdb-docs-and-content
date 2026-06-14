@@ -361,6 +361,53 @@ if ($photoCty !== '') {
 /* Top participants (leaderboard) */
 $leaders = participants(15);
 
+/* ---------- actual records: comments / reactions / predictions ---------- */
+/* fixture_id -> "Home vs Away" label (defensive: blank if wc_fixtures absent). */
+$fxMap = [];
+foreach (q("SELECT fixture_id, home_name, away_name FROM wc_fixtures") as $f) {
+    $hn = trim((string)($f['home_name'] ?? '')); $an = trim((string)($f['away_name'] ?? ''));
+    if ($hn !== '' || $an !== '') $fxMap[(int)$f['fixture_id']] = ($hn ?: 'TBA') . ' vs ' . ($an ?: 'TBA');
+}
+function adminMatchLabel(array $map, $mid): string {
+    $mid = (int)$mid;
+    return $map[$mid] ?? ('Match #' . $mid);
+}
+function adminWhen($ts): string {
+    $ts = trim((string)$ts);
+    if ($ts === '') return '—';
+    $t = strtotime($ts);
+    return $t ? date('d M · H:i', $t) : $ts;
+}
+
+/* Recent comments — actual rows with author + status. */
+$t=''; $p=[]; $dw=dWhere('c.created_at',$t,$p);
+$recentComments = q("SELECT c.id, c.post_id, c.author_name, c.body, c.status, c.created_at, u.full_name
+                     FROM WC2026_Fan_Wall_Comments c
+                     LEFT JOIN WC2026_Users u ON u.id = c.user_id
+                     WHERE 1=1 {$dw}
+                     ORDER BY c.created_at DESC LIMIT 60", $t,$p);
+
+/* Recent reactions — actual rows with user + match. */
+$rTs = $reactTs !== '' ? $reactTs : 'created_at';
+$t=''; $p=[]; $dw=dWhere("r.`{$rTs}`",$t,$p);
+$recentReactions = q("SELECT r.reaction, r.match_id, r.`{$rTs}` AS ts, u.full_name
+                      FROM WC2026_Match_Reactions r
+                      LEFT JOIN WC2026_Users u ON u.id = r.user_id
+                      WHERE 1=1 {$dw}
+                      ORDER BY r.`{$rTs}` DESC LIMIT 60", $t,$p);
+
+/* Recent predictions — actual rows with user + match + points + scored flag. */
+$pTs = $predTs !== '' ? $predTs : 'id';
+$t=''; $p=[]; $dw=$predTs!==''?dWhere("p.`{$predTs}`",$t,$p):'';
+$recentPredictions = q("SELECT p.match_id, p.predicted_home_score, p.predicted_away_score, p.predicted_winner,
+                               p.points_awarded, p.points_calculated, p.`{$pTs}` AS ts, u.full_name
+                        FROM WC2026_Predictions p
+                        LEFT JOIN WC2026_Users u ON u.id = p.user_id
+                        WHERE 1=1 {$dw}
+                        ORDER BY p.`{$pTs}` DESC LIMIT 60", $t,$p);
+
+$reactEmoji = ['like'=>'👍','fire'=>'🔥','goal'=>'⚽','heart'=>'❤️','love'=>'❤️','wow'=>'😮','clap'=>'👏'];
+
 /* ---------- helper to split rows into JS arrays ---------- */
 function xy(array $rows, string $kx, string $ky): array {
     $labels=[]; $data=[];
@@ -566,6 +613,78 @@ td{font-weight:700;color:#eaf6ff}
                 </tr>
             <?php endforeach; else: ?>
                 <tr><td colspan="11" class="empty">No participant data yet.</td></tr>
+            <?php endif; ?>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <!-- Actual records: predictions / reactions / comments -->
+    <h2 class="section">Predictions <small style="font-weight:700;color:var(--muted);font-size:11px">(latest 60)</small></h2>
+    <div class="card col-12">
+        <div class="table-scroll">
+        <table>
+            <thead><tr><th>#</th><th>User</th><th>Match</th><th>Prediction</th><th>Winner</th><th>Points</th><th>Scored</th><th>When</th></tr></thead>
+            <tbody>
+            <?php if ($recentPredictions): foreach ($recentPredictions as $i => $r): ?>
+                <tr>
+                    <td><span class="rank"><?= $i+1 ?></span></td>
+                    <td><?= h($r['full_name'] ?: '—') ?></td>
+                    <td><?= h(adminMatchLabel($fxMap, $r['match_id'])) ?></td>
+                    <td><?= (int)$r['predicted_home_score'] ?> - <?= (int)$r['predicted_away_score'] ?></td>
+                    <td><?= h($r['predicted_winner'] ?: '—') ?></td>
+                    <td class="pts"><?= number_format((int)$r['points_awarded']) ?></td>
+                    <td><?= ((int)$r['points_calculated'] === 1) ? '✅' : '⏳' ?></td>
+                    <td><?= h(adminWhen($r['ts'])) ?></td>
+                </tr>
+            <?php endforeach; else: ?>
+                <tr><td colspan="8" class="empty">No predictions yet.</td></tr>
+            <?php endif; ?>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <h2 class="section">Match reactions <small style="font-weight:700;color:var(--muted);font-size:11px">(latest 60)</small></h2>
+    <div class="card col-12">
+        <div class="table-scroll">
+        <table>
+            <thead><tr><th>#</th><th>User</th><th>Match</th><th>Reaction</th><th>When</th></tr></thead>
+            <tbody>
+            <?php if ($recentReactions): foreach ($recentReactions as $i => $r): ?>
+                <?php $rk = strtolower(trim((string)$r['reaction'])); ?>
+                <tr>
+                    <td><span class="rank"><?= $i+1 ?></span></td>
+                    <td><?= h($r['full_name'] ?: '—') ?></td>
+                    <td><?= h(adminMatchLabel($fxMap, $r['match_id'])) ?></td>
+                    <td><?= ($reactEmoji[$rk] ?? '') ?> <?= h($r['reaction'] ?: '—') ?></td>
+                    <td><?= h(adminWhen($r['ts'])) ?></td>
+                </tr>
+            <?php endforeach; else: ?>
+                <tr><td colspan="5" class="empty">No reactions yet.</td></tr>
+            <?php endif; ?>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+    <h2 class="section">Fan Wall comments <small style="font-weight:700;color:var(--muted);font-size:11px">(latest 60)</small></h2>
+    <div class="card col-12">
+        <div class="table-scroll">
+        <table>
+            <thead><tr><th>#</th><th>Author</th><th>Comment</th><th>Post</th><th>Status</th><th>When</th></tr></thead>
+            <tbody>
+            <?php if ($recentComments): foreach ($recentComments as $i => $r): ?>
+                <tr>
+                    <td><span class="rank"><?= $i+1 ?></span></td>
+                    <td><?= h(($r['full_name'] ?: $r['author_name']) ?: '—') ?></td>
+                    <td style="white-space:normal;max-width:520px"><?= h(mb_strimwidth((string)$r['body'], 0, 160, '…')) ?></td>
+                    <td>#<?= (int)$r['post_id'] ?></td>
+                    <td><?= h($r['status'] ?: '—') ?></td>
+                    <td><?= h(adminWhen($r['created_at'])) ?></td>
+                </tr>
+            <?php endforeach; else: ?>
+                <tr><td colspan="6" class="empty">No comments yet.</td></tr>
             <?php endif; ?>
             </tbody>
         </table>
