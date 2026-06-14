@@ -497,6 +497,16 @@ body.popup-mode .popup-title{
     box-shadow:0 0 0 4px rgba(85,183,255,.15);
 }
 
+.predict-pts-hint{
+    display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;
+    margin:14px auto 4px;padding:10px 14px;border-radius:13px;max-width:520px;
+    font-size:13px;font-weight:800;color:#eaf6ff;
+    background:rgba(168,231,255,.08);border:1px solid rgba(168,231,255,.22);
+}
+.predict-pts-hint b{color:#F5C85B;font-weight:900}
+.predict-pts-hint i{color:rgba(234,244,255,.4);font-style:normal}
+.predict-pts-hint span{color:rgba(234,244,255,.8)}
+
 .score-sep{
     color:var(--muted);
     font-weight:900;
@@ -888,6 +898,12 @@ body.popup-mode .card{background:transparent !important}
                         <label><?= h($match['away_team']) ?></label>
                         <input type="number" name="predicted_away_score" min="0" max="30" value="<?= (int)$predAway ?>" required>
                     </div>
+                </div>
+
+                <div class="predict-pts-hint">
+                    ✅ <span>Exact correct score</span> <b>+<?= number_format(WC_PTS_PREDICT_SCORE) ?></b>
+                    <i>·</i>
+                    🎯 <span>Correct match winner</span> <b>+<?= number_format(WC_PTS_PREDICT_WINNER) ?></b>
                 </div>
 
                 <div class="actions">
