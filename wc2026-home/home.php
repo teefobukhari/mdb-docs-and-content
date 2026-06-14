@@ -502,6 +502,110 @@ $newsMatches = wc_rows($conn, "
     LIMIT 6
 ");
 
+/* ---- (#2) Enriched Match News: last-24h results (with summary), next-24h
+   fixtures, and live events pulled from db_form.wc_events ---- */
+$newsLast24 = wc_rows($conn, "
+    SELECT id, home_team, away_team, match_datetime, round_name, status_short,
+           home_score, away_score, elapsed, is_live, is_finished
+    FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches
+    WHERE (is_finished = 1 OR status_short IN ('FT','AET','PEN'))
+      AND match_datetime >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+    ORDER BY match_datetime DESC
+    LIMIT 8
+");
+
+$newsNext24 = wc_rows($conn, "
+    SELECT id, home_team, away_team, match_datetime, round_name, status_short,
+           home_score, away_score, elapsed, is_live, is_finished
+    FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches
+    WHERE (is_finished = 0 OR is_finished IS NULL)
+      AND match_datetime >= NOW()
+      AND match_datetime <= DATE_ADD(NOW(), INTERVAL 24 HOUR)
+    ORDER BY match_datetime ASC
+    LIMIT 8
+");
+
+/* Events for live + last-24h fixtures. SELECT * keeps us independent of the
+   exact db_form.wc_events column names (degrades to [] if the table is absent). */
+$newsEventFids = [];
+foreach ($liveMatches as $lm) { $newsEventFids[(int)$lm['id']] = true; }
+foreach ($newsLast24 as $lr) { $newsEventFids[(int)$lr['id']] = true; }
+$newsEvents = [];
+if ($newsEventFids) {
+    $fidList = implode(',', array_map('intval', array_keys($newsEventFids)));
+    $newsEvents = wc_rows($conn, "SELECT * FROM wc_events WHERE fixture_id IN ($fidList) LIMIT 40");
+}
+
+/* Pick the first non-empty value among a list of candidate column names. */
+function wc_news_pick(array $row, array $keys): string {
+    foreach ($keys as $k) {
+        if (isset($row[$k]) && trim((string)$row[$k]) !== '') return trim((string)$row[$k]);
+    }
+    return '';
+}
+
+/* fixture_id -> "Home vs Away" label for captioning events. */
+$newsFixtureLabel = [];
+foreach (array_merge($liveMatches, $newsLast24) as $mm) {
+    $newsFixtureLabel[(int)$mm['id']] = wc_safe_team($mm['home_team']) . ' vs ' . wc_safe_team($mm['away_team']);
+}
+
+/* Build the ticker item list (raw strings; escaped at render time). */
+$newsItems = [];
+
+foreach ($liveMatches as $lm) {
+    $sc = (is_null($lm['home_score']) ? '-' : (int)$lm['home_score']) . ' - ' . (is_null($lm['away_score']) ? '-' : (int)$lm['away_score']);
+    $el = trim((string)($lm['elapsed'] ?? ''));
+    $newsItems[] = '🔴 ' . wc_safe_team($lm['home_team']) . ' ' . $sc . ' ' . wc_safe_team($lm['away_team'])
+        . ' • ' . ($el !== '' ? $el . "'" : 'LIVE');
+}
+
+foreach ($newsEvents as $ev) {
+    $type   = wc_news_pick($ev, ['type', 'event_type', 'kind']);
+    $detail = wc_news_pick($ev, ['detail', 'event_detail', 'description', 'comments']);
+    $player = wc_news_pick($ev, ['player_name', 'player', 'playername']);
+    $team   = wc_news_pick($ev, ['team_name', 'team', 'teamname']);
+    $minute = wc_news_pick($ev, ['elapsed', 'minute', 'time_elapsed', 'time']);
+    $fid    = (int)($ev['fixture_id'] ?? 0);
+
+    if ($type === '' && $detail === '' && $player === '') continue;
+    $low = strtolower($type . ' ' . $detail);
+    $isGoal = strpos($low, 'goal') !== false;
+    $isCard = strpos($low, 'card') !== false;
+    if (!$isGoal && !$isCard) continue;
+
+    $bits = [];
+    if ($minute !== '') $bits[] = $minute . "'";
+    if ($player !== '') $bits[] = $player;
+    if ($team !== '')   $bits[] = '(' . $team . ')';
+    $line = ($isGoal ? '⚽ ' : '🟨 ') . implode(' ', $bits);
+    $cap = $newsFixtureLabel[$fid] ?? '';
+    if ($cap !== '') $line .= ' — ' . $cap;
+    $newsItems[] = $line;
+}
+
+foreach ($newsLast24 as $lr) {
+    $sc = (is_null($lr['home_score']) ? '-' : (int)$lr['home_score']) . ' - ' . (is_null($lr['away_score']) ? '-' : (int)$lr['away_score']);
+    $st = strtoupper(trim((string)($lr['status_short'] ?? 'FT'))) ?: 'FT';
+    $newsItems[] = '🏁 ' . wc_safe_team($lr['home_team']) . ' ' . $sc . ' ' . wc_safe_team($lr['away_team']) . ' • ' . $st;
+}
+
+foreach ($newsNext24 as $up) {
+    $when = date('d M • h:i A', strtotime((string)$up['match_datetime']));
+    $newsItems[] = '🕒 ' . wc_safe_team($up['home_team']) . ' vs ' . wc_safe_team($up['away_team']) . ' • ' . $when;
+}
+
+/* Fallback to the generic upcoming/live list when the 24h windows are empty. */
+if (!$newsItems) {
+    foreach ($newsMatches as $nm) {
+        $nmStatus = wc_match_status_label($nm);
+        $nmScore = ((int)($nm['is_live'] ?? 0) === 1 || (int)($nm['is_finished'] ?? 0) === 1)
+            ? ((is_null($nm['home_score']) ? '-' : (int)$nm['home_score']) . ' - ' . (is_null($nm['away_score']) ? '-' : (int)$nm['away_score']))
+            : date('d M • h:i A', strtotime((string)$nm['match_datetime']));
+        $newsItems[] = wc_safe_team($nm['home_team']) . ' vs ' . wc_safe_team($nm['away_team']) . ' • ' . $nmStatus . ' • ' . $nmScore;
+    }
+}
+
 $mapMatches = wc_rows($conn, "
     SELECT id, home_team, away_team, home_logo, away_logo, match_datetime, stadium, city,
            round_name, status_short, status_long, elapsed, home_score, away_score, is_live, is_finished
@@ -4726,36 +4830,16 @@ body:before{
         <div class="news-ticker-inner">
             <div class="news-label">● <span data-i18n="matchNews">Match News</span></div>
             <div class="news-track">
-                <?php if (!empty($newsMatches)): ?>
+                <?php if (!empty($newsItems)): ?>
                     <span>
-                        <?php foreach ($newsMatches as $nm): ?>
-                            <?php
-                                $nmStatus = wc_match_status_label($nm);
-                                $nmScore = ((int)($nm['is_live'] ?? 0) === 1 || (int)($nm['is_finished'] ?? 0) === 1)
-                                    ? ((is_null($nm['home_score']) ? '-' : (int)$nm['home_score']) . ' - ' . (is_null($nm['away_score']) ? '-' : (int)$nm['away_score']))
-                                    : date('d M - h:i A', strtotime((string)$nm['match_datetime']));
-                            ?>
-                            <?= htmlspecialchars(wc_safe_team($nm['home_team']), ENT_QUOTES, 'UTF-8') ?>
-                            vs
-                            <?= htmlspecialchars(wc_safe_team($nm['away_team']), ENT_QUOTES, 'UTF-8') ?>
-                            • <?= htmlspecialchars($nmStatus, ENT_QUOTES, 'UTF-8') ?>
-                            • <?= htmlspecialchars($nmScore, ENT_QUOTES, 'UTF-8') ?>
+                        <?php foreach ($newsItems as $ni): ?>
+                            <?= htmlspecialchars($ni, ENT_QUOTES, 'UTF-8') ?>
                             &nbsp;&nbsp; • &nbsp;&nbsp;
                         <?php endforeach; ?>
                     </span>
                     <span>
-                        <?php foreach ($newsMatches as $nm): ?>
-                            <?php
-                                $nmStatus = wc_match_status_label($nm);
-                                $nmScore = ((int)($nm['is_live'] ?? 0) === 1 || (int)($nm['is_finished'] ?? 0) === 1)
-                                    ? ((is_null($nm['home_score']) ? '-' : (int)$nm['home_score']) . ' - ' . (is_null($nm['away_score']) ? '-' : (int)$nm['away_score']))
-                                    : date('d M - h:i A', strtotime((string)$nm['match_datetime']));
-                            ?>
-                            <?= htmlspecialchars(wc_safe_team($nm['home_team']), ENT_QUOTES, 'UTF-8') ?>
-                            vs
-                            <?= htmlspecialchars(wc_safe_team($nm['away_team']), ENT_QUOTES, 'UTF-8') ?>
-                            • <?= htmlspecialchars($nmStatus, ENT_QUOTES, 'UTF-8') ?>
-                            • <?= htmlspecialchars($nmScore, ENT_QUOTES, 'UTF-8') ?>
+                        <?php foreach ($newsItems as $ni): ?>
+                            <?= htmlspecialchars($ni, ENT_QUOTES, 'UTF-8') ?>
                             &nbsp;&nbsp; • &nbsp;&nbsp;
                         <?php endforeach; ?>
                     </span>
