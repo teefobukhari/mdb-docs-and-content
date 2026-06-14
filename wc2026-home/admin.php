@@ -422,6 +422,28 @@ if (isset($_GET['rescore']) && $_GET['rescore'] === 'predictions') {
     exit;
 }
 
+/* Auto re-score: keep prediction points in sync with the CURRENT scoring values
+   on every admin load — no button needed. One efficient UPDATE...JOIN that only
+   writes rows whose value would actually change (idempotent + cheap). */
+try {
+    $sc = (int)WC_PTS_PREDICT_SCORE; $wn = (int)WC_PTS_PREDICT_WINNER;
+    $caseExpr = "CASE
+            WHEN p.predicted_home_score = COALESCE(f.goals_home, f.ft_home)
+             AND p.predicted_away_score = COALESCE(f.goals_away, f.ft_away) THEN {$sc}
+            WHEN SIGN(p.predicted_home_score - p.predicted_away_score)
+               = SIGN(COALESCE(f.goals_home, f.ft_home) - COALESCE(f.goals_away, f.ft_away)) THEN {$wn}
+            ELSE 0 END";
+    @$conn->query("
+        UPDATE WC2026_Predictions p
+        JOIN wc_fixtures f ON f.fixture_id = p.match_id
+        SET p.points_awarded = {$caseExpr}, p.points_calculated = 1, p.updated_at = NOW()
+        WHERE f.status_short IN ('FT','AET','PEN')
+          AND COALESCE(f.goals_home, f.ft_home) IS NOT NULL
+          AND COALESCE(f.goals_away, f.ft_away) IS NOT NULL
+          AND (p.points_calculated = 0 OR p.points_awarded <> ({$caseExpr}))
+    ");
+} catch (Throwable $e) { /* ignore — predictions/fixtures table may be absent */ }
+
 /* ================= KPIs (all respect the active filters) ================= */
 /* Users — user-attribute filters + registration date range. */
 $t=''; $p=[]; $uw=uWhere('',$t,$p); $dw=dWhere('created_at',$t,$p);
