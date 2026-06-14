@@ -42,6 +42,25 @@ function qv(string $sql, string $types = '', array $params = []) {
     return array_values($row)[0] ?? 0;
 }
 
+/* Return the first column in $cands that actually exists on $table (current DB),
+   preserving its real casing; '' if none. Lets us bind to whatever timestamp /
+   segment column the schema happens to use instead of hardcoding a name. */
+function first_col(string $table, array $cands): string {
+    static $cache = [];
+    $key = strtolower($table);
+    if (!array_key_exists($key, $cache)) {
+        $cache[$key] = [];
+        foreach (q("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", "s", [$table]) as $r) {
+            $cache[$key][strtolower((string)$r['COLUMN_NAME'])] = (string)$r['COLUMN_NAME'];
+        }
+    }
+    foreach ($cands as $c) {
+        if (isset($cache[$key][strtolower($c)])) return $cache[$key][strtolower($c)];
+    }
+    return '';
+}
+
 /* ---------- role gate (admin only) ---------- */
 $adminId   = (int)($_SESSION['USER_ID'] ?? 0);
 $meRows    = q("SELECT id, full_name, role FROM WC2026_Users WHERE id = ? LIMIT 1", "i", [$adminId]);
@@ -208,21 +227,60 @@ $charts['reg'] = q("SELECT DATE(created_at) d, COUNT(*) c FROM WC2026_Users WHER
 $t=''; $p=[]; $dw=dWhere('created_at',$t,$p);
 $charts['login'] = q("SELECT DATE(created_at) d, COUNT(*) c FROM WC2026_Users_Audit_Log WHERE action_type='LOGIN' {$dw} GROUP BY DATE(created_at) ORDER BY d", $t,$p);
 
-/* Users by department / location / role / status */
-$t=''; $p=[]; $w=uWhere('',$t,$p);
-$charts['dept']   = q("SELECT COALESCE(NULLIF(department,''),'—') k, COUNT(*) c FROM WC2026_Users WHERE 1=1 {$w} GROUP BY k ORDER BY c DESC LIMIT 12", $t,$p);
+/* Users by segment — joined to the unified employee master list. The segment
+   column name varies across deployments, so detect it; if the master list is
+   unavailable the widget simply blanks instead of erroring. */
+$mlSegCol = first_col('Unified_Employees_MasterList',
+    ['segment','segment_name','department','dept','section','division','business_unit','businessunit','unit','dept_name','sector']);
+$t=''; $p=[]; $w=uWhere('u',$t,$p);
+if ($mlSegCol !== '') {
+    $charts['segment'] = q("
+        SELECT COALESCE(NULLIF(m.`{$mlSegCol}`,''),'—') k, COUNT(*) c
+        FROM WC2026_Users u
+        LEFT JOIN Unified_Employees_MasterList m
+               ON (u.email IS NOT NULL AND u.email <> '' AND LOWER(m.email) = LOWER(u.email))
+        WHERE 1=1 {$w}
+        GROUP BY k ORDER BY c DESC LIMIT 15", $t,$p);
+} else {
+    $charts['segment'] = [];
+}
+
+/* Users by location */
 $t=''; $p=[]; $w=uWhere('',$t,$p);
 $charts['loc']    = q("SELECT COALESCE(NULLIF(location,''),'—') k, COUNT(*) c FROM WC2026_Users WHERE 1=1 {$w} GROUP BY k ORDER BY c DESC LIMIT 12", $t,$p);
-$t=''; $p=[]; $w=uWhere('',$t,$p);
-$charts['role']   = q("SELECT COALESCE(NULLIF(role,''),'—') k, COUNT(*) c FROM WC2026_Users WHERE 1=1 {$w} GROUP BY k ORDER BY c DESC", $t,$p);
-$t=''; $p=[]; $w=uWhere('',$t,$p);
-$charts['status'] = q("SELECT COALESCE(NULLIF(status,''),'—') k, COUNT(*) c FROM WC2026_Users WHERE 1=1 {$w} GROUP BY k ORDER BY c DESC", $t,$p);
+
+/* Site revisit recurrence — distribution of how many times each user has logged
+   in (from the audit log), bucketed; replaces the old "users by status" chart. */
+$t=''; $p=[]; $dw=dWhere('created_at',$t,$p);
+$charts['revisit'] = q("
+    SELECT
+        CASE WHEN logins = 1      THEN '1 visit'
+             WHEN logins <= 3     THEN '2–3 visits'
+             WHEN logins <= 6     THEN '4–6 visits'
+             WHEN logins <= 12    THEN '7–12 visits'
+             ELSE '13+ visits' END AS k,
+        COUNT(*) c,
+        MIN(logins) ord
+    FROM (
+        SELECT user_id, COUNT(*) logins
+        FROM WC2026_Users_Audit_Log
+        WHERE action_type = 'LOGIN' {$dw}
+        GROUP BY user_id
+    ) t
+    GROUP BY k ORDER BY ord", $t,$p);
 
 /* Game sessions per day + predictions per day + fan wall per day */
 $t=''; $p=[]; $dw=dWhere('played_at',$t,$p);
 $charts['game'] = q("SELECT DATE(played_at) d, COUNT(*) c, COALESCE(SUM(total_points),0) pts FROM WC2026_Game_Sessions WHERE 1=1 {$dw} GROUP BY DATE(played_at) ORDER BY d", $t,$p);
-$t=''; $p=[]; $dw=dWhere('created_at',$t,$p);
-$charts['pred'] = q("SELECT DATE(created_at) d, COUNT(*) c FROM WC2026_Predictions WHERE 1=1 {$dw} GROUP BY DATE(created_at) ORDER BY d", $t,$p);
+/* Predictions per day — bind to whatever timestamp column the table uses so the
+   line actually populates (was blank when the column wasn't named created_at). */
+$predTs = first_col('WC2026_Predictions', ['created_at','submitted_at','predicted_at','updated_at']);
+if ($predTs !== '') {
+    $t=''; $p=[]; $dw=dWhere("`{$predTs}`",$t,$p);
+    $charts['pred'] = q("SELECT DATE(`{$predTs}`) d, COUNT(*) c FROM WC2026_Predictions WHERE 1=1 {$dw} GROUP BY DATE(`{$predTs}`) ORDER BY d", $t,$p);
+} else {
+    $charts['pred'] = [];
+}
 $t=''; $p=[]; $dw=dWhere('created_at',$t,$p);
 $charts['fanwall'] = q("SELECT DATE(created_at) d, COUNT(*) c FROM WC2026_Fan_Wall WHERE 1=1 {$dw} GROUP BY DATE(created_at) ORDER BY d", $t,$p);
 
@@ -232,15 +290,21 @@ $charts['winner'] = q("SELECT predicted_winner k, COUNT(*) c FROM WC2026_Predict
 /* Match reaction breakdown */
 $charts['reactions'] = q("SELECT reaction k, COUNT(*) c FROM WC2026_Match_Reactions GROUP BY reaction ORDER BY c DESC");
 
-/* Studio: filter assets (active vs total) */
-$studio = [
-    'platforms' => ['active' => (int) qv("SELECT COUNT(*) FROM WC2026_Filter_Platforms WHERE status='Active'"), 'total' => (int) qv("SELECT COUNT(*) FROM WC2026_Filter_Platforms")],
-    'countries' => ['active' => (int) qv("SELECT COUNT(*) FROM WC2026_Filter_Countries WHERE status='Active'"), 'total' => (int) qv("SELECT COUNT(*) FROM WC2026_Filter_Countries")],
-    'frames'    => ['active' => (int) qv("SELECT COUNT(*) FROM WC2026_Filter_Frames WHERE status='Active'"),    'total' => (int) qv("SELECT COUNT(*) FROM WC2026_Filter_Frames")],
-];
 /* Studio photos over time */
 $t=''; $p=[]; $dw=dWhere('created_at',$t,$p);
 $charts['photos'] = q("SELECT DATE(created_at) d, COUNT(*) c FROM WC2026_Fan_Wall WHERE photo_path IS NOT NULL AND photo_path <> '' {$dw} GROUP BY DATE(created_at) ORDER BY d", $t,$p);
+
+/* Studio photos created by country (the fan's selected location) */
+$t=''; $p=[]; $dw=dWhere('created_at',$t,$p);
+$charts['photoCountry'] = q("SELECT COALESCE(NULLIF(author_location,''),'—') k, COUNT(*) c
+    FROM WC2026_Fan_Wall WHERE photo_path IS NOT NULL AND photo_path <> '' {$dw}
+    GROUP BY k ORDER BY c DESC LIMIT 15", $t,$p);
+
+/* Studio photos by moderation status */
+$t=''; $p=[]; $dw=dWhere('created_at',$t,$p);
+$charts['photoStatus'] = q("SELECT COALESCE(NULLIF(status,''),'—') k, COUNT(*) c
+    FROM WC2026_Fan_Wall WHERE photo_path IS NOT NULL AND photo_path <> '' {$dw}
+    GROUP BY k ORDER BY c DESC", $t,$p);
 
 /* Top participants (leaderboard) */
 $leaders = participants(15);
@@ -253,20 +317,20 @@ function xy(array $rows, string $kx, string $ky): array {
 }
 
 $JS = [
-    'reg'       => xy($charts['reg'], 'd', 'c'),
-    'login'     => xy($charts['login'], 'd', 'c'),
-    'dept'      => xy($charts['dept'], 'k', 'c'),
-    'loc'       => xy($charts['loc'], 'k', 'c'),
-    'role'      => xy($charts['role'], 'k', 'c'),
-    'status'    => xy($charts['status'], 'k', 'c'),
-    'game'      => xy($charts['game'], 'd', 'c'),
-    'gamePts'   => xy($charts['game'], 'd', 'pts'),
-    'pred'      => xy($charts['pred'], 'd', 'c'),
-    'fanwall'   => xy($charts['fanwall'], 'd', 'c'),
-    'winner'    => xy($charts['winner'], 'k', 'c'),
-    'reactions' => xy($charts['reactions'], 'k', 'c'),
-    'photos'    => xy($charts['photos'], 'd', 'c'),
-    'studio'    => $studio,
+    'reg'          => xy($charts['reg'], 'd', 'c'),
+    'login'        => xy($charts['login'], 'd', 'c'),
+    'segment'      => xy($charts['segment'], 'k', 'c'),
+    'loc'          => xy($charts['loc'], 'k', 'c'),
+    'revisit'      => xy($charts['revisit'], 'k', 'c'),
+    'game'         => xy($charts['game'], 'd', 'c'),
+    'gamePts'      => xy($charts['game'], 'd', 'pts'),
+    'pred'         => xy($charts['pred'], 'd', 'c'),
+    'fanwall'      => xy($charts['fanwall'], 'd', 'c'),
+    'winner'       => xy($charts['winner'], 'k', 'c'),
+    'reactions'    => xy($charts['reactions'], 'k', 'c'),
+    'photos'       => xy($charts['photos'], 'd', 'c'),
+    'photoCountry' => xy($charts['photoCountry'], 'k', 'c'),
+    'photoStatus'  => xy($charts['photoStatus'], 'k', 'c'),
 ];
 
 /* ---------- filter dropdown options ---------- */
@@ -403,8 +467,7 @@ td{font-weight:700;color:#eaf6ff}
     <!-- Trends -->
     <h2 class="section">Activity trends</h2>
     <div class="grid">
-        <div class="card col-8"><h3>Registrations & logins <small>per day</small></h3><div class="chart-box"><canvas id="cReg"></canvas></div></div>
-        <div class="card col-4"><h3>Users by role</h3><div class="chart-box"><canvas id="cRole"></canvas></div></div>
+        <div class="card col-12"><h3>Registrations & logins <small>per day</small></h3><div class="chart-box"><canvas id="cReg"></canvas></div></div>
         <div class="card col-6"><h3>Game plays & points <small>per day</small></h3><div class="chart-box"><canvas id="cGame"></canvas></div></div>
         <div class="card col-6"><h3>Predictions & Fan Wall <small>per day</small></h3><div class="chart-box"><canvas id="cEngage"></canvas></div></div>
     </div>
@@ -412,18 +475,19 @@ td{font-weight:700;color:#eaf6ff}
     <!-- Demographics -->
     <h2 class="section">Users & demographics</h2>
     <div class="grid">
-        <div class="card col-6"><h3>Users by department</h3><div class="chart-box"><canvas id="cDept"></canvas></div></div>
+        <div class="card col-6"><h3>Users by segment <small>unified master list</small></h3><div class="chart-box"><canvas id="cSegment"></canvas></div></div>
         <div class="card col-6"><h3>Users by location</h3><div class="chart-box"><canvas id="cLoc"></canvas></div></div>
-        <div class="card col-4"><h3>Users by status</h3><div class="chart-box chart-sm"><canvas id="cStatus"></canvas></div></div>
+        <div class="card col-4"><h3>Site revisit recurrence <small>logins / user</small></h3><div class="chart-box chart-sm"><canvas id="cRevisit"></canvas></div></div>
         <div class="card col-4"><h3>Predicted winners</h3><div class="chart-box chart-sm"><canvas id="cWinner"></canvas></div></div>
         <div class="card col-4"><h3>Match reactions</h3><div class="chart-box chart-sm"><canvas id="cReact"></canvas></div></div>
     </div>
 
-    <!-- Studio insights -->
-    <h2 class="section">Fan Filter Studio insights</h2>
+    <!-- Studio photos -->
+    <h2 class="section">Studio photos</h2>
     <div class="grid">
-        <div class="card col-6"><h3>Studio assets <small>active vs total</small></h3><div class="chart-box"><canvas id="cStudio"></canvas></div></div>
-        <div class="card col-6"><h3>Studio photos created <small>per day</small></h3><div class="chart-box"><canvas id="cPhotos"></canvas></div></div>
+        <div class="card col-12"><h3>Studio photos created <small>per day</small></h3><div class="chart-box"><canvas id="cPhotos"></canvas></div></div>
+        <div class="card col-8"><h3>Studio photos by country</h3><div class="chart-box"><canvas id="cPhotoCountry"></canvas></div></div>
+        <div class="card col-4"><h3>Studio photos by status</h3><div class="chart-box chart-sm"><canvas id="cPhotoStatus"></canvas></div></div>
     </div>
 
     <!-- Leaderboard -->
@@ -476,9 +540,6 @@ mk('cReg',{type:'line',data:{labels:D.reg.labels.length?D.reg.labels:D.login.lab
   {label:'Logins',data:D.login.data,borderColor:'#7EF4AE',backgroundColor:'rgba(126,244,174,.12)',fill:true,tension:.35,pointRadius:2}
 ]},options:{responsive:true,maintainAspectRatio:false,scales:{x:GRID,y:{...GRID,beginAtZero:true}},plugins:{legend:{position:'bottom'}}}});
 
-/* Users by role (doughnut) */
-mk('cRole',{type:'doughnut',data:{labels:D.role.labels,datasets:[{data:D.role.data,backgroundColor:PAL,borderColor:'rgba(0,0,0,.2)',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
-
 /* Game plays + points (mixed bar/line) */
 mk('cGame',{data:{labels:D.game.labels,datasets:[
   {type:'bar',label:'Plays',data:D.game.data,backgroundColor:'rgba(58,139,246,.6)',borderRadius:6,yAxisID:'y'},
@@ -491,14 +552,14 @@ mk('cEngage',{type:'line',data:{labels:D.pred.labels.length?D.pred.labels:D.fanw
   {label:'Fan Wall posts',data:D.fanwall.data,borderColor:'#FF8B5B',backgroundColor:'rgba(255,139,91,.12)',fill:true,tension:.35,pointRadius:2}
 ]},options:{responsive:true,maintainAspectRatio:false,scales:{x:GRID,y:{...GRID,beginAtZero:true}},plugins:{legend:{position:'bottom'}}}});
 
-/* Department (bar) */
-mk('cDept',{type:'bar',data:{labels:D.dept.labels,datasets:[{label:'Users',data:D.dept.data,backgroundColor:PAL,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:GRID,y:{...GRID,beginAtZero:true}},plugins:{legend:{display:false}}}});
+/* Segment — unified master list (bar) */
+mk('cSegment',{type:'bar',data:{labels:D.segment.labels,datasets:[{label:'Users',data:D.segment.data,backgroundColor:PAL,borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:GRID,y:{...GRID,beginAtZero:true}},plugins:{legend:{display:false}}}});
 
 /* Location (horizontal bar) */
 mk('cLoc',{type:'bar',data:{labels:D.loc.labels,datasets:[{label:'Users',data:D.loc.data,backgroundColor:'#55B7FF',borderRadius:6}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{...GRID,beginAtZero:true},y:GRID},plugins:{legend:{display:false}}}});
 
-/* Status (doughnut) */
-mk('cStatus',{type:'doughnut',data:{labels:D.status.labels,datasets:[{data:D.status.data,backgroundColor:PAL,borderWidth:1,borderColor:'rgba(0,0,0,.2)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+/* Site revisit recurrence (bar) */
+mk('cRevisit',{type:'bar',data:{labels:D.revisit.labels,datasets:[{label:'Users',data:D.revisit.data,backgroundColor:'#7EF4AE',borderRadius:6}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:GRID,y:{...GRID,beginAtZero:true,ticks:{precision:0}}},plugins:{legend:{display:false}}}});
 
 /* Predicted winner (pie) */
 mk('cWinner',{type:'pie',data:{labels:D.winner.labels,datasets:[{data:D.winner.data,backgroundColor:PAL,borderWidth:1,borderColor:'rgba(0,0,0,.2)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
@@ -506,15 +567,14 @@ mk('cWinner',{type:'pie',data:{labels:D.winner.labels,datasets:[{data:D.winner.d
 /* Reactions (doughnut) */
 mk('cReact',{type:'doughnut',data:{labels:D.reactions.labels,datasets:[{data:D.reactions.data,backgroundColor:PAL,borderWidth:1,borderColor:'rgba(0,0,0,.2)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
 
-/* Studio assets (grouped bar) */
-const sA=D.studio||{}; const sLabels=['Platforms','Countries','Frames'];
-mk('cStudio',{type:'bar',data:{labels:sLabels,datasets:[
-  {label:'Active',data:[(sA.platforms||{}).active||0,(sA.countries||{}).active||0,(sA.frames||{}).active||0],backgroundColor:'#7EF4AE',borderRadius:6},
-  {label:'Total',data:[(sA.platforms||{}).total||0,(sA.countries||{}).total||0,(sA.frames||{}).total||0],backgroundColor:'rgba(168,231,255,.35)',borderRadius:6}
-]},options:{responsive:true,maintainAspectRatio:false,scales:{x:GRID,y:{...GRID,beginAtZero:true}},plugins:{legend:{position:'bottom'}}}});
-
 /* Studio photos per day (line) */
-mk('cPhotos',{type:'line',data:{labels:D.photos.labels,datasets:[{label:'Photos',data:D.photos.data,borderColor:'#F5C85B',backgroundColor:'rgba(245,200,91,.16)',fill:true,tension:.35,pointRadius:2}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:GRID,y:{...GRID,beginAtZero:true}},plugins:{legend:{display:false}}}});
+mk('cPhotos',{type:'line',data:{labels:D.photos.labels,datasets:[{label:'Photos',data:D.photos.data,borderColor:'#F5C85B',backgroundColor:'rgba(245,200,91,.16)',fill:true,tension:.35,pointRadius:2}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:GRID,y:{...GRID,beginAtZero:true,ticks:{precision:0}}},plugins:{legend:{display:false}}}});
+
+/* Studio photos by country (horizontal bar) */
+mk('cPhotoCountry',{type:'bar',data:{labels:D.photoCountry.labels,datasets:[{label:'Photos',data:D.photoCountry.data,backgroundColor:PAL,borderRadius:6}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{...GRID,beginAtZero:true,ticks:{precision:0}},y:GRID},plugins:{legend:{display:false}}}});
+
+/* Studio photos by status (doughnut) */
+mk('cPhotoStatus',{type:'doughnut',data:{labels:D.photoStatus.labels,datasets:[{data:D.photoStatus.data,backgroundColor:PAL,borderWidth:1,borderColor:'rgba(0,0,0,.2)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
 </script>
 </body>
 </html>
