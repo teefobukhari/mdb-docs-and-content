@@ -359,6 +359,7 @@ if ($rankRows) $myRank = '#' . (int)$rankRows[0]['rank_no'];
 /* ---- Per-match reaction + comment counts (for the card badges) ---- */
 $matchReactCounts   = [];
 $matchCommentCounts = [];
+$matchPredictCounts = [];
 $mids = [];
 foreach ($matches as $mm) $mids[] = (int)$mm['id'];
 if ($mids) {
@@ -368,6 +369,9 @@ if ($mids) {
     }
     foreach (wc_rows($conn, "SELECT match_id, COUNT(*) AS c FROM WC2026_Match_Comments WHERE status='Active' AND match_id IN ($inList) GROUP BY match_id") as $r) {
         $matchCommentCounts[(int)$r['match_id']] = (int)$r['c'];
+    }
+    foreach (wc_rows($conn, "SELECT match_id, COUNT(*) AS c FROM WC2026_Predictions WHERE match_id IN ($inList) GROUP BY match_id") as $r) {
+        $matchPredictCounts[(int)$r['match_id']] = (int)$r['c'];
     }
 }
 
@@ -1561,6 +1565,7 @@ body{
 .msm-pill b{font-weight:900;color:#FFE19A}
 .msm-comment{color:rgba(255,255,255,.78)}
 .msm-comment.muted{color:rgba(255,255,255,.5)}
+.msm-predict{color:#A8E7FF}
 @media(max-width:640px){.hero{min-height:340px !important;padding:18px 14px 40px !important}}
 </style>
 </head>
@@ -1768,14 +1773,15 @@ body{
                             <?php endif; ?>
                         </div>
 
-                        <?php $rcCount = (int)($matchReactCounts[(int)$m['id']] ?? 0); $ccCount = (int)($matchCommentCounts[(int)$m['id']] ?? 0); ?>
-                        <button type="button" class="match-social-mini" data-predict-url="/WC2026/predict?match=<?= (int)$m['id'] ?>&view=details" title="Open reactions &amp; comments">
+                        <?php $rcCount = (int)($matchReactCounts[(int)$m['id']] ?? 0); $ccCount = (int)($matchCommentCounts[(int)$m['id']] ?? 0); $pcCount = (int)($matchPredictCounts[(int)$m['id']] ?? 0); ?>
+                        <button type="button" class="match-social-mini" data-predict-url="/WC2026/predict?match=<?= (int)$m['id'] ?>&view=details" title="Open reactions, comments &amp; predictions">
                             <span class="msm-pill msm-react">🔥 <b><?= $rcCount ?></b> <span data-i18n="reactionsWord">reactions</span></span>
                             <?php if ($ccCount > 0): ?>
                                 <span class="msm-pill msm-comment">💬 <b><?= $ccCount ?></b> <span data-i18n="commentsWord">comments</span></span>
                             <?php else: ?>
                                 <span class="msm-pill msm-comment muted">💬 <span data-i18n="commentWord">Comment</span></span>
                             <?php endif; ?>
+                            <span class="msm-pill msm-predict">🎯 <b><?= $pcCount ?></b> <span data-i18n="predictionsWord">predictions</span></span>
                         </button>
 
                         <div class="match-actions">
@@ -2280,7 +2286,7 @@ html[data-theme="saudi"] .tm-frame-wrap{border-color:rgba(126,244,174,.22)}
       heroIntro:'Browse the official World Cup 2026 match list, live status, upcoming fixtures, and final results. Submit predictions before kickoff and climb the leaderboard.',
       statTotal:'Total Matches',statTotalNote:'Synced fixtures',statUpcoming:'Upcoming',statUpcomingNote:'Open for predictions',statLive:'Live Now',statLiveNote:'Currently playing',statFinished:'Finished',statFinishedNote:'Results available',
       tabAll:'All',tabUpcoming:'Upcoming',tabLive:'Live',tabFinished:'Finished',searchPh:'Search team or round...',searchBtn:'Search',
-      reactionsWord:'reactions',commentsWord:'comments',commentWord:'Comment',
+      reactionsWord:'reactions',commentsWord:'comments',commentWord:'Comment',predictionsWord:'predictions',
       globeKicker:'WORLD CUP 2026',globeTitle:'Nations on the Pitch',globeP:'Tap a nation to jump to its fixtures.',
       teamsMapTitle:'Participating Teams Map',openTeamsMap:'Open Full Map ↗',teamsMapSub:'Explore all 48 qualified nations on a real world map — tap any country for its football story, stars and key moments.',
       footerDev:'Developed by CATRION © IT Digital & Transformation',close:'Close',
@@ -2297,7 +2303,7 @@ html[data-theme="saudi"] .tm-frame-wrap{border-color:rgba(126,244,174,.22)}
       heroIntro:'تصفّح قائمة مباريات كأس العالم 2026 الرسمية، والحالة المباشرة، والمباريات القادمة والنتائج النهائية. أرسل توقعاتك قبل انطلاق المباراة وتصدّر لوحة الصدارة.',
       statTotal:'إجمالي المباريات',statTotalNote:'مباريات متزامنة',statUpcoming:'القادمة',statUpcomingNote:'مفتوحة للتوقع',statLive:'مباشر الآن',statLiveNote:'تُلعب حاليًا',statFinished:'منتهية',statFinishedNote:'النتائج متاحة',
       tabAll:'الكل',tabUpcoming:'القادمة',tabLive:'مباشر',tabFinished:'منتهية',searchPh:'ابحث عن فريق أو دور...',searchBtn:'بحث',
-      reactionsWord:'تفاعلات',commentsWord:'تعليقات',commentWord:'تعليق',
+      reactionsWord:'تفاعلات',commentsWord:'تعليقات',commentWord:'تعليق',predictionsWord:'توقعات',
       globeKicker:'كأس العالم 2026',globeTitle:'المنتخبات في الملعب',globeP:'انقر منتخبًا للانتقال إلى مبارياته.',
       teamsMapTitle:'خريطة المنتخبات المشاركة',openTeamsMap:'فتح الخريطة كاملة ↗',teamsMapSub:'استكشف المنتخبات الـ48 المتأهلة على خريطة عالم حقيقية — اضغط على أي دولة لقصتها الكروية ونجومها ولحظاتها المميزة.',
       footerDev:'تطوير كاتريون © تقنية المعلومات والتحول الرقمي',close:'إغلاق',

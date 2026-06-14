@@ -516,6 +516,11 @@ $mapMatches = wc_rows($conn, "
     LIMIT 5
 ");
 
+/* Standings: use the latest season actually present so a sync that writes a
+   different season (e.g. qualifying) still shows up instead of a stale/empty table. */
+$wcStandSeason = (int) wc_scalar($conn, "SELECT MAX(season) FROM wc_standings WHERE league_id = 1");
+if ($wcStandSeason <= 0) $wcStandSeason = (int) wc_scalar($conn, "SELECT MAX(season) FROM wc_standings");
+if ($wcStandSeason <= 0) $wcStandSeason = 2026;
 $standingsRows = wc_rows($conn, "
     SELECT
         grp AS group_name,
@@ -529,9 +534,18 @@ $standingsRows = wc_rows($conn, "
         gf AS goals_for
     FROM wc_standings
     WHERE league_id = 1
-      AND season = 2026
+      AND season = ?
     ORDER BY grp ASC, rank_pos ASC
-");
+", "i", [$wcStandSeason]);
+if (!$standingsRows) {
+    $standingsRows = wc_rows($conn, "
+        SELECT grp AS group_name, rank_pos AS position, team_id, team_name, NULL AS team_logo,
+               played, points, gd AS goal_difference, gf AS goals_for
+        FROM wc_standings
+        WHERE season = (SELECT MAX(season) FROM wc_standings)
+        ORDER BY grp ASC, rank_pos ASC
+    ");
+}
 
 /* ---- Country flags from WC2026_Filter_Countries (matched by name or code) ---- */
 $flagByName = [];
@@ -6792,7 +6806,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       fanFilterTitle:'Fan Filter Studio',openFull:'Open full page',
       soonBadge:'Coming Soon',soonTitle:'Mystery Box',soonSub:'A surprise World Cup reward drop is on its way. Keep playing and predicting — this box unlocks later in the tournament.',soonCta:'Unlocks Soon',
       ffChooseCountry:'Choose Country',ffChooseFrame:'Choose Frame',ffStartCam:'Start Camera',ffUpload:'Upload Photo',ffCapture:'Capture',ffRetake:'Retake',ffSave:'Save & Download',ffReady:'Start the camera or upload a photo.',ffNeedData:'Add active countries and frames to enable the studio.',
-      openWall:'Open Fan Wall',closeWall:'Minimize',ffCardSub:'Create your World Cup fan photo — pick your country, choose a frame, snap a selfie and download.',ffOpenStudio:'Open Studio',newPost:'new',
+      openWall:'Open Fan Wall',closeWall:'Minimize',loadMore:'Load more posts',ffCardSub:'Create your World Cup fan photo — pick your country, choose a frame, snap a selfie and download.',ffOpenStudio:'Open Studio',newPost:'new',
       navHowTo:'How to Use',navPoints:'Points',ffSearchCountry:'Search country…',
       howToTitle:'Get started in 5 steps',
       howStep1t:'Play the Daily Goal Rush',howStep1d:'Tap the ball (or press Space) to shoot. Aim with the moving target line, beat the goalkeeper, and score as many goals as you can in 30 seconds — once per day.',
@@ -6856,7 +6870,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       fanFilterTitle:'استوديو فلتر المشجع',openFull:'فتح الصفحة كاملة',
       soonBadge:'قريبًا',soonTitle:'الصندوق الغامض',soonSub:'مكافأة مفاجئة من كأس العالم في الطريق. واصل اللعب والتوقع — سيُفتح هذا الصندوق لاحقًا خلال البطولة.',soonCta:'يُفتح قريبًا',
       ffChooseCountry:'اختر الدولة',ffChooseFrame:'اختر الإطار',ffStartCam:'تشغيل الكاميرا',ffUpload:'رفع صورة',ffCapture:'التقاط',ffRetake:'إعادة',ffSave:'حفظ وتنزيل',ffReady:'شغّل الكاميرا أو ارفع صورة.',ffNeedData:'أضف دولًا وإطارات نشطة لتفعيل الاستوديو.',
-      openWall:'فتح جدار المشجعين',closeWall:'تصغير',ffCardSub:'أنشئ صورتك كمشجع — اختر دولتك، اختر إطارًا، التقط صورة وحمّلها.',ffOpenStudio:'فتح الاستوديو',newPost:'جديد',
+      openWall:'فتح جدار المشجعين',closeWall:'تصغير',loadMore:'تحميل المزيد',ffCardSub:'أنشئ صورتك كمشجع — اختر دولتك، اختر إطارًا، التقط صورة وحمّلها.',ffOpenStudio:'فتح الاستوديو',newPost:'جديد',
       navHowTo:'طريقة الاستخدام',navPoints:'النقاط',ffSearchCountry:'ابحث عن دولة…',
       howToTitle:'ابدأ في 5 خطوات',
       howStep1t:'العب تحدي الأهداف اليومي',howStep1d:'انقر الكرة (أو اضغط مسافة) للتسديد. صوّب باستخدام خط الهدف المتحرك، تجاوز الحارس، وسجّل أكبر عدد من الأهداف خلال 30 ثانية — مرة واحدة يوميًا.',
@@ -7003,6 +7017,8 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
 .social-actions .match-link.primary{margin-inline-start:auto}
 .social-feed{display:flex;flex-direction:column;gap:14px}
 .social-loading,.social-empty{color:rgba(255,255,255,.6);font-weight:800;text-align:center;padding:16px}
+.s-loadmore{display:block;width:100%;margin:12px 0 2px;padding:11px;border-radius:14px;cursor:pointer;font-family:inherit;font-weight:900;font-size:13px;color:#A8E7FF;background:rgba(168,231,255,.10);border:1px solid rgba(168,231,255,.25);transition:.18s}
+.s-loadmore:hover{background:rgba(168,231,255,.18)}
 .s-post{border:1px solid rgba(168,231,255,.14);border-radius:18px;padding:14px;background:rgba(255,255,255,.04)}
 .s-post-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .s-post-ava{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:900;color:#06202e;background:linear-gradient(135deg,#F5C85B,#FFE19A)}
@@ -7508,12 +7524,33 @@ html[data-theme="saudi"] .teams-map-frame-wrap{border-color:rgba(126,244,174,.22
     });
     return el;
   }
-  function loadFeed(){
-    if(!feed) return;
-    fetch(feed.dataset.endpoint,{credentials:'same-origin'})
+  var wallPage=1, wallLoading=false, wallMoreBtn=null;
+  function ensureMoreBtn(){
+    if(wallMoreBtn) return wallMoreBtn;
+    wallMoreBtn=d.createElement('button');
+    wallMoreBtn.type='button'; wallMoreBtn.className='s-loadmore';
+    wallMoreBtn.addEventListener('click', function(){ loadFeed(true); });
+    if(feed && feed.parentNode) feed.parentNode.insertBefore(wallMoreBtn, feed.nextSibling);
+    return wallMoreBtn;
+  }
+  function loadFeed(append){
+    if(!feed || wallLoading) return;
+    wallLoading=true;
+    var pg = append ? (wallPage + 1) : 1;
+    if(append && wallMoreBtn) wallMoreBtn.textContent='…';
+    fetch(feed.dataset.endpoint + '?page=' + pg, {credentials:'same-origin'})
       .then(function(r){ return r.json(); })
-      .then(function(data){ var posts=(data && data.posts)||[]; renderPosts(posts); seedNotify((data && data.recent) || posts); })
-      .catch(function(){ feed.innerHTML='<div class="social-empty">'+esc(tr('socialEmpty'))+'</div>'; });
+      .then(function(data){
+        var posts=(data && data.posts)||[];
+        if(append){ posts.forEach(function(p){ feed.appendChild(renderPost(p)); }); wallPage=pg; }
+        else { renderPosts(posts); wallPage=1; seedNotify((data && data.recent && data.recent.length) ? data.recent : posts); }
+        var btn=ensureMoreBtn();
+        btn.style.display=(data && data.hasMore)?'':'none';
+        btn.textContent=tr('loadMore');
+        wallLoading=false;
+      })
+      .catch(function(){ wallLoading=false; if(wallMoreBtn) wallMoreBtn.textContent=tr('loadMore');
+        if(!append) feed.innerHTML='<div class="social-empty">'+esc(tr('socialEmpty'))+'</div>'; });
   }
   if(photoInput){ photoInput.addEventListener('change', function(){ photoName.textContent=(photoInput.files&&photoInput.files[0])?photoInput.files[0].name:''; }); }
   var myName='<?= htmlspecialchars($name, ENT_QUOTES, "UTF-8") ?>';

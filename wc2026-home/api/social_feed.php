@@ -5,9 +5,16 @@
 
 require __DIR__ . '/_fanwall_common.php';
 
-$WALL_LIMIT   = 40;   // posts shown on the wall
+$PER_PAGE     = 15;   // posts per page
 $NOTIFY_MINS  = 15;   // notification window
 $NOTIFY_LIMIT = 30;   // notification cap
+
+$page   = max(1, (int)($_GET['page'] ?? 1));
+$offset = ($page - 1) * $PER_PAGE; // ints -> safe to inline
+
+$total = 0;
+$tr = fw_rows($conn, "SELECT COUNT(*) AS c FROM WC2026_Fan_Wall WHERE status = 'Active'");
+if ($tr) $total = (int)$tr[0]['c'];
 
 $posts = fw_rows(
     $conn,
@@ -16,7 +23,7 @@ $posts = fw_rows(
      FROM WC2026_Fan_Wall
      WHERE status = 'Active'
      ORDER BY created_at DESC
-     LIMIT {$WALL_LIMIT}"
+     LIMIT {$PER_PAGE} OFFSET {$offset}"
 );
 
 $ids = [];
@@ -53,12 +60,9 @@ if ($ids) {
 
 $out = [];
 $recent = [];
-$cutoff = time() - ($NOTIFY_MINS * 60);
 
 foreach ($posts as $p) {
     $pid = (int)$p['id'];
-    $ago = fw_time_ago($p['created_at']);
-
     $out[] = [
         'id'         => $pid,
         'name'       => $p['author_name'],
@@ -67,16 +71,32 @@ foreach ($posts as $p) {
         'likes'      => (int)$p['likes_count'],
         'liked'      => isset($likedSet[$pid]),
         'comments'   => $commentsByPost[$pid] ?? [],
-        'created_at' => $ago,
+        'created_at' => fw_time_ago($p['created_at']),
     ];
+}
 
-    if (strtotime((string)$p['created_at']) >= $cutoff && count($recent) < $NOTIFY_LIMIT) {
-        $recent[] = [
-            'name'       => $p['author_name'],
-            'body'       => $p['body'],
-            'created_at' => $ago,
-        ];
+/* Notification "recent" list (last N minutes) — only needed on the first page. */
+if ($page === 1) {
+    $cutoff = date('Y-m-d H:i:s', time() - ($NOTIFY_MINS * 60));
+    foreach (fw_rows(
+        $conn,
+        "SELECT author_name, body, created_at FROM WC2026_Fan_Wall
+         WHERE status = 'Active' AND created_at >= ?
+         ORDER BY created_at DESC LIMIT {$NOTIFY_LIMIT}",
+        "s",
+        [$cutoff]
+    ) as $r) {
+        $recent[] = ['name' => $r['author_name'], 'body' => $r['body'], 'created_at' => fw_time_ago($r['created_at'])];
     }
 }
 
-fw_out(['ok' => true, 'posts' => $out, 'recent' => $recent]);
+$hasMore = ($offset + count($out)) < $total;
+fw_out([
+    'ok'      => true,
+    'posts'   => $out,
+    'recent'  => $recent,
+    'page'    => $page,
+    'perPage' => $PER_PAGE,
+    'total'   => $total,
+    'hasMore' => $hasMore,
+]);
