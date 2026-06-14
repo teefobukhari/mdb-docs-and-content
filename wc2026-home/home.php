@@ -803,6 +803,12 @@ function wc_attach_flags(array &$rows, array $byName, array $byCode): void {
     unset($r);
 }
 
+/* Is this team Saudi Arabia? (accent/alias-aware: "Saudi Arabia", "KSA", …) */
+function wc_is_saudi($team): bool {
+    $n = wc_norm_country((string)$team);
+    return $n !== '' && in_array($n, wc_country_aliases('saudiarabia'), true);
+}
+
 wc_attach_flags($liveMatches, $flagByName, $flagByCode);
 wc_attach_flags($nextMatch, $flagByName, $flagByCode);
 wc_attach_flags($upcomingMatches, $flagByName, $flagByCode);
@@ -5015,10 +5021,17 @@ body:before{
 </section>
 
 <!-- (3) Next World Cup matches within 24 hours — inside main so the container offset can't overlap it -->
-<?php $n24 = !empty($next24Matches) ? $next24Matches : $next24Fallback; ?>
-<section class="next24-wrap">
+<?php
+    $n24 = !empty($next24Matches) ? $next24Matches : $next24Fallback;
+    $n24HasSaudi = false;
+    foreach ($n24 as $nx) {
+        if (wc_is_saudi($nx['home_team'] ?? '') || wc_is_saudi($nx['away_team'] ?? '')) { $n24HasSaudi = true; break; }
+    }
+?>
+<section class="next24-wrap<?= $n24HasSaudi ? ' saudi-playing' : '' ?>">
     <div class="next24-head">
         <h2 class="next24-title"><span class="next24-dot"></span> <span data-i18n="next24Title">Next Matches · within 24 hours</span></h2>
+        <?php if ($n24HasSaudi): ?><span class="saudi-soon-chip"><span class="flag">🇸🇦</span> <span data-i18n="saudiSoon">Saudi Arabia plays soon!</span></span><?php endif; ?>
         <a href="/WC2026/matches" class="match-link soft" data-i18n="viewFullMatches">View Full Matches</a>
     </div>
     <?php if (!empty($n24)): ?>
@@ -5029,8 +5042,12 @@ body:before{
                     $nxWhen = date('D, d M • h:i A', strtotime((string)$nx['match_datetime']));
                     $nxVenue = trim(($nx['stadium'] ?? '') . (!empty($nx['city']) ? ' • ' . $nx['city'] : ''));
                     $kickoffOpen = wc_prediction_open((string)$nx['match_datetime']);
+                    $cardSaudi = wc_is_saudi($nx['home_team'] ?? '') || wc_is_saudi($nx['away_team'] ?? '');
                 ?>
-                <article class="next24-card">
+                <article class="next24-card<?= $cardSaudi ? ' saudi-card' : '' ?>">
+                    <?php if ($cardSaudi): ?>
+                        <div class="saudi-ribbon"><span class="flag">🇸🇦</span> <span data-i18n="saudiRibbon">Cheer for the Green Falcons!</span></div>
+                    <?php endif; ?>
                     <div class="next24-meta">
                         <?php if ($nxLive): ?><span class="live-badge" data-i18n="liveNow">Live</span><?php else: ?><span class="status-badge"><?= htmlspecialchars($nxWhen, ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
                         <?php if (!$kickoffOpen && !$nxLive): ?><span class="lock-badge" title="Predictions closed">🔒 <span data-i18n="closed">Closed</span></span><?php endif; ?>
@@ -7301,7 +7318,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       agentTyping:'Thinking…',agentErr:'Sorry, the agent could not respond. Please try again.',
       agentInstruction:'Respond in clear, fan-friendly English. If live data is missing, say what is missing.',
       navFanFilter:'Fan Filter',navProfile:'My Profile',close:'Close',
-      next24Title:'Next Matches · within 24 hours',liveNow:'Live',closed:'Closed',predictionsClosed:'Predictions Closed',
+      next24Title:'Next Matches · within 24 hours',saudiSoon:'Saudi Arabia plays soon!',saudiRibbon:'Cheer for the Green Falcons!',liveNow:'Live',closed:'Closed',predictionsClosed:'Predictions Closed',
       no24:'No matches kicking off within the next 24 hours. Check the full schedule.',
       statOverall:'Overall Score',statOverallNote:'All-time points',statWeekly:'Weekly Score',statWeeklyNote:'This week',
       statParticipants:'Participants',onlineNow:'online now',onlineNowTitle:'Online Now',online:'online',
@@ -7369,7 +7386,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       agentTyping:'أفكّر…',agentErr:'عذرًا، تعذّر على الوكيل الرد. حاول مرة أخرى.',
       agentInstruction:'أجب بالعربية بأسلوب واضح ومناسب للجماهير. إذا كانت البيانات الحية غير متوفرة فاذكر ذلك.',
       navFanFilter:'فلتر المشجع',navProfile:'ملفي',close:'إغلاق',
-      next24Title:'المباريات القادمة · خلال 24 ساعة',liveNow:'مباشر',closed:'مغلق',predictionsClosed:'التوقعات مغلقة',
+      next24Title:'المباريات القادمة · خلال 24 ساعة',saudiSoon:'السعودية تلعب قريبًا!',saudiRibbon:'شجّع الصقور الخضر!',liveNow:'مباشر',closed:'مغلق',predictionsClosed:'التوقعات مغلقة',
       no24:'لا توجد مباريات تنطلق خلال الـ24 ساعة القادمة. اطّلع على الجدول الكامل.',
       statOverall:'النقاط الإجمالية',statOverallNote:'النقاط الكلية',statWeekly:'نقاط الأسبوع',statWeeklyNote:'هذا الأسبوع',
       statParticipants:'المشاركون',onlineNow:'متصل الآن',onlineNowTitle:'المتصلون الآن',online:'متصل',
@@ -7497,6 +7514,42 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
     background:radial-gradient(circle at 100% 0%,rgba(14,99,230,.24),transparent 40%),linear-gradient(135deg,#061A36,#08254D 60%,#0A3A76);
     box-shadow:0 22px 50px rgba(0,0,0,.26);transition:transform .25s ease,border-color .25s}
 .next24-card:hover{transform:translateY(-4px);border-color:rgba(168,231,255,.4)}
+
+/* ===== Saudi Arabia plays soon — celebratory motion ===== */
+.next24-wrap.saudi-playing .next24-dot{background:#7EF4AE;box-shadow:0 0 16px #7EF4AE;animation:saudiDot 1.4s ease-in-out infinite}
+@keyframes saudiDot{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:.65}}
+.saudi-soon-chip{display:inline-flex;align-items:center;gap:7px;padding:7px 13px;border-radius:999px;font-weight:900;font-size:12.5px;
+    color:#062417;background:linear-gradient(135deg,#7EF4AE,#22C55E);box-shadow:0 10px 24px rgba(34,197,94,.45);
+    animation:saudiBob 1.9s ease-in-out infinite}
+.saudi-soon-chip .flag{animation:saudiWave 1.6s ease-in-out infinite;transform-origin:60% 60%;display:inline-block}
+.next24-card.saudi-card{
+    border-color:rgba(126,244,174,.55);
+    background:radial-gradient(circle at 100% 0%,rgba(17,163,106,.30),transparent 42%),linear-gradient(135deg,#062a1c,#08351f 55%,#0a3a76);
+    box-shadow:0 0 0 1px rgba(126,244,174,.35),0 22px 54px rgba(17,163,106,.34);
+    animation:saudiPulse 2.6s ease-in-out infinite;overflow:hidden}
+.next24-card.saudi-card:hover{transform:translateY(-5px);border-color:rgba(126,244,174,.85)}
+@keyframes saudiPulse{
+    0%,100%{box-shadow:0 0 0 1px rgba(126,244,174,.32),0 22px 54px rgba(17,163,106,.30)}
+    50%{box-shadow:0 0 0 2px rgba(126,244,174,.62),0 26px 70px rgba(17,163,106,.55)}}
+.next24-card.saudi-card::before{content:"";position:absolute;top:0;left:-65%;width:55%;height:100%;
+    background:linear-gradient(105deg,transparent,rgba(255,255,255,.20),transparent);transform:skewX(-18deg);
+    pointer-events:none;animation:saudiSheen 3.4s ease-in-out infinite}
+@keyframes saudiSheen{0%{left:-65%}55%,100%{left:135%}}
+.saudi-ribbon{display:flex;align-items:center;justify-content:center;gap:8px;margin:0 0 12px;padding:8px 12px;border-radius:13px;
+    font-weight:900;font-size:12.5px;color:#062417;background:linear-gradient(135deg,#7EF4AE,#22C55E);
+    box-shadow:0 10px 22px rgba(34,197,94,.42);animation:saudiBob 1.8s ease-in-out infinite}
+.saudi-ribbon .flag{font-size:15px;display:inline-block;animation:saudiWave 1.6s ease-in-out infinite;transform-origin:60% 60%}
+.next24-card.saudi-card .team-logo{animation:saudiFloat 2.7s ease-in-out infinite}
+.next24-card.saudi-card .n24-vs{animation:saudiVs 1.6s ease-in-out infinite}
+@keyframes saudiBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes saudiWave{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(9deg)}}
+@keyframes saudiFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+@keyframes saudiVs{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.12);opacity:1}}
+@media(prefers-reduced-motion:reduce){
+    .next24-wrap.saudi-playing .next24-dot,.saudi-soon-chip,.saudi-soon-chip .flag,.next24-card.saudi-card,
+    .next24-card.saudi-card::before,.saudi-ribbon,.saudi-ribbon .flag,.next24-card.saudi-card .team-logo,
+    .next24-card.saudi-card .n24-vs{animation:none !important}}
+
 .next24-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .lock-badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:900;text-transform:uppercase;color:#FFE19A;background:rgba(245,200,91,.14);border:1px solid rgba(245,200,91,.35);padding:6px 9px;border-radius:999px}
 .next24-teams{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center}
