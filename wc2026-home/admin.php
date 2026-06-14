@@ -177,6 +177,56 @@ function participants(int $limit = 0): array {
     ", $types, $params);
 }
 
+/* ---------- per-user behaviour & experience (one row per user, all metrics) ---------- */
+function userBehavior(int $limit = 500): array {
+    global $predTs, $reactTs, $photoTs;
+    $types = ''; $params = [];
+
+    /* Date clauses are appended in the SAME order they appear in the SQL below so
+       the bound params line up; user-attribute filters bind last (outer WHERE). */
+    $dGame = dWhere('played_at', $types, $params);                               // game sessions
+    $dPred = $predTs !== '' ? dWhere("`{$predTs}`", $types, $params) : '';        // predictions
+    $dRe   = $reactTs !== '' ? dWhere("`{$reactTs}`", $types, $params) : '';      // reactions
+    $dCo   = dWhere('created_at', $types, $params);                               // comments
+    $dFw   = dWhere('created_at', $types, $params);                               // fan wall
+    $dLg   = dWhere('created_at', $types, $params);                               // logins (audit)
+
+    /* Studio photos: only join when the table/timestamp exist (else show 0). */
+    $phSel = '0 AS studio_photos'; $phJoin = '';
+    if ($photoTs !== '') {
+        $dPh   = dWhere("`{$photoTs}`", $types, $params);
+        $phSel = 'COALESCE(ph.cnt,0) AS studio_photos';
+        $phJoin = "LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Filter_Photos WHERE 1=1 {$dPh} GROUP BY user_id) ph ON ph.user_id = u.id";
+    }
+
+    $uw = uWhere('u', $types, $params); // outer user-attribute filters bind last
+
+    return q("
+        SELECT
+            u.id, u.full_name, u.prn, u.department, u.location, u.role, u.status, u.last_login_at,
+            COALESCE(gs.plays,0)  AS game_plays,
+            COALESCE(gs.pts,0)    AS game_score,
+            COALESCE(pr.preds,0)  AS predictions,
+            COALESCE(pr.correct,0) AS predictions_correct,
+            COALESCE(re.cnt,0)    AS reactions,
+            COALESCE(co.cnt,0)    AS comments,
+            COALESCE(fw.cnt,0)    AS wall_posts,
+            COALESCE(lg.cnt,0)    AS logins,
+            {$phSel}
+        FROM WC2026_Users u
+        LEFT JOIN (SELECT user_id, COUNT(*) plays, COALESCE(SUM(total_points),0) pts FROM WC2026_Game_Sessions WHERE 1=1 {$dGame} GROUP BY user_id) gs ON gs.user_id = u.id
+        LEFT JOIN (SELECT user_id, COUNT(*) preds, SUM(CASE WHEN points_awarded > 0 THEN 1 ELSE 0 END) correct FROM WC2026_Predictions WHERE 1=1 {$dPred} GROUP BY user_id) pr ON pr.user_id = u.id
+        LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Match_Reactions WHERE 1=1 {$dRe} GROUP BY user_id) re ON re.user_id = u.id
+        LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Fan_Wall_Comments WHERE 1=1 {$dCo} GROUP BY user_id) co ON co.user_id = u.id
+        LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Fan_Wall WHERE 1=1 {$dFw} GROUP BY user_id) fw ON fw.user_id = u.id
+        LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Users_Audit_Log WHERE action_type='LOGIN' {$dLg} GROUP BY user_id) lg ON lg.user_id = u.id
+        {$phJoin}
+        WHERE 1=1 {$uw}
+        ORDER BY (COALESCE(gs.pts,0) + COALESCE(pr.preds,0) + COALESCE(re.cnt,0) + COALESCE(co.cnt,0) + COALESCE(fw.cnt,0)) DESC, u.full_name ASC
+        LIMIT " . (int)$limit . "
+    ", $types, $params);
+}
+
 /* ---------- CSV export (must run before any HTML) ---------- */
 function csv_out(string $filename, array $headers, array $rows): void {
     while (ob_get_level()) { ob_end_clean(); }
@@ -225,6 +275,18 @@ if (isset($_GET['export'])) {
                     $r['likes_count'],$r['comments_count'],$r['status'],$r['created_at']];
         }, $rows);
         csv_out("wc2026_studio_{$date}.csv", $headers, $data);
+    }
+
+    if ($ex === 'behavior') {
+        $rows = userBehavior(100000);
+        $headers = ['ID','PRN','Full name','Department','Location','Role','Status','Last login',
+                    'Predictions','Correct','Reactions','Comments','Wall posts','Game score','Game plays','Logins','Studio photos'];
+        $data = array_map(function ($r) {
+            return [$r['id'],$r['prn'] ?? '',$r['full_name'],$r['department'],$r['location'],$r['role'],$r['status'],$r['last_login_at'],
+                    $r['predictions'],$r['predictions_correct'],$r['reactions'],$r['comments'],$r['wall_posts'],
+                    $r['game_score'],$r['game_plays'],$r['logins'],$r['studio_photos']];
+        }, $rows);
+        csv_out("wc2026_behavior_{$date}.csv", $headers, $data);
     }
 }
 
@@ -360,6 +422,9 @@ if ($photoCty !== '') {
 
 /* Top participants (leaderboard) */
 $leaders = participants(15);
+
+/* Per-user behaviour & experience (all metrics, one row per user) */
+$behavior = userBehavior(500);
 
 /* ---------- actual records: comments / reactions / predictions ---------- */
 /* fixture_id -> "Home vs Away" label (defensive: blank if wc_fixtures absent). */
@@ -503,6 +568,12 @@ td{font-weight:700;color:#eaf6ff}
 .rank{display:inline-grid;place-items:center;width:24px;height:24px;border-radius:7px;background:rgba(168,231,255,.14);font-weight:900;font-size:11px}
 .pts{color:var(--gold);font-weight:900}
 .empty{color:var(--muted);font-weight:700;text-align:center;padding:30px;font-size:13px}
+.behav-toolbar{display:flex;align-items:center;gap:12px;margin:0 0 12px;flex-wrap:wrap}
+.behav-search{flex:1;min-width:220px;min-height:42px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.06);
+    color:#fff;padding:9px 14px;font-family:inherit;font-weight:700;font-size:13px}
+.behav-search::placeholder{color:rgba(234,244,255,.5)}
+.behav-count{font-size:12px;font-weight:800;color:var(--muted)}
+#behavTable tbody tr.hide{display:none}
 @media(max-width:1100px){.col-8,.col-6,.col-4,.col-3{grid-column:span 6}}
 @media(max-width:680px){.col-12,.col-8,.col-6,.col-4,.col-3{grid-column:span 12}.wrap{padding:14px}}
 </style>
@@ -547,6 +618,7 @@ td{font-weight:700;color:#eaf6ff}
         <a class="btn btn-gold" href="?export=users&<?= h(qstr()) ?>">⬇ Export users</a>
         <a class="btn btn-gold" href="?export=participants&<?= h(qstr()) ?>">⬇ Export participants</a>
         <a class="btn btn-gold" href="?export=studio&<?= h(qstr()) ?>">⬇ Export studio</a>
+        <a class="btn btn-gold" href="?export=behavior&<?= h(qstr()) ?>">⬇ Export behaviour</a>
     </form>
 
     <!-- KPIs -->
@@ -617,6 +689,50 @@ td{font-weight:700;color:#eaf6ff}
             </tbody>
         </table>
         </div>
+    </div>
+
+    <!-- User behaviour & experience -->
+    <h2 class="section">User behaviour &amp; experience</h2>
+    <div class="card col-12">
+        <div class="behav-toolbar">
+            <input type="search" id="behavSearch" class="behav-search" placeholder="🔎 Search name / PRN / department / location…" autocomplete="off">
+            <span class="behav-count" id="behavCount"><?= count($behavior) ?> users</span>
+        </div>
+        <div class="table-scroll">
+        <table id="behavTable">
+            <thead><tr>
+                <th>#</th><th>User</th><th>PRN</th><th>Dept</th><th>Location</th>
+                <th title="Predictions made">Predictions</th><th title="Correct (matched actual result)">Correct</th>
+                <th>Reactions</th><th>Comments</th><th>Wall</th>
+                <th title="Game score (points)">Game score</th><th title="Game plays">Plays</th>
+                <th>Logins</th><th>Studio photos</th>
+            </tr></thead>
+            <tbody>
+            <?php if ($behavior): foreach ($behavior as $i => $r): ?>
+                <?php $accuracy = ((int)$r['predictions'] > 0) ? round(100 * (int)$r['predictions_correct'] / (int)$r['predictions']) : 0; ?>
+                <tr data-search="<?= h(strtolower(($r['full_name'] ?? '').' '.($r['prn'] ?? '').' '.($r['department'] ?? '').' '.($r['location'] ?? ''))) ?>">
+                    <td><span class="rank"><?= $i+1 ?></span></td>
+                    <td><?= h($r['full_name'] ?: '—') ?></td>
+                    <td><?= h($r['prn'] ?: '—') ?></td>
+                    <td><?= h($r['department'] ?: '—') ?></td>
+                    <td><?= h($r['location'] ?: '—') ?></td>
+                    <td><?= number_format((int)$r['predictions']) ?></td>
+                    <td><?= number_format((int)$r['predictions_correct']) ?><?php if ((int)$r['predictions'] > 0): ?> <small style="color:var(--muted)">(<?= $accuracy ?>%)</small><?php endif; ?></td>
+                    <td><?= number_format((int)$r['reactions']) ?></td>
+                    <td><?= number_format((int)$r['comments']) ?></td>
+                    <td><?= number_format((int)$r['wall_posts']) ?></td>
+                    <td class="pts"><?= number_format((int)$r['game_score']) ?></td>
+                    <td><?= number_format((int)$r['game_plays']) ?></td>
+                    <td><?= number_format((int)$r['logins']) ?></td>
+                    <td><?= number_format((int)$r['studio_photos']) ?></td>
+                </tr>
+            <?php endforeach; else: ?>
+                <tr><td colspan="14" class="empty">No user data for the selected filters.</td></tr>
+            <?php endif; ?>
+            </tbody>
+        </table>
+        </div>
+        <div class="behav-empty empty" id="behavNoMatch" style="display:none">No users match your search.</div>
     </div>
 
     <!-- Actual records: predictions / reactions / comments -->
@@ -742,6 +858,26 @@ mk('cPhotos',{type:'line',data:{labels:D.photos.labels,datasets:[{label:'Photos'
 
 /* Studio photos by country (horizontal bar) */
 mk('cPhotoCountry',{type:'bar',data:{labels:D.photoCountry.labels,datasets:[{label:'Photos',data:D.photoCountry.data,backgroundColor:PAL,borderRadius:6}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{...GRID,beginAtZero:true,ticks:{precision:0}},y:GRID},plugins:{legend:{display:false}}}});
+
+/* User behaviour table — live client-side search */
+(function(){
+  var input=document.getElementById('behavSearch'),
+      table=document.getElementById('behavTable'),
+      count=document.getElementById('behavCount'),
+      noMatch=document.getElementById('behavNoMatch');
+  if(!input||!table) return;
+  var rows=[].slice.call(table.querySelectorAll('tbody tr[data-search]'));
+  input.addEventListener('input',function(){
+    var q=input.value.trim().toLowerCase(), shown=0;
+    rows.forEach(function(tr){
+      var hit = q==='' || (tr.getAttribute('data-search')||'').indexOf(q)!==-1;
+      tr.classList.toggle('hide', !hit);
+      if(hit) shown++;
+    });
+    if(count) count.textContent = shown + ' / ' + rows.length + ' users';
+    if(noMatch) noMatch.style.display = (shown===0 && rows.length>0) ? 'block' : 'none';
+  });
+})();
 </script>
 </body>
 </html>
