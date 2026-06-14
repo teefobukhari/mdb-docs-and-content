@@ -118,12 +118,26 @@ function dWhere(string $col, string &$types, array &$params): string {
 if (!defined('WC_PTS_PHOTO')) define('WC_PTS_PHOTO', 10); // Fan Filter photo (once per day) per the scoring rules
 if (!defined('WC_STUDIO_DAILY_PTS')) define('WC_STUDIO_DAILY_PTS', WC_PTS_PHOTO); // align studio bonus to the +10 rule
 
-/** Total earned points for a behaviour row: predictions (winner+score+champion,
- *  already in points_awarded) + game score + studio photos (once/day × WC_PTS_PHOTO). */
+/** Champion/other prediction points = total prediction points beyond exact-score
+ *  (+5) and correct-winner (+3) — i.e. the +15 champion picks. */
+function predChampionPoints(array $r): int {
+    return max(0, (int)($r['pred_points'] ?? 0) - (int)($r['score_pts'] ?? 0) - (int)($r['winner_pts'] ?? 0));
+}
+
+/** Studio points = distinct photo days × WC_PTS_PHOTO (+10, once per day). */
+function studioPoints(array $r): int {
+    return (int)($r['studio_days'] ?? 0) * WC_PTS_PHOTO;
+}
+
+/** Total earned points = score + winner + champion + game score + studio.
+ *  Equivalent to predictions (points_awarded) + game + studio, but computed from
+ *  the same components shown in the table so the columns always sum to Total. */
 function behaviorPoints(array $r): int {
-    return (int)($r['game_score'] ?? 0)
-         + (int)($r['pred_points'] ?? 0)
-         + (int)($r['studio_days'] ?? 0) * WC_PTS_PHOTO;
+    return (int)($r['score_pts'] ?? 0)
+         + (int)($r['winner_pts'] ?? 0)
+         + predChampionPoints($r)
+         + (int)($r['game_score'] ?? 0)
+         + studioPoints($r);
 }
 
 /* Detect the real timestamp / FK columns so KPIs + charts can date-filter and
@@ -355,11 +369,11 @@ if (isset($_GET['export'])) {
         $rows = userBehavior(0); // all users
         usort($rows, fn($a, $b) => behaviorPoints($b) <=> behaviorPoints($a));
         $headers = ['ID','PRN','Full name','Department','Location','Role','Status','Last login',
-                    'Score pts','Winner pts','Reactions','Comments','Wall posts','Game score','Game plays','Logins','Studio pts','Total points'];
+                    'Score pts','Winner pts','Champion pts','Reactions','Comments','Wall posts','Game score','Game plays','Logins','Studio pts','Total points'];
         $data = array_map(function ($r) {
             return [$r['id'],$r['prn'] ?? '',$r['full_name'],$r['department'],$r['location'],$r['role'],$r['status'],$r['last_login_at'],
-                    $r['score_pts'],$r['winner_pts'],$r['reactions'],$r['comments'],$r['wall_posts'],
-                    $r['game_score'],$r['game_plays'],$r['logins'],(int)($r['studio_days'] ?? 0) * WC_PTS_PHOTO,behaviorPoints($r)];
+                    $r['score_pts'],$r['winner_pts'],predChampionPoints($r),$r['reactions'],$r['comments'],$r['wall_posts'],
+                    $r['game_score'],$r['game_plays'],$r['logins'],studioPoints($r),behaviorPoints($r)];
         }, $rows);
         if (strtolower((string)($_GET['fmt'] ?? '')) === 'xlsx') {
             xlsx_out("wc2026_behavior_{$date}.xlsx", $headers, $data);
@@ -828,11 +842,11 @@ td{font-weight:700;color:#eaf6ff}
         <table id="behavTable">
             <thead><tr>
                 <th>#</th><th>User</th><th>PRN</th><th>Dept</th><th>Location</th>
-                <th title="Points from exact correct scores (+5 each)">Score pts</th><th title="Points from correct winners (+3 each)">Winner pts</th>
+                <th title="Points from exact correct scores (+5 each)">Score pts</th><th title="Points from correct winners (+3 each)">Winner pts</th><th title="Champion pick (+15) / other prediction points">Champion pts</th>
                 <th>Reactions</th><th>Comments</th><th>Wall</th>
                 <th title="Game score (points)">Game score</th><th title="Game plays">Plays</th>
                 <th>Logins</th><th title="Studio photo points (once/day +10)">Studio pts</th>
-                <th title="Predictions (winner/score/champion) + game score + studio photos">Total points</th>
+                <th title="Score + Winner + Champion + Game score + Studio">Total points</th>
             </tr></thead>
             <tbody>
             <?php if ($behavior): foreach ($behavior as $i => $r): ?>
@@ -844,6 +858,7 @@ td{font-weight:700;color:#eaf6ff}
                     <td><?= h($r['location'] ?: '—') ?></td>
                     <td><?= number_format((int)$r['score_pts']) ?></td>
                     <td><?= number_format((int)$r['winner_pts']) ?></td>
+                    <td><?= number_format(predChampionPoints($r)) ?></td>
                     <td><?= number_format((int)$r['reactions']) ?></td>
                     <td><?= number_format((int)$r['comments']) ?></td>
                     <td><?= number_format((int)$r['wall_posts']) ?></td>
@@ -854,7 +869,7 @@ td{font-weight:700;color:#eaf6ff}
                     <td class="pts"><?= number_format(behaviorPoints($r)) ?></td>
                 </tr>
             <?php endforeach; else: ?>
-                <tr><td colspan="15" class="empty">No user data for the selected filters.</td></tr>
+                <tr><td colspan="16" class="empty">No user data for the selected filters.</td></tr>
             <?php endif; ?>
             </tbody>
         </table>
