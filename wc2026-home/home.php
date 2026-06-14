@@ -5291,12 +5291,12 @@ body:before{
     </section>
     <?php endif; /* legacy world-map */ ?>
 
-    <section class="card knockout-card bracket-preview-mode" id="knockoutBracketCard">
+    <section class="card knockout-card expanded" id="knockoutBracketCard">
         <div class="bracket-head">
             <div class="bracket-title-wrap">
                 <div class="bracket-title">🏆 <span data-i18n="bracketTitle">World Cup Knockout Bracket</span></div>
                 <div class="bracket-subtitle" data-i18n="bracketSub">
-                    Projected tournament path (R32 → R16 → QF → SF → Final). Preview is collapsed for a cleaner home page.
+                    Full projected tournament path — all 16 Round of 32 ties through to the Final (R32 → R16 → QF → SF → Final).
                 </div>
             </div>
 
@@ -5314,7 +5314,7 @@ body:before{
                 </div>
 
                 <button type="button" class="bracket-more-btn" id="bracketMoreBtn">
-                    <span data-i18n="more">MORE</span> <span>→</span>
+                    MINIMIZE <span>✕</span>
                 </button>
             </div>
         </div>
@@ -5430,7 +5430,7 @@ body:before{
 
         <div class="bracket-preview-footer" id="bracketPreviewFooter">
             <button type="button" class="bracket-show-full" id="bracketShowFull">
-                <span data-i18n="showFullBracket">Show Full Bracket</span> <span>↗</span>
+                <span>Minimize Bracket</span> <span>↙</span>
             </button>
         </div>
     </section>
