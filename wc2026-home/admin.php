@@ -206,8 +206,8 @@ function userBehavior(int $limit = 500): array {
             u.id, u.full_name, u.prn, u.department, u.location, u.role, u.status, u.last_login_at,
             COALESCE(gs.plays,0)  AS game_plays,
             COALESCE(gs.pts,0)    AS game_score,
-            COALESCE(pr.preds,0)  AS predictions,
-            COALESCE(pr.correct,0) AS predictions_correct,
+            COALESCE(pr.correct_score,0)  AS correct_score,
+            COALESCE(pr.correct_winner,0) AS correct_winner,
             COALESCE(re.cnt,0)    AS reactions,
             COALESCE(co.cnt,0)    AS comments,
             COALESCE(fw.cnt,0)    AS wall_posts,
@@ -215,14 +215,14 @@ function userBehavior(int $limit = 500): array {
             {$phSel}
         FROM WC2026_Users u
         LEFT JOIN (SELECT user_id, COUNT(*) plays, COALESCE(SUM(total_points),0) pts FROM WC2026_Game_Sessions WHERE 1=1 {$dGame} GROUP BY user_id) gs ON gs.user_id = u.id
-        LEFT JOIN (SELECT user_id, COUNT(*) preds, SUM(CASE WHEN points_awarded > 0 THEN 1 ELSE 0 END) correct FROM WC2026_Predictions WHERE 1=1 {$dPred} GROUP BY user_id) pr ON pr.user_id = u.id
+        LEFT JOIN (SELECT user_id, SUM(CASE WHEN points_awarded >= 5 THEN 1 ELSE 0 END) correct_score, SUM(CASE WHEN points_awarded > 0 THEN 1 ELSE 0 END) correct_winner FROM WC2026_Predictions WHERE 1=1 {$dPred} GROUP BY user_id) pr ON pr.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Match_Reactions WHERE 1=1 {$dRe} GROUP BY user_id) re ON re.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Fan_Wall_Comments WHERE 1=1 {$dCo} GROUP BY user_id) co ON co.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Fan_Wall WHERE 1=1 {$dFw} GROUP BY user_id) fw ON fw.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Users_Audit_Log WHERE action_type='LOGIN' {$dLg} GROUP BY user_id) lg ON lg.user_id = u.id
         {$phJoin}
         WHERE 1=1 {$uw}
-        ORDER BY (COALESCE(gs.pts,0) + COALESCE(pr.preds,0) + COALESCE(re.cnt,0) + COALESCE(co.cnt,0) + COALESCE(fw.cnt,0)) DESC, u.full_name ASC
+        ORDER BY (COALESCE(gs.pts,0) + COALESCE(pr.correct_winner,0) + COALESCE(re.cnt,0) + COALESCE(co.cnt,0) + COALESCE(fw.cnt,0)) DESC, u.full_name ASC
         " . ($limit > 0 ? ('LIMIT ' . (int)$limit) : '') . "
     ", $types, $params);
 }
@@ -344,10 +344,10 @@ if (isset($_GET['export'])) {
     if ($ex === 'behavior') {
         $rows = userBehavior(0); // all users
         $headers = ['ID','PRN','Full name','Department','Location','Role','Status','Last login',
-                    'Predictions','Correct','Reactions','Comments','Wall posts','Game score','Game plays','Logins','Studio photos'];
+                    'Correct score','Correct winner','Reactions','Comments','Wall posts','Game score','Game plays','Logins','Studio photos'];
         $data = array_map(function ($r) {
             return [$r['id'],$r['prn'] ?? '',$r['full_name'],$r['department'],$r['location'],$r['role'],$r['status'],$r['last_login_at'],
-                    $r['predictions'],$r['predictions_correct'],$r['reactions'],$r['comments'],$r['wall_posts'],
+                    $r['correct_score'],$r['correct_winner'],$r['reactions'],$r['comments'],$r['wall_posts'],
                     $r['game_score'],$r['game_plays'],$r['logins'],$r['studio_photos']];
         }, $rows);
         if (strtolower((string)($_GET['fmt'] ?? '')) === 'xlsx') {
@@ -815,22 +815,21 @@ td{font-weight:700;color:#eaf6ff}
         <table id="behavTable">
             <thead><tr>
                 <th>#</th><th>User</th><th>PRN</th><th>Dept</th><th>Location</th>
-                <th title="Predictions made">Predictions</th><th title="Correct (matched actual result)">Correct</th>
+                <th title="Exact correct score predictions (+5)">Correct score</th><th title="Correct winner predictions (+3, includes exact score)">Correct winner</th>
                 <th>Reactions</th><th>Comments</th><th>Wall</th>
                 <th title="Game score (points)">Game score</th><th title="Game plays">Plays</th>
                 <th>Logins</th><th>Studio photos</th>
             </tr></thead>
             <tbody>
             <?php if ($behavior): foreach ($behavior as $i => $r): ?>
-                <?php $accuracy = ((int)$r['predictions'] > 0) ? round(100 * (int)$r['predictions_correct'] / (int)$r['predictions']) : 0; ?>
                 <tr data-search="<?= h(strtolower(($r['full_name'] ?? '').' '.($r['prn'] ?? '').' '.($r['department'] ?? '').' '.($r['location'] ?? ''))) ?>">
                     <td><span class="rank"><?= $i+1 ?></span></td>
                     <td><?= h($r['full_name'] ?: '—') ?></td>
                     <td><?= h($r['prn'] ?: '—') ?></td>
                     <td><?= h($r['department'] ?: '—') ?></td>
                     <td><?= h($r['location'] ?: '—') ?></td>
-                    <td><?= number_format((int)$r['predictions']) ?></td>
-                    <td><?= number_format((int)$r['predictions_correct']) ?><?php if ((int)$r['predictions'] > 0): ?> <small style="color:var(--muted)">(<?= $accuracy ?>%)</small><?php endif; ?></td>
+                    <td class="pts"><?= number_format((int)$r['correct_score']) ?></td>
+                    <td><?= number_format((int)$r['correct_winner']) ?></td>
                     <td><?= number_format((int)$r['reactions']) ?></td>
                     <td><?= number_format((int)$r['comments']) ?></td>
                     <td><?= number_format((int)$r['wall_posts']) ?></td>
