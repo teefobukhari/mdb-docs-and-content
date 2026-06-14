@@ -92,6 +92,139 @@ if (isset($_GET['api'])) {
     echo wc_apifootball_get($url, $wcCacheDir, $ttlMap[$ep] ?? 60);
     exit;
 }
+
+/* ---- AI logging proxy: worldcup_agent.php?ai=<mode> (POST) --------------------
+   Forwards the request to the central AI Gateway, then records the interaction
+   in AI_Audit_Logs against the logged-in user (PRN). Keeping this on the server
+   means the user identity and the full prompt/response are captured in one audit
+   trail, and AI keeps working even if logging fails. */
+if (isset($_GET['ai'])) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+
+    $modeMap = [
+        'fan'      => 'wc_ai_fan_assistant.php',
+        'predict'  => 'wc_ai_predict.php',
+        'tactical' => 'wc_ai_tactical.php',
+        'summary'  => 'wc_ai_match_summary.php',
+        'command'  => 'wc_ai_command_center.php',
+    ];
+    $mode = (string)($_GET['ai']);
+    if (!isset($modeMap[$mode])) {
+        http_response_code(400); echo json_encode(['ok' => false, 'error' => 'Unknown AI mode.']); exit;
+    }
+
+    /* session + DB connection (same bootstrap pattern as admin.php) */
+    if (session_status() === PHP_SESSION_NONE) { session_name('WC2026SESSID'); session_start(); }
+    $conn = null;
+    if (is_file(__DIR__ . '/connections/config.php')) { require __DIR__ . '/connections/config.php'; }
+
+    /* resolve the acting user (PRN / name / role): session first, WC2026_Users as backup */
+    $uid   = (int)($_SESSION['USER_ID'] ?? 0);
+    $prn   = trim((string)($_SESSION['PRN'] ?? ''));
+    $uname = trim((string)($_SESSION['FULL_NAME'] ?? ''));
+    $urole = '';
+    if ($conn instanceof mysqli && $uid > 0) {
+        if ($st = $conn->prepare("SELECT prn, full_name, role FROM WC2026_Users WHERE id = ? LIMIT 1")) {
+            $st->bind_param('i', $uid);
+            $st->execute();
+            if ($row = $st->get_result()->fetch_assoc()) {
+                if ($prn === '')   $prn   = trim((string)($row['prn'] ?? ''));
+                if ($uname === '') $uname = trim((string)($row['full_name'] ?? ''));
+                $urole = trim((string)($row['role'] ?? ''));
+            }
+            $st->close();
+        }
+    }
+    if ($prn === '') $prn = 'GUEST';
+
+    /* request body — the prompt is payload.text */
+    $rawBody    = file_get_contents('php://input') ?: '';
+    $payload    = json_decode($rawBody, true);
+    if (!is_array($payload)) $payload = [];
+    $promptText = (string)($payload['text'] ?? $rawBody);
+    $moduleName = (string)($payload['module'] ?? 'WORLDCUP');
+
+    /* forward to the gateway on the same host (carry the session cookie + real IP) */
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host   = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+    $gwUrl  = $scheme . '://' . $host . '/AI-Gateway/api/' . $modeMap[$mode];
+    $fwdHdr = ['Content-Type: application/json'];
+    if (!empty($_SERVER['HTTP_COOKIE'])) $fwdHdr[] = 'Cookie: ' . $_SERVER['HTTP_COOKIE'];
+    $clientIp = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+    if ($clientIp !== '') $fwdHdr[] = 'X-Forwarded-For: ' . $clientIp;
+
+    $respBody = ''; $httpCode = 0; $curlErr = '';
+    if (function_exists('curl_init')) {
+        $ch = curl_init($gwUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $rawBody,
+            CURLOPT_TIMEOUT        => 120,
+            CURLOPT_HTTPHEADER     => $fwdHdr,
+        ]);
+        $respBody = (string)curl_exec($ch);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlErr  = curl_error($ch);
+        curl_close($ch);
+    } else {
+        $ctx = stream_context_create(['http' => ['method' => 'POST', 'timeout' => 120,
+            'header' => implode("\r\n", $fwdHdr) . "\r\n", 'content' => $rawBody, 'ignore_errors' => true]]);
+        $respBody = (string)@file_get_contents($gwUrl, false, $ctx);
+        $httpCode = 200;
+    }
+
+    /* interpret the gateway response */
+    $data  = json_decode($respBody, true);
+    $isArr = is_array($data);
+    $status = 'success'; $errMsg = null;
+    if ($curlErr !== '' || $respBody === '') {
+        $status = 'failed'; $errMsg = $curlErr !== '' ? $curlErr : 'empty gateway response';
+    } elseif ($httpCode >= 400) {
+        $status = ($httpCode === 403) ? 'blocked' : 'failed'; $errMsg = 'gateway HTTP ' . $httpCode;
+    } elseif ($isArr && ($data['ok'] ?? null) === false) {
+        $status = 'failed'; $errMsg = (string)($data['error'] ?? 'gateway error');
+    } elseif ($isArr && (!empty($data['blocked']) || ($data['status'] ?? '') === 'blocked')) {
+        $status = 'blocked'; $errMsg = (string)($data['error'] ?? 'blocked by gateway');
+    }
+    $respText = $isArr ? (string)($data['result'] ?? $data['output'] ?? $respBody) : $respBody;
+
+    /* token usage (OpenAI / Azure style with fallbacks) */
+    $usage  = ($isArr && isset($data['usage']) && is_array($data['usage'])) ? $data['usage'] : [];
+    $inTok  = (int)($usage['prompt_tokens']     ?? $usage['input_tokens']  ?? $data['input_tokens']  ?? 0);
+    $outTok = (int)($usage['completion_tokens'] ?? $usage['output_tokens'] ?? $data['output_tokens'] ?? 0);
+    $totTok = (int)($usage['total_tokens']      ?? $data['total_tokens']   ?? ($inTok + $outTok));
+
+    /* write the audit row — never let logging break the AI response */
+    if ($conn instanceof mysqli) {
+        try {
+            $ip = (string)$clientIp;
+            if (strpos($ip, ',') !== false) $ip = trim(explode(',', $ip)[0]);
+            $ua     = substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 1000);
+            $unameN = $uname !== '' ? $uname : null;
+            $uroleN = $urole !== '' ? $urole : null;
+            $sql = "INSERT INTO AI_Audit_Logs
+                    (user_prn,user_name,user_role,module_name,feature_name,prompt,response,
+                     status,error_message,input_tokens,output_tokens,total_tokens,ip_address,user_agent)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+            if ($st = $conn->prepare($sql)) {
+                $st->bind_param(
+                    'sssssssssiiiss',
+                    $prn, $unameN, $uroleN, $moduleName, $mode, $promptText, $respText,
+                    $status, $errMsg, $inTok, $outTok, $totTok, $ip, $ua
+                );
+                $st->execute();
+                $st->close();
+            }
+        } catch (Throwable $e) { /* swallow logging errors */ }
+    }
+
+    /* return the gateway response verbatim to the browser */
+    http_response_code(($httpCode >= 400) ? $httpCode : 200);
+    echo $respBody !== '' ? $respBody : json_encode(['ok' => false, 'error' => $errMsg ?: 'No response']);
+    exit;
+}
 ?>
 <!doctype html>
 <html lang="en" dir="ltr" data-theme="catrion">
@@ -414,7 +547,7 @@ async function buildFixtureContext(fid){
 
 async function runAgent(){
   syncCards();
-  const mode=$('mode').value,endpoint=endpointMap[mode];
+  const mode=$('mode').value,endpoint='worldcup_agent.php?ai='+encodeURIComponent(mode);
   const q=$('question').value||'';
   addMsg(q||modeLabel(mode),'user');
   $('status').textContent=t('running');
