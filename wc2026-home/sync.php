@@ -3,12 +3,15 @@ declare(strict_types=1);
 /**
  * sync.php — World Cup 2026 ingestion (API-Football v3 → MySQL)
  * ------------------------------------------------------------------
- * Modes (CLI):  php sync.php schedule | live | standings | auto
+ * Modes (CLI):  php sync.php schedule | live | standings | all | auto
  *   schedule   Full fixture pull (league=1, season=2026). Cheap relative to value.
  *              Run 1–2×/day. Captures final scores once matches reach FT.
  *   live       fixtures?live=1 — in-play scores + events. Goal events fire a
  *              Taqnyat SMS. ONLY viable on a paid plan (see quota note below).
  *   standings  standings?league=1&season=2026. Run hourly on matchdays.
+ *   all        One manual full refresh: fixtures (schedule) + standings together
+ *              (2 requests). Use this when you want wc_fixtures AND wc_standings
+ *              updated in a single run.
  *   auto       Self-selects: live if a fixture is inside its window, else a
  *              once-per-day schedule refresh. Safe to run every minute from cron.
  *
@@ -60,6 +63,8 @@ try {
         case 'schedule':  run_schedule($pdo, $API_BASE, $API_KEY, $LEAGUE, $SEASON); break;
         case 'live':      run_live($pdo, $ENV, $API_BASE, $API_KEY, $LEAGUE);        break;
         case 'standings': run_standings($pdo, $API_BASE, $API_KEY, $LEAGUE, $SEASON);break;
+        case 'all':       run_schedule($pdo, $API_BASE, $API_KEY, $LEAGUE, $SEASON);
+                          run_standings($pdo, $API_BASE, $API_KEY, $LEAGUE, $SEASON);break;
         case 'skip':      log_sync($pdo, 'skip', null, 0, 'outside all windows');    break;
         default: fwrite(STDERR, "unknown mode: $mode\n"); exit(2);
     }
