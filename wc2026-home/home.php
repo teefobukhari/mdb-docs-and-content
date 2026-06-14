@@ -27,7 +27,7 @@ $iconPath = "/WC2026/partials/CATRION%20Icon.png";
 
 /* Top background banner (Key Visual 3800x700). If the file is missing the
    gradient hero is used as a graceful fallback. */
-$bannerPath = "/WC2026/WC-2026-KV.jpg";
+$bannerPath = "/WC2026/WC-2026-KV.png";
 
 /* ----------------------------------------------------------------------
  * Scoring rules (single source of truth). Applied server-side wherever
@@ -1076,10 +1076,17 @@ $next24Matches = wc_rows($conn, "
     SELECT id, home_team, away_team, home_logo, away_logo, match_datetime, stadium, city,
            round_name, status_short, status_long, elapsed, home_score, away_score, is_live, is_finished
     FROM ({$WC_FIXTURES_SUBQUERY}) WC2026_Matches
-    WHERE (is_finished=0 OR is_finished IS NULL)
-      AND match_datetime >= NOW()
-      AND match_datetime <= DATE_ADD(NOW(), INTERVAL 24 HOUR)
-    ORDER BY match_datetime ASC
+    WHERE (
+            is_live = 1 OR status_short IN ('LIVE','1H','2H','HT','ET','BT','P','SUSP','INT')
+            OR (
+                (is_finished=0 OR is_finished IS NULL)
+                AND match_datetime >= NOW()
+                AND match_datetime <= DATE_ADD(NOW(), INTERVAL 24 HOUR)
+            )
+          )
+    ORDER BY
+        CASE WHEN is_live = 1 OR status_short IN ('LIVE','1H','2H','HT','ET','BT','P','SUSP','INT') THEN 0 ELSE 1 END,
+        match_datetime ASC
     LIMIT 8
 ");
 wc_attach_flags($next24Matches, $flagByName, $flagByCode);
@@ -3933,7 +3940,8 @@ body:before{
 
 .bracket-preview-mode .bracket-shell{
     max-height:390px !important;
-    overflow:hidden !important;
+    overflow-x:auto !important;   /* keep horizontal scroll so the right-hand rounds aren't clipped */
+    overflow-y:hidden !important; /* vertical preview clip (fade + "show full" still apply) */
 }
 
 .bracket-preview-mode .bracket-shell:after{
