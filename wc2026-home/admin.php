@@ -115,8 +115,11 @@ function dWhere(string $col, string &$types, array &$params): string {
 }
 
 /* Points awarded per distinct day a user uses the Fan Studio (one award/day). */
-if (!defined('WC_PTS_PHOTO')) define('WC_PTS_PHOTO', 10); // Fan Filter photo (once per day) per the scoring rules
-if (!defined('WC_STUDIO_DAILY_PTS')) define('WC_STUDIO_DAILY_PTS', WC_PTS_PHOTO); // align studio bonus to the +10 rule
+if (!defined('WC_PTS_PHOTO')) define('WC_PTS_PHOTO', 1000); // Fan Filter photo (once per day) per the scoring rules
+if (!defined('WC_STUDIO_DAILY_PTS')) define('WC_STUDIO_DAILY_PTS', WC_PTS_PHOTO); // align studio bonus to the photo rule
+if (!defined('WC_PTS_PREDICT_WINNER'))   define('WC_PTS_PREDICT_WINNER', 300);
+if (!defined('WC_PTS_PREDICT_SCORE'))    define('WC_PTS_PREDICT_SCORE', 500);
+if (!defined('WC_PTS_PREDICT_CHAMPION')) define('WC_PTS_PREDICT_CHAMPION', 5000);
 
 /** Champion/other prediction points = total prediction points beyond exact-score
  *  (+5) and correct-winner (+3) — i.e. the +15 champion picks. */
@@ -239,7 +242,7 @@ function userBehavior(int $limit = 500): array {
             {$phSel}
         FROM WC2026_Users u
         LEFT JOIN (SELECT user_id, COUNT(*) plays, COALESCE(SUM(total_points),0) pts FROM WC2026_Game_Sessions WHERE 1=1 {$dGame} GROUP BY user_id) gs ON gs.user_id = u.id
-        LEFT JOIN (SELECT user_id, SUM(CASE WHEN points_awarded = 5 THEN 5 ELSE 0 END) score_pts, SUM(CASE WHEN points_awarded = 3 THEN 3 ELSE 0 END) winner_pts, COALESCE(SUM(points_awarded),0) pred_points FROM WC2026_Predictions WHERE 1=1 {$dPred} GROUP BY user_id) pr ON pr.user_id = u.id
+        LEFT JOIN (SELECT user_id, SUM(CASE WHEN points_awarded = " . WC_PTS_PREDICT_SCORE . " THEN points_awarded ELSE 0 END) score_pts, SUM(CASE WHEN points_awarded = " . WC_PTS_PREDICT_WINNER . " THEN points_awarded ELSE 0 END) winner_pts, COALESCE(SUM(points_awarded),0) pred_points FROM WC2026_Predictions WHERE 1=1 {$dPred} GROUP BY user_id) pr ON pr.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Match_Reactions WHERE 1=1 {$dRe} GROUP BY user_id) re ON re.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Fan_Wall_Comments WHERE 1=1 {$dCo} GROUP BY user_id) co ON co.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Fan_Wall WHERE 1=1 {$dFw} GROUP BY user_id) fw ON fw.user_id = u.id
@@ -802,12 +805,12 @@ td{font-weight:700;color:#eaf6ff}
                 ['🎁', 'Daily food bonus roll', '+10 → +100'],
             ],
             'Predictions' => [
-                ['🎯', 'Predict the match winner', '+3'],
-                ['✅', 'Predict the correct score', '+5'],
-                ['🏆', 'Predict the champion (Final only)', '+15'],
+                ['🎯', 'Predict the match winner', '+' . number_format(WC_PTS_PREDICT_WINNER)],
+                ['✅', 'Predict the correct score', '+' . number_format(WC_PTS_PREDICT_SCORE)],
+                ['🏆', 'Predict the champion (Final only)', '+' . number_format(WC_PTS_PREDICT_CHAMPION)],
             ],
             'Fan Studio' => [
-                ['📸', 'Fan Filter photo (once per day)', '+10'],
+                ['📸', 'Fan Filter photo (once per day)', '+' . number_format(WC_PTS_PHOTO)],
             ],
         ];
     ?>

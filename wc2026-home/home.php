@@ -37,10 +37,10 @@ $bannerPath = "/WC2026/WC-2026-KV.png";
  *  - Predict correct score ... 5 pts
  *  - Predict champion ........ 15 pts (FINAL only)
  * -------------------------------------------------------------------- */
-const WC_PTS_PHOTO            = 10;
-const WC_PTS_PREDICT_WINNER   = 3;
-const WC_PTS_PREDICT_SCORE    = 5;
-const WC_PTS_PREDICT_CHAMPION = 15;
+const WC_PTS_PHOTO            = 1000;
+const WC_PTS_PREDICT_WINNER   = 300;
+const WC_PTS_PREDICT_SCORE    = 500;
+const WC_PTS_PREDICT_CHAMPION = 5000;
 const WC_PHOTO_DAILY_CAP      = 1; // photo points can be earned once per day
 
 /* Server-side prediction lock: a prediction may only be submitted BEFORE

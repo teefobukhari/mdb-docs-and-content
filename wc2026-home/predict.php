@@ -245,8 +245,8 @@ $savedNow = ($_SERVER['REQUEST_METHOD'] === 'POST' && $success !== '' && $isPopu
 /* ---- Award prediction points once the match is finished (idempotent) ----
    The points_calculated=0 guard means this runs at most once per prediction and
    never double-awards, even if a separate scoring job also runs. */
-if (!defined('WC_PTS_PREDICT_WINNER')) define('WC_PTS_PREDICT_WINNER', 3);
-if (!defined('WC_PTS_PREDICT_SCORE'))  define('WC_PTS_PREDICT_SCORE', 5);
+if (!defined('WC_PTS_PREDICT_WINNER')) define('WC_PTS_PREDICT_WINNER', 300);
+if (!defined('WC_PTS_PREDICT_SCORE'))  define('WC_PTS_PREDICT_SCORE', 500);
 
 if ($existing
     && !empty($match['is_finished'])

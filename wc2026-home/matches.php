@@ -2274,10 +2274,10 @@ html[data-theme="saudi"] .tm-frame-wrap{border-color:rgba(126,244,174,.22)}
                 <tr><td data-i18n="ptsGolden">Golden ball goal (bonus)</td><td><b>+50</b></td></tr>
                 <tr><td data-i18n="ptsCombo">Combo streak (every 3 / 5 goals)</td><td><b>+20 / +50</b></td></tr>
                 <tr><td data-i18n="ptsMystery">Daily food bonus roll</td><td><b>+10 → +100</b></td></tr>
-                <tr><td data-i18n="ptsPredWin">Predict the match winner</td><td><b>+3</b></td></tr>
-                <tr><td data-i18n="ptsPredScore">Predict the correct score</td><td><b>+5</b></td></tr>
-                <tr><td data-i18n="ptsChampion">Predict the champion (Final only)</td><td><b>+15</b></td></tr>
-                <tr><td data-i18n="ptsPhoto">Fan Filter photo (once per day)</td><td><b>+10</b></td></tr>
+                <tr><td data-i18n="ptsPredWin">Predict the match winner</td><td><b>+300</b></td></tr>
+                <tr><td data-i18n="ptsPredScore">Predict the correct score</td><td><b>+500</b></td></tr>
+                <tr><td data-i18n="ptsChampion">Predict the champion (Final only)</td><td><b>+5,000</b></td></tr>
+                <tr><td data-i18n="ptsPhoto">Fan Filter photo (once per day)</td><td><b>+1,000</b></td></tr>
             </tbody>
         </table>
         <p class="pts-note" data-i18n="ptsNote">Submit predictions before kickoff — points are awarded automatically once the official result is synced. Save your daily Fan Filter photo for the photo bonus.</p>
