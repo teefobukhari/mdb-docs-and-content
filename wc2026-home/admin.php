@@ -215,9 +215,9 @@ function userBehavior(int $limit = 500): array {
             u.id, u.full_name, u.prn, u.department, u.location, u.role, u.status, u.last_login_at,
             COALESCE(gs.plays,0)  AS game_plays,
             COALESCE(gs.pts,0)    AS game_score,
-            COALESCE(pr.correct_score,0)  AS correct_score,
-            COALESCE(pr.correct_winner,0) AS correct_winner,
-            COALESCE(pr.pred_points,0)    AS pred_points,
+            COALESCE(pr.score_pts,0)   AS score_pts,
+            COALESCE(pr.winner_pts,0)  AS winner_pts,
+            COALESCE(pr.pred_points,0) AS pred_points,
             COALESCE(re.cnt,0)    AS reactions,
             COALESCE(co.cnt,0)    AS comments,
             COALESCE(fw.cnt,0)    AS wall_posts,
@@ -225,14 +225,14 @@ function userBehavior(int $limit = 500): array {
             {$phSel}
         FROM WC2026_Users u
         LEFT JOIN (SELECT user_id, COUNT(*) plays, COALESCE(SUM(total_points),0) pts FROM WC2026_Game_Sessions WHERE 1=1 {$dGame} GROUP BY user_id) gs ON gs.user_id = u.id
-        LEFT JOIN (SELECT user_id, SUM(CASE WHEN points_awarded = 5 THEN 1 ELSE 0 END) correct_score, SUM(CASE WHEN points_awarded > 0 THEN 1 ELSE 0 END) correct_winner, COALESCE(SUM(points_awarded),0) pred_points FROM WC2026_Predictions WHERE 1=1 {$dPred} GROUP BY user_id) pr ON pr.user_id = u.id
+        LEFT JOIN (SELECT user_id, SUM(CASE WHEN points_awarded = 5 THEN 5 ELSE 0 END) score_pts, SUM(CASE WHEN points_awarded = 3 THEN 3 ELSE 0 END) winner_pts, COALESCE(SUM(points_awarded),0) pred_points FROM WC2026_Predictions WHERE 1=1 {$dPred} GROUP BY user_id) pr ON pr.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Match_Reactions WHERE 1=1 {$dRe} GROUP BY user_id) re ON re.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Fan_Wall_Comments WHERE 1=1 {$dCo} GROUP BY user_id) co ON co.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Fan_Wall WHERE 1=1 {$dFw} GROUP BY user_id) fw ON fw.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) cnt FROM WC2026_Users_Audit_Log WHERE action_type='LOGIN' {$dLg} GROUP BY user_id) lg ON lg.user_id = u.id
         {$phJoin}
         WHERE 1=1 {$uw}
-        ORDER BY (COALESCE(gs.pts,0) + COALESCE(pr.correct_winner,0) + COALESCE(re.cnt,0) + COALESCE(co.cnt,0) + COALESCE(fw.cnt,0)) DESC, u.full_name ASC
+        ORDER BY (COALESCE(gs.pts,0) + COALESCE(pr.pred_points,0) + COALESCE(re.cnt,0) + COALESCE(co.cnt,0) + COALESCE(fw.cnt,0)) DESC, u.full_name ASC
         " . ($limit > 0 ? ('LIMIT ' . (int)$limit) : '') . "
     ", $types, $params);
 }
@@ -355,11 +355,11 @@ if (isset($_GET['export'])) {
         $rows = userBehavior(0); // all users
         usort($rows, fn($a, $b) => behaviorPoints($b) <=> behaviorPoints($a));
         $headers = ['ID','PRN','Full name','Department','Location','Role','Status','Last login',
-                    'Correct score','Correct winner','Reactions','Comments','Wall posts','Game score','Game plays','Logins','Studio photos','Total points'];
+                    'Score pts','Winner pts','Reactions','Comments','Wall posts','Game score','Game plays','Logins','Studio pts','Total points'];
         $data = array_map(function ($r) {
             return [$r['id'],$r['prn'] ?? '',$r['full_name'],$r['department'],$r['location'],$r['role'],$r['status'],$r['last_login_at'],
-                    $r['correct_score'],$r['correct_winner'],$r['reactions'],$r['comments'],$r['wall_posts'],
-                    $r['game_score'],$r['game_plays'],$r['logins'],$r['studio_photos'],behaviorPoints($r)];
+                    $r['score_pts'],$r['winner_pts'],$r['reactions'],$r['comments'],$r['wall_posts'],
+                    $r['game_score'],$r['game_plays'],$r['logins'],(int)($r['studio_days'] ?? 0) * WC_PTS_PHOTO,behaviorPoints($r)];
         }, $rows);
         if (strtolower((string)($_GET['fmt'] ?? '')) === 'xlsx') {
             xlsx_out("wc2026_behavior_{$date}.xlsx", $headers, $data);
@@ -828,10 +828,10 @@ td{font-weight:700;color:#eaf6ff}
         <table id="behavTable">
             <thead><tr>
                 <th>#</th><th>User</th><th>PRN</th><th>Dept</th><th>Location</th>
-                <th title="Exact correct score predictions (+5)">Correct score</th><th title="Correct winner predictions (+3, includes exact score)">Correct winner</th>
+                <th title="Points from exact correct scores (+5 each)">Score pts</th><th title="Points from correct winners (+3 each)">Winner pts</th>
                 <th>Reactions</th><th>Comments</th><th>Wall</th>
                 <th title="Game score (points)">Game score</th><th title="Game plays">Plays</th>
-                <th>Logins</th><th>Studio photos</th>
+                <th>Logins</th><th title="Studio photo points (once/day +10)">Studio pts</th>
                 <th title="Predictions (winner/score/champion) + game score + studio photos">Total points</th>
             </tr></thead>
             <tbody>
@@ -842,15 +842,15 @@ td{font-weight:700;color:#eaf6ff}
                     <td><?= h($r['prn'] ?: '—') ?></td>
                     <td><?= h($r['department'] ?: '—') ?></td>
                     <td><?= h($r['location'] ?: '—') ?></td>
-                    <td class="pts"><?= number_format((int)$r['correct_score']) ?></td>
-                    <td><?= number_format((int)$r['correct_winner']) ?></td>
+                    <td><?= number_format((int)$r['score_pts']) ?></td>
+                    <td><?= number_format((int)$r['winner_pts']) ?></td>
                     <td><?= number_format((int)$r['reactions']) ?></td>
                     <td><?= number_format((int)$r['comments']) ?></td>
                     <td><?= number_format((int)$r['wall_posts']) ?></td>
                     <td class="pts"><?= number_format((int)$r['game_score']) ?></td>
                     <td><?= number_format((int)$r['game_plays']) ?></td>
                     <td><?= number_format((int)$r['logins']) ?></td>
-                    <td><?= number_format((int)$r['studio_photos']) ?></td>
+                    <td><?= number_format((int)($r['studio_days'] ?? 0) * WC_PTS_PHOTO) ?></td>
                     <td class="pts"><?= number_format(behaviorPoints($r)) ?></td>
                 </tr>
             <?php endforeach; else: ?>
