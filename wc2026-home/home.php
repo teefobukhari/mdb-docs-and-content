@@ -585,8 +585,12 @@ foreach ($newsEvents as $ev) {
     if ($player !== '') $bits[] = $player;
     if ($team !== '')   $bits[] = '(' . $team . ')';
     $eventsByFixture[$fid][] = [
-        'min'  => (int)preg_replace('/\D/', '', $minute),
-        'text' => ($isGoal ? '⚽ ' : '🟨 ') . implode(' ', $bits),
+        'min'    => (int)preg_replace('/\D/', '', $minute),
+        'text'   => ($isGoal ? '⚽ ' : '🟨 ') . implode(' ', $bits),
+        'icon'   => $isGoal ? '⚽' : '🟨',
+        'team'   => $team,
+        'player' => $player,
+        'minute' => $minute,
     ];
 }
 foreach ($eventsByFixture as &$evs) { usort($evs, fn($a, $b) => $a['min'] <=> $b['min']); }
@@ -664,6 +668,74 @@ if (!$newsItems) {
         $newsItems[] = wc_safe_team($nm['home_team']) . ' vs ' . wc_safe_team($nm['away_team']) . ' • ' . $nmStatus . ' • ' . $nmScore;
     }
 }
+
+/* ---- "View all" popup: key news grouped by team ---- */
+$newsByTeam = [];
+$wcAddTeamNews = function (string $team, string $flag, string $icon, string $text) use (&$newsByTeam) {
+    $t = wc_safe_team($team);
+    if ($t === '' || $t === 'TBA') return;
+    if (!isset($newsByTeam[$t])) $newsByTeam[$t] = ['flag' => $flag, 'items' => []];
+    if ($flag !== '' && $newsByTeam[$t]['flag'] === '') $newsByTeam[$t]['flag'] = $flag;
+    $newsByTeam[$t]['items'][] = ['icon' => $icon, 'text' => $text];
+};
+
+/* fixture_id -> match (for event opponent context) + a deduped match list. */
+$newsFxInfo = [];
+$newsSeenFx = [];
+$newsUniqMatches = [];
+foreach ([$liveMatches, $newsLast24, $newsToday, $newsNext24] as $set) {
+    foreach ($set as $m) {
+        $fid = (int)$m['id'];
+        $newsFxInfo[$fid] = $m;
+        if (isset($newsSeenFx[$fid])) continue;
+        $newsSeenFx[$fid] = true;
+        $newsUniqMatches[] = $m;
+    }
+}
+
+foreach ($newsUniqMatches as $m) {
+    $home = wc_safe_team($m['home_team']);
+    $away = wc_safe_team($m['away_team']);
+    $hf   = (string)($m['home_logo'] ?? '');
+    $af   = (string)($m['away_logo'] ?? '');
+    $hs   = is_null($m['home_score']) ? '-' : (int)$m['home_score'];
+    $as   = is_null($m['away_score']) ? '-' : (int)$m['away_score'];
+    $short = strtoupper((string)($m['status_short'] ?? ''));
+    $live  = ((int)($m['is_live'] ?? 0) === 1) || in_array($short, ['LIVE', '1H', '2H', 'HT', 'ET', 'BT', 'P'], true);
+    $fin   = ((int)($m['is_finished'] ?? 0) === 1) || in_array($short, ['FT', 'AET', 'PEN'], true);
+
+    if ($live) {
+        $el = trim((string)($m['elapsed'] ?? ''));
+        $suf = $el !== '' ? ' • ' . $el . "'" : ' • LIVE';
+        $wcAddTeamNews($home, $hf, '🔴', $hs . '–' . $as . ' vs ' . $away . $suf);
+        $wcAddTeamNews($away, $af, '🔴', $as . '–' . $hs . ' vs ' . $home . $suf);
+    } elseif ($fin) {
+        $st = $short ?: 'FT';
+        $wcAddTeamNews($home, $hf, '🏁', $hs . '–' . $as . ' vs ' . $away . ' • ' . $st);
+        $wcAddTeamNews($away, $af, '🏁', $as . '–' . $hs . ' vs ' . $home . ' • ' . $st);
+    } else {
+        $when = date('d M • h:i A', strtotime((string)$m['match_datetime']));
+        $wcAddTeamNews($home, $hf, '🕒', 'vs ' . $away . ' • ' . $when);
+        $wcAddTeamNews($away, $af, '🕒', 'vs ' . $home . ' • ' . $when);
+    }
+}
+
+/* goal/card events, attributed to the scoring/booked team. */
+foreach ($eventsByFixture as $fid => $evs) {
+    $fi   = $newsFxInfo[$fid] ?? null;
+    $hN   = $fi ? wc_safe_team($fi['home_team']) : '';
+    $aN   = $fi ? wc_safe_team($fi['away_team']) : '';
+    foreach ($evs as $e) {
+        $team = (string)($e['team'] ?? '');
+        if ($team === '') continue;
+        $opp = (strcasecmp($team, $hN) === 0) ? $aN : (($aN !== '' && strcasecmp($team, $aN) === 0) ? $hN : '');
+        $min = trim((string)($e['minute'] ?? ''));
+        $txt = ($min !== '' ? $min . "' " : '') . trim((string)($e['player'] ?? ''));
+        if ($opp !== '') $txt .= ' (vs ' . $opp . ')';
+        $wcAddTeamNews($team, wc_flag($team, $flagByName, $flagByCode), (string)($e['icon'] ?? '•'), trim($txt));
+    }
+}
+ksort($newsByTeam, SORT_NATURAL | SORT_FLAG_CASE);
 
 $mapMatches = wc_rows($conn, "
     SELECT id, home_team, away_team, home_logo, away_logo, match_datetime, stadium, city,
@@ -5046,9 +5118,48 @@ body:before{
                     <span>World Cup updates will appear after fixtures are synced.</span>
                 <?php endif; ?>
             </div>
-            <a class="news-view" href="/WC2026/matches">View all →</a>
+            <a class="news-view" href="/WC2026/matches" id="newsViewAll"><span data-i18n="viewAll">View all</span> →</a>
         </div>
     </section>
+
+    <!-- Match News pop-up — key news grouped by team -->
+    <div class="news-modal" id="newsModal" hidden>
+        <div class="news-modal-backdrop" data-news-close></div>
+        <div class="news-modal-card" role="dialog" aria-modal="true" aria-label="Match news by team">
+            <div class="news-modal-head">
+                <div class="news-modal-title">📰 <span data-i18n="matchNews">Match News</span> · <span data-i18n="byTeam">by team</span></div>
+                <button type="button" class="news-modal-x" data-news-close aria-label="Close">✕</button>
+            </div>
+            <div class="news-modal-body">
+                <?php if (!empty($newsByTeam)): ?>
+                    <div class="news-team-grid">
+                        <?php foreach ($newsByTeam as $teamName => $info): ?>
+                            <div class="news-team-card">
+                                <div class="news-team-head">
+                                    <?php if (!empty($info['flag'])): ?>
+                                        <img src="<?= htmlspecialchars($info['flag'], ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy">
+                                    <?php else: ?>
+                                        <span class="news-team-fallback"><?= htmlspecialchars(mb_substr($teamName, 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                                    <?php endif; ?>
+                                    <strong><?= htmlspecialchars($teamName, ENT_QUOTES, 'UTF-8') ?></strong>
+                                </div>
+                                <ul class="news-team-items">
+                                    <?php foreach ($info['items'] as $it): ?>
+                                        <li><span class="nti-icon"><?= htmlspecialchars((string)$it['icon'], ENT_QUOTES, 'UTF-8') ?></span> <span><?= htmlspecialchars((string)$it['text'], ENT_QUOTES, 'UTF-8') ?></span></li>
+                                    <?php endforeach; ?>
+                                </ul>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="news-modal-empty" data-i18n="newsEmpty">No match news yet — check back after fixtures are synced.</div>
+                <?php endif; ?>
+            </div>
+            <div class="news-modal-foot">
+                <a class="news-modal-link" href="/WC2026/matches"><span data-i18n="viewFullMatches">View Full Matches</span> →</a>
+            </div>
+        </div>
+    </div>
 
     <!-- (7) Fan Wall notification bar — surfaces new posts even while the wall is minimized -->
     <div class="fan-notify" id="fanNotifyBar" hidden>
@@ -7161,7 +7272,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       miniDailyGame:'Daily Game',miniMatches:'Matches',miniPrize:'Prize Pool',
       statMyPoints:'My Points',statMyPointsNote:'All game points',statRank:'My Rank',statRankNote:'Daily game leaderboard',
       statBest:'Best Score',statBestNote:'Highest daily score',statMatches:'World Cup Matches',live:'live',finished:'finished',
-      statPrize:'Prize Pool',matchNews:'Match News',liveMapTitle:'Live World Cup Map',
+      statPrize:'Prize Pool',matchNews:'Match News',viewAll:'View all',byTeam:'by team',newsEmpty:'No match news yet — check back after fixtures are synced.',liveMapTitle:'Live World Cup Map',
       legendLive:'Live Now',legendUpcoming:'Upcoming',legendFinished:'Finished',legendLive2:'Live',
       progressTitle:'Tournament Progress',stageKnockout:'Knockout Stage',completed:'completed',
       stageQF:'Quarter Finals',matchesFromApi:'matches',stageSF:'Semi Finals',stageFinal:'Final',matchFromApi:'match',
@@ -7229,7 +7340,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       miniDailyGame:'اللعبة اليومية',miniMatches:'مباريات',miniPrize:'إجمالي الجائزة',
       statMyPoints:'نقاطي',statMyPointsNote:'كل نقاط اللعبة',statRank:'ترتيبي',statRankNote:'لوحة اللعبة اليومية',
       statBest:'أفضل نتيجة',statBestNote:'أعلى نتيجة يومية',statMatches:'مباريات كأس العالم',live:'مباشر',finished:'منتهية',
-      statPrize:'إجمالي الجائزة',matchNews:'أخبار المباريات',liveMapTitle:'خريطة كأس العالم المباشرة',
+      statPrize:'إجمالي الجائزة',matchNews:'أخبار المباريات',viewAll:'عرض الكل',byTeam:'حسب الفريق',newsEmpty:'لا توجد أخبار مباريات بعد — تحقق بعد مزامنة المباريات.',liveMapTitle:'خريطة كأس العالم المباشرة',
       legendLive:'مباشر الآن',legendUpcoming:'قادمة',legendFinished:'منتهية',legendLive2:'مباشر',
       progressTitle:'تقدّم البطولة',stageKnockout:'دور خروج المغلوب',completed:'مكتملة',
       stageQF:'ربع النهائي',matchesFromApi:'مباريات',stageSF:'نصف النهائي',stageFinal:'النهائي',matchFromApi:'مباراة',
@@ -8301,8 +8412,50 @@ table.group-table tr:last-child td{border-bottom:0}
 html[dir="rtl"] .group-table .gt-team{text-align:right}
 html[dir="rtl"] table.group-table th.gt-team{text-align:right}
 @media(max-width:560px){.group-tables{grid-template-columns:1fr 1fr}.group-table .gt-name{font-size:11px}}
+
+/* ===== Match News pop-up (key news grouped by team) ===== */
+.news-modal{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;padding:18px}
+.news-modal[hidden]{display:none}
+.news-modal-backdrop{position:absolute;inset:0;background:rgba(4,14,30,.72);backdrop-filter:blur(4px)}
+.news-modal-card{position:relative;width:min(760px,100%);max-height:86vh;display:flex;flex-direction:column;
+    background:linear-gradient(160deg,#0b2347,#08203f 60%,#0a3a76);
+    border:1px solid rgba(168,231,255,.22);border-radius:22px;box-shadow:0 40px 90px rgba(0,0,0,.5);overflow:hidden}
+.news-modal-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px;
+    border-bottom:1px solid rgba(168,231,255,.14);background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02))}
+.news-modal-title{font-size:15px;font-weight:900;color:#fff}
+.news-modal-x{width:34px;height:34px;border-radius:10px;border:1px solid rgba(168,231,255,.2);background:rgba(255,255,255,.07);
+    color:#fff;font-size:15px;font-weight:900;cursor:pointer;line-height:1}
+.news-modal-x:hover{background:rgba(255,255,255,.16)}
+.news-modal-body{padding:16px 18px;overflow:auto}
+.news-team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.news-team-card{background:rgba(255,255,255,.05);border:1px solid rgba(168,231,255,.16);border-radius:15px;padding:12px 13px}
+.news-team-head{display:flex;align-items:center;gap:9px;margin-bottom:9px;padding-bottom:9px;border-bottom:1px solid rgba(255,255,255,.08)}
+.news-team-head img,.news-team-fallback{width:24px;height:24px;border-radius:6px;object-fit:cover;flex:0 0 auto;box-shadow:0 5px 12px rgba(0,0,0,.3)}
+.news-team-fallback{display:inline-grid;place-items:center;background:rgba(168,231,255,.16);font-size:11px;font-weight:900;color:#A8E7FF}
+.news-team-head strong{color:#fff;font-size:13.5px;font-weight:900}
+.news-team-items{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.news-team-items li{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;font-weight:700;color:rgba(234,244,255,.9);line-height:1.35}
+.news-team-items .nti-icon{flex:0 0 auto}
+.news-modal-empty{text-align:center;color:rgba(234,244,255,.7);font-weight:800;padding:34px 10px}
+.news-modal-foot{padding:13px 18px;border-top:1px solid rgba(168,231,255,.14);display:flex;justify-content:flex-end}
+.news-modal-link{color:#A8E7FF;font-weight:900;font-size:13px;text-decoration:none}
+.news-modal-link:hover{text-decoration:underline}
+html[dir="rtl"] .news-team-items li{flex-direction:row-reverse;text-align:right}
+html[dir="rtl"] .news-team-head{flex-direction:row-reverse}
+html[dir="rtl"] .news-modal-foot{justify-content:flex-start}
+@media(max-width:560px){.news-team-grid{grid-template-columns:1fr}}
 </style>
 <script>
+/* Match News pop-up — open from "View all", close on backdrop / ✕ / Esc */
+(function(){
+  var trigger=document.getElementById('newsViewAll'), modal=document.getElementById('newsModal');
+  if(!trigger||!modal) return;
+  function open(e){ if(e)e.preventDefault(); modal.hidden=false; document.documentElement.style.overflow='hidden'; }
+  function close(){ modal.hidden=true; document.documentElement.style.overflow=''; }
+  trigger.addEventListener('click', open);
+  modal.querySelectorAll('[data-news-close]').forEach(function(el){ el.addEventListener('click', close); });
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape' && !modal.hidden) close(); });
+})();
 (function(){
   var b=document.getElementById('navBurger'), a=document.getElementById('topActions');
   if(!b||!a) return;

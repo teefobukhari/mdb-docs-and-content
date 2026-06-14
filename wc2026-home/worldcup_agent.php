@@ -119,20 +119,31 @@ if (isset($_GET['ai'])) {
     $conn = null;
     if (is_file(__DIR__ . '/connections/config.php')) { require __DIR__ . '/connections/config.php'; }
 
-    /* resolve the acting user (PRN / name / role): session first, WC2026_Users as backup */
+    /* resolve the acting user (PRN / name / role): the DB is authoritative so the
+       audit row always has the correct prn + name, with session/master-list backups. */
     $uid   = (int)($_SESSION['USER_ID'] ?? 0);
     $prn   = trim((string)($_SESSION['PRN'] ?? ''));
     $uname = trim((string)($_SESSION['FULL_NAME'] ?? ''));
     $urole = '';
-    if ($conn instanceof mysqli && $uid > 0) {
-        if ($st = $conn->prepare("SELECT prn, full_name, role FROM WC2026_Users WHERE id = ? LIMIT 1")) {
-            $st->bind_param('i', $uid);
-            $st->execute();
-            if ($row = $st->get_result()->fetch_assoc()) {
-                if ($prn === '')   $prn   = trim((string)($row['prn'] ?? ''));
-                if ($uname === '') $uname = trim((string)($row['full_name'] ?? ''));
-                $urole = trim((string)($row['role'] ?? ''));
-            }
+    if ($conn instanceof mysqli) {
+        $urow = null;
+        if ($uid > 0 && ($st = $conn->prepare("SELECT prn, full_name, role FROM WC2026_Users WHERE id = ? LIMIT 1"))) {
+            $st->bind_param('i', $uid); $st->execute();
+            $urow = $st->get_result()->fetch_assoc() ?: null; $st->close();
+        }
+        if (!$urow && $prn !== '' && ($st = $conn->prepare("SELECT prn, full_name, role FROM WC2026_Users WHERE prn = ? LIMIT 1"))) {
+            $st->bind_param('s', $prn); $st->execute();
+            $urow = $st->get_result()->fetch_assoc() ?: null; $st->close();
+        }
+        if ($urow) {
+            if (trim((string)($urow['prn'] ?? '')) !== '')       $prn   = trim((string)$urow['prn']);        // DB wins
+            if (trim((string)($urow['full_name'] ?? '')) !== '') $uname = trim((string)$urow['full_name']);
+            $urole = trim((string)($urow['role'] ?? ''));
+        }
+        /* last resort for the display name: the unified employee master list by PRN */
+        if ($uname === '' && $prn !== '' && ($st = $conn->prepare("SELECT FULL_NAME FROM Unified_Employees_MasterList WHERE PRN = ? LIMIT 1"))) {
+            $st->bind_param('s', $prn); $st->execute();
+            if ($mr = $st->get_result()->fetch_assoc()) $uname = trim((string)($mr['FULL_NAME'] ?? ''));
             $st->close();
         }
     }
