@@ -1041,6 +1041,20 @@ foreach ($knockoutMatches as $r) {
     if (!empty($r['is_finished'])) $knockoutFinished++;
 }
 
+/* Stage 2 (Round of 32) state: real fixtures > projection-from-standings > blank.
+   Until the knockouts actually start we either show a projection built from the
+   current Stage 1 standings (labelled), or — if standings have no usable data
+   yet — a clean "not started" message instead of 1A/2B placeholders. */
+$hasRealKnockout   = !empty($realKnockout);
+$standingsHaveData = false;
+foreach ($standingsRows as $sr) {
+    if (trim((string)($sr['group_letter'] ?? '')) !== '' && trim((string)($sr['team_name'] ?? '')) !== '') {
+        $standingsHaveData = true; break;
+    }
+}
+$r32Projected = !$hasRealKnockout && $standingsHaveData;  // show projected bracket + note
+$r32Blank     = !$hasRealKnockout && !$standingsHaveData; // show "not started yet" message
+
 $leaderboard = [];
 
 /* ---- Daily Fan Studio bonus: WC_STUDIO_DAILY_PTS per distinct day a user
@@ -5466,6 +5480,17 @@ body:before{
 
         <!-- Stage 2 — Round of 32 → Final bracket -->
         <div class="bracket-stage" id="bracketStage2" hidden>
+        <?php if ($r32Blank): ?>
+            <div class="bracket-empty bracket-r32-blank">
+                <div class="r32-blank-icon">🗓️</div>
+                <div data-i18n="r32NotStarted">The Round of 32 hasn't started yet — check back after the group stage.</div>
+            </div>
+        <?php else: ?>
+            <?php if ($r32Projected): ?>
+                <div class="bracket-projected-note">
+                    🔮 <span data-i18n="r32Projected">Projected from the current group standings — the Round of 32 hasn't started yet.</span>
+                </div>
+            <?php endif; ?>
         <div class="bracket-shell" id="bracketShell">
             <?php if ($knockoutTotal > 0): ?>
                 <div class="bracket-grid" id="bracketGrid">
@@ -5580,6 +5605,7 @@ body:before{
                 <span>Minimize Bracket</span> <span>↙</span>
             </button>
         </div>
+        <?php endif; /* /$r32Blank else */ ?>
         </div><!-- /#bracketStage2 -->
     </section>
 
@@ -7144,6 +7170,8 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       more:'MORE',showFullBracket:'Show Full Bracket',
       bracketStage1:'Stage 1 · Groups',bracketStage2:'Stage 2 · Round of 32',gtTeam:'Team',
       bracketGroupsEmpty:'Group standings will appear once the group stage is synced.',
+      r32NotStarted:"The Round of 32 hasn't started yet — check back after the group stage.",
+      r32Projected:"Projected from the current group standings — the Round of 32 hasn't started yet.",
       kickerLive:'Live Now',kickerNext:'Next World Cup Match',kickerMatches:'World Cup Matches',
       viewMatches:'View Matches',submitPrediction:'Submit Prediction',worldCupFeed:'World Cup Feed',matchesSynced:'matches synced',
       dailyGoalRush:'Daily Goal Rush',onePlayPerDay:'One play per day',
@@ -7210,6 +7238,8 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       more:'المزيد',showFullBracket:'عرض المخطط كاملًا',
       bracketStage1:'المرحلة 1 · المجموعات',bracketStage2:'المرحلة 2 · دور 32',gtTeam:'الفريق',
       bracketGroupsEmpty:'ستظهر ترتيب المجموعات بعد مزامنة دور المجموعات.',
+      r32NotStarted:'لم يبدأ دور الـ32 بعد — تابع بعد انتهاء دور المجموعات.',
+      r32Projected:'متوقّع بناءً على ترتيب المجموعات الحالي — لم يبدأ دور الـ32 بعد.',
       kickerLive:'مباشر الآن',kickerNext:'المباراة القادمة',kickerMatches:'مباريات كأس العالم',
       viewMatches:'عرض المباريات',submitPrediction:'أرسل توقعك',worldCupFeed:'تغذية كأس العالم',matchesSynced:'مباراة متزامنة',
       dailyGoalRush:'تحدي الأهداف اليومي',onePlayPerDay:'محاولة واحدة يوميًا',
@@ -8242,6 +8272,10 @@ html[dir="rtl"] .wc-agent-panel{inset-inline-end:auto;inset-inline-start:24px}
 #knockoutBracketCard.stage1-active .bracket-preview-footer{display:none !important}
 
 .bracket-stage[hidden]{display:none !important}
+.bracket-projected-note{margin:12px 18px 0;padding:10px 14px;border-radius:13px;font-size:12.5px;font-weight:800;
+    color:#F5C85B;background:rgba(245,200,91,.10);border:1px solid rgba(245,200,91,.30);display:flex;align-items:center;gap:8px}
+.bracket-r32-blank{padding:42px 22px;text-align:center;color:rgba(234,244,255,.78);font-weight:800;line-height:1.55}
+.bracket-r32-blank .r32-blank-icon{font-size:34px;margin-bottom:10px;opacity:.9}
 #bracketStage1{padding:16px 18px 20px}
 .group-tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
 .group-table-card{background:linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.025));
