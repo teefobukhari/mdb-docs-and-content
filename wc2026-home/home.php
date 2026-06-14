@@ -669,73 +669,7 @@ if (!$newsItems) {
     }
 }
 
-/* ---- "View all" popup: key news grouped by team ---- */
-$newsByTeam = [];
-$wcAddTeamNews = function (string $team, string $flag, string $icon, string $text) use (&$newsByTeam) {
-    $t = wc_safe_team($team);
-    if ($t === '' || $t === 'TBA') return;
-    if (!isset($newsByTeam[$t])) $newsByTeam[$t] = ['flag' => $flag, 'items' => []];
-    if ($flag !== '' && $newsByTeam[$t]['flag'] === '') $newsByTeam[$t]['flag'] = $flag;
-    $newsByTeam[$t]['items'][] = ['icon' => $icon, 'text' => $text];
-};
-
-/* fixture_id -> match (for event opponent context) + a deduped match list. */
-$newsFxInfo = [];
-$newsSeenFx = [];
-$newsUniqMatches = [];
-foreach ([$liveMatches, $newsLast24, $newsToday, $newsNext24] as $set) {
-    foreach ($set as $m) {
-        $fid = (int)$m['id'];
-        $newsFxInfo[$fid] = $m;
-        if (isset($newsSeenFx[$fid])) continue;
-        $newsSeenFx[$fid] = true;
-        $newsUniqMatches[] = $m;
-    }
-}
-
-foreach ($newsUniqMatches as $m) {
-    $home = wc_safe_team($m['home_team']);
-    $away = wc_safe_team($m['away_team']);
-    $hf   = (string)($m['home_logo'] ?? '');
-    $af   = (string)($m['away_logo'] ?? '');
-    $hs   = is_null($m['home_score']) ? '-' : (int)$m['home_score'];
-    $as   = is_null($m['away_score']) ? '-' : (int)$m['away_score'];
-    $short = strtoupper((string)($m['status_short'] ?? ''));
-    $live  = ((int)($m['is_live'] ?? 0) === 1) || in_array($short, ['LIVE', '1H', '2H', 'HT', 'ET', 'BT', 'P'], true);
-    $fin   = ((int)($m['is_finished'] ?? 0) === 1) || in_array($short, ['FT', 'AET', 'PEN'], true);
-
-    if ($live) {
-        $el = trim((string)($m['elapsed'] ?? ''));
-        $suf = $el !== '' ? ' • ' . $el . "'" : ' • LIVE';
-        $wcAddTeamNews($home, $hf, '🔴', $hs . '–' . $as . ' vs ' . $away . $suf);
-        $wcAddTeamNews($away, $af, '🔴', $as . '–' . $hs . ' vs ' . $home . $suf);
-    } elseif ($fin) {
-        $st = $short ?: 'FT';
-        $wcAddTeamNews($home, $hf, '🏁', $hs . '–' . $as . ' vs ' . $away . ' • ' . $st);
-        $wcAddTeamNews($away, $af, '🏁', $as . '–' . $hs . ' vs ' . $home . ' • ' . $st);
-    } else {
-        $when = date('d M • h:i A', strtotime((string)$m['match_datetime']));
-        $wcAddTeamNews($home, $hf, '🕒', 'vs ' . $away . ' • ' . $when);
-        $wcAddTeamNews($away, $af, '🕒', 'vs ' . $home . ' • ' . $when);
-    }
-}
-
-/* goal/card events, attributed to the scoring/booked team. */
-foreach ($eventsByFixture as $fid => $evs) {
-    $fi   = $newsFxInfo[$fid] ?? null;
-    $hN   = $fi ? wc_safe_team($fi['home_team']) : '';
-    $aN   = $fi ? wc_safe_team($fi['away_team']) : '';
-    foreach ($evs as $e) {
-        $team = (string)($e['team'] ?? '');
-        if ($team === '') continue;
-        $opp = (strcasecmp($team, $hN) === 0) ? $aN : (($aN !== '' && strcasecmp($team, $aN) === 0) ? $hN : '');
-        $min = trim((string)($e['minute'] ?? ''));
-        $txt = ($min !== '' ? $min . "' " : '') . trim((string)($e['player'] ?? ''));
-        if ($opp !== '') $txt .= ' (vs ' . $opp . ')';
-        $wcAddTeamNews($team, wc_flag($team, $flagByName, $flagByCode), (string)($e['icon'] ?? '•'), trim($txt));
-    }
-}
-ksort($newsByTeam, SORT_NATURAL | SORT_FLAG_CASE);
+/* ---- "View all" popup data is built later, once country flags are loaded ---- */
 
 $mapMatches = wc_rows($conn, "
     SELECT id, home_team, away_team, home_logo, away_logo, match_datetime, stadium, city,
@@ -875,6 +809,74 @@ wc_attach_flags($upcomingMatches, $flagByName, $flagByCode);
 wc_attach_flags($latestResults, $flagByName, $flagByCode);
 wc_attach_flags($newsMatches, $flagByName, $flagByCode);
 wc_attach_flags($mapMatches, $flagByName, $flagByCode);
+
+/* ---- "View all" popup: key news grouped by team (flags now loaded) ---- */
+$newsByTeam = [];
+$wcAddTeamNews = function (string $team, string $flag, string $icon, string $text) use (&$newsByTeam) {
+    $t = wc_safe_team($team);
+    if ($t === '' || $t === 'TBA') return;
+    if (!isset($newsByTeam[$t])) $newsByTeam[$t] = ['flag' => $flag, 'items' => []];
+    if ($flag !== '' && $newsByTeam[$t]['flag'] === '') $newsByTeam[$t]['flag'] = $flag;
+    $newsByTeam[$t]['items'][] = ['icon' => $icon, 'text' => $text];
+};
+
+/* fixture_id -> match (for event opponent context) + a deduped match list. */
+$newsFxInfo = [];
+$newsSeenFx = [];
+$newsUniqMatches = [];
+foreach ([$liveMatches, $newsLast24, $newsToday, $newsNext24] as $set) {
+    foreach ($set as $m) {
+        $fid = (int)$m['id'];
+        $newsFxInfo[$fid] = $m;
+        if (isset($newsSeenFx[$fid])) continue;
+        $newsSeenFx[$fid] = true;
+        $newsUniqMatches[] = $m;
+    }
+}
+
+foreach ($newsUniqMatches as $m) {
+    $home = wc_safe_team($m['home_team']);
+    $away = wc_safe_team($m['away_team']);
+    $hf   = (string)($m['home_logo'] ?? ''); if ($hf === '') $hf = wc_flag($home, $flagByName, $flagByCode);
+    $af   = (string)($m['away_logo'] ?? ''); if ($af === '') $af = wc_flag($away, $flagByName, $flagByCode);
+    $hs   = is_null($m['home_score']) ? '-' : (int)$m['home_score'];
+    $as   = is_null($m['away_score']) ? '-' : (int)$m['away_score'];
+    $short = strtoupper((string)($m['status_short'] ?? ''));
+    $live  = ((int)($m['is_live'] ?? 0) === 1) || in_array($short, ['LIVE', '1H', '2H', 'HT', 'ET', 'BT', 'P'], true);
+    $fin   = ((int)($m['is_finished'] ?? 0) === 1) || in_array($short, ['FT', 'AET', 'PEN'], true);
+
+    if ($live) {
+        $el = trim((string)($m['elapsed'] ?? ''));
+        $suf = $el !== '' ? ' • ' . $el . "'" : ' • LIVE';
+        $wcAddTeamNews($home, $hf, '🔴', $hs . '–' . $as . ' vs ' . $away . $suf);
+        $wcAddTeamNews($away, $af, '🔴', $as . '–' . $hs . ' vs ' . $home . $suf);
+    } elseif ($fin) {
+        $st = $short ?: 'FT';
+        $wcAddTeamNews($home, $hf, '🏁', $hs . '–' . $as . ' vs ' . $away . ' • ' . $st);
+        $wcAddTeamNews($away, $af, '🏁', $as . '–' . $hs . ' vs ' . $home . ' • ' . $st);
+    } else {
+        $when = date('d M • h:i A', strtotime((string)$m['match_datetime']));
+        $wcAddTeamNews($home, $hf, '🕒', 'vs ' . $away . ' • ' . $when);
+        $wcAddTeamNews($away, $af, '🕒', 'vs ' . $home . ' • ' . $when);
+    }
+}
+
+/* goal/card events, attributed to the scoring/booked team. */
+foreach ($eventsByFixture as $fid => $evs) {
+    $fi   = $newsFxInfo[$fid] ?? null;
+    $hN   = $fi ? wc_safe_team($fi['home_team']) : '';
+    $aN   = $fi ? wc_safe_team($fi['away_team']) : '';
+    foreach ($evs as $e) {
+        $team = (string)($e['team'] ?? '');
+        if ($team === '') continue;
+        $opp = (strcasecmp($team, $hN) === 0) ? $aN : (($aN !== '' && strcasecmp($team, $aN) === 0) ? $hN : '');
+        $min = trim((string)($e['minute'] ?? ''));
+        $txt = ($min !== '' ? $min . "' " : '') . trim((string)($e['player'] ?? ''));
+        if ($opp !== '') $txt .= ' (vs ' . $opp . ')';
+        $wcAddTeamNews($team, wc_flag($team, $flagByName, $flagByCode), (string)($e['icon'] ?? '•'), trim($txt));
+    }
+}
+ksort($newsByTeam, SORT_NATURAL | SORT_FLAG_CASE);
 
 function wc_group_letter_from_name(?string $groupName): string {
     $g = strtoupper(trim((string)$groupName));
