@@ -250,8 +250,7 @@ if (!defined('WC_PTS_PREDICT_SCORE'))  define('WC_PTS_PREDICT_SCORE', 500);
 
 if ($existing
     && !empty($match['is_finished'])
-    && !is_null($match['home_score'] ?? null) && !is_null($match['away_score'] ?? null)
-    && (int)($existing['points_calculated'] ?? 0) === 0) {
+    && !is_null($match['home_score'] ?? null) && !is_null($match['away_score'] ?? null)) {
 
     $aH = (int)$match['home_score'];
     $aA = (int)$match['away_score'];
@@ -267,16 +266,23 @@ if ($existing
         $awardPts = WC_PTS_PREDICT_WINNER;       // correct winner only
     }
 
-    $upStmt = $conn->prepare("
-        UPDATE WC2026_Predictions
-        SET points_awarded = ?, points_calculated = 1, updated_at = NOW()
-        WHERE user_id = ? AND match_id = ? AND points_calculated = 0
-    ");
-    if ($upStmt) {
-        $upStmt->bind_param("iii", $awardPts, $userId, $matchId);
-        if ($upStmt->execute() && $upStmt->affected_rows > 0) {
-            $existing['points_awarded']    = $awardPts;
-            $existing['points_calculated'] = 1;
+    /* Self-healing: award if not yet scored, OR re-score when the stored value is
+       stale (e.g. after the point values changed) so predict.php always reflects
+       the current scoring rules without a manual re-score. */
+    $alreadyCalc = (int)($existing['points_calculated'] ?? 0) === 1;
+    $currentPts  = (int)($existing['points_awarded'] ?? 0);
+    if (!$alreadyCalc || $currentPts !== $awardPts) {
+        $upStmt = $conn->prepare("
+            UPDATE WC2026_Predictions
+            SET points_awarded = ?, points_calculated = 1, updated_at = NOW()
+            WHERE user_id = ? AND match_id = ?
+        ");
+        if ($upStmt) {
+            $upStmt->bind_param("iii", $awardPts, $userId, $matchId);
+            if ($upStmt->execute()) {
+                $existing['points_awarded']    = $awardPts;
+                $existing['points_calculated'] = 1;
+            }
         }
     }
 }
