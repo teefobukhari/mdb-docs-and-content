@@ -5385,6 +5385,81 @@ body:before{
             </div>
         </div>
 
+        <!-- Stage switcher: Stage 1 = Group Stage table, Stage 2 = Round of 32 bracket -->
+        <div class="bracket-stage-tabs" id="bracketStageTabs">
+            <button type="button" class="bstage-tab active" data-stage="1">
+                <span data-i18n="bracketStage1">Stage 1 · Groups</span>
+            </button>
+            <button type="button" class="bstage-tab" data-stage="2">
+                <span data-i18n="bracketStage2">Stage 2 · Round of 32</span>
+            </button>
+        </div>
+
+        <!-- Stage 1 — Group Stage standings as tables -->
+        <?php
+            $bracketGroups = [];
+            foreach ($standingsRows as $sr) {
+                $gl = strtoupper(trim((string)($sr['group_letter'] ?? '')));
+                if ($gl === '') continue;
+                $bracketGroups[$gl][] = $sr;
+            }
+            ksort($bracketGroups);
+            foreach ($bracketGroups as $gl => &$rws) {
+                usort($rws, fn($a, $b) => ((int)($a['position'] ?? 0)) <=> ((int)($b['position'] ?? 0)));
+            }
+            unset($rws);
+        ?>
+        <div class="bracket-stage" id="bracketStage1">
+            <?php if (!empty($bracketGroups)): ?>
+                <div class="group-tables">
+                    <?php foreach ($bracketGroups as $gl => $rows): ?>
+                        <div class="group-table-card">
+                            <div class="group-table-title">Group <?= htmlspecialchars($gl, ENT_QUOTES, 'UTF-8') ?></div>
+                            <table class="group-table">
+                                <thead>
+                                    <tr>
+                                        <th class="gt-pos">#</th>
+                                        <th class="gt-team" data-i18n="gtTeam">Team</th>
+                                        <th class="gt-num" title="Played">P</th>
+                                        <th class="gt-num" title="Goal difference">GD</th>
+                                        <th class="gt-num" title="Points">Pts</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($rows as $idx => $tr): ?>
+                                        <?php
+                                            $tName = wc_safe_team($tr['team_name'] ?? '');
+                                            $tFlag = !empty($tr['team_logo']) ? (string)$tr['team_logo'] : wc_flag($tName, $flagByName, $flagByCode);
+                                            $tPos  = (int)($tr['position'] ?? ($idx + 1));
+                                            $qualClass = $tPos <= 2 ? 'q-top' : ($tPos === 3 ? 'q-third' : '');
+                                        ?>
+                                        <tr class="<?= $qualClass ?>">
+                                            <td class="gt-pos"><?= $tPos ?></td>
+                                            <td class="gt-team">
+                                                <?php if ($tFlag !== ''): ?>
+                                                    <img src="<?= htmlspecialchars($tFlag, ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy">
+                                                <?php else: ?>
+                                                    <span class="gt-flag-fallback"><?= htmlspecialchars(mb_substr($tName, 0, 1), ENT_QUOTES, 'UTF-8') ?></span>
+                                                <?php endif; ?>
+                                                <span class="gt-name"><?= htmlspecialchars($tName, ENT_QUOTES, 'UTF-8') ?></span>
+                                            </td>
+                                            <td class="gt-num"><?= (int)($tr['played'] ?? 0) ?></td>
+                                            <td class="gt-num"><?= (int)($tr['goal_difference'] ?? 0) > 0 ? '+' : '' ?><?= (int)($tr['goal_difference'] ?? 0) ?></td>
+                                            <td class="gt-num gt-pts"><?= (int)($tr['points'] ?? 0) ?></td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php else: ?>
+                <div class="bracket-empty" data-i18n="bracketGroupsEmpty">Group standings will appear once the group stage is synced.</div>
+            <?php endif; ?>
+        </div>
+
+        <!-- Stage 2 — Round of 32 → Final bracket -->
+        <div class="bracket-stage" id="bracketStage2" hidden>
         <div class="bracket-shell" id="bracketShell">
             <?php if ($knockoutTotal > 0): ?>
                 <div class="bracket-grid" id="bracketGrid">
@@ -5499,6 +5574,7 @@ body:before{
                 <span>Minimize Bracket</span> <span>↙</span>
             </button>
         </div>
+        </div><!-- /#bracketStage2 -->
     </section>
 
     <!-- (1) Mystery / coming-soon teaser — to be opened later -->
@@ -6698,6 +6774,22 @@ document.addEventListener('DOMContentLoaded', function(){
     if(card){ card.addEventListener('transitionend', scheduleDraw); }
     [moreBtn, showFullBtn].forEach(function(b){ if(b) b.addEventListener('click', function(){ setTimeout(drawConnectors, 360); }); });
     setTimeout(drawConnectors, 300); setTimeout(drawConnectors, 900);
+
+    /* Stage switcher: Stage 1 (group tables) ↔ Stage 2 (R32 bracket). */
+    var stageTabs = document.getElementById('bracketStageTabs');
+    var stage1El  = document.getElementById('bracketStage1');
+    var stage2El  = document.getElementById('bracketStage2');
+    function showStage(n){
+        if(!stage1El || !stage2El) return;
+        var two = (String(n) === '2');
+        stage1El.hidden = two;
+        stage2El.hidden = !two;
+        if(stageTabs){ stageTabs.querySelectorAll('.bstage-tab').forEach(function(b){ b.classList.toggle('active', b.dataset.stage === String(n)); }); }
+        if(card){ card.classList.toggle('stage1-active', !two); }
+        if(two){ setTimeout(drawConnectors, 60); setTimeout(drawConnectors, 260); }
+    }
+    if(stageTabs){ stageTabs.querySelectorAll('.bstage-tab').forEach(function(b){ b.addEventListener('click', function(){ showStage(b.dataset.stage); }); }); }
+    showStage(1); // default to Stage 1 (group stage table)
 })();
 </script>
 
@@ -7042,8 +7134,10 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       progressTitle:'Tournament Progress',stageKnockout:'Knockout Stage',completed:'completed',
       stageQF:'Quarter Finals',matchesFromApi:'matches',stageSF:'Semi Finals',stageFinal:'Final',matchFromApi:'match',
       viewFullMatches:'View Full Matches',bracketTitle:'World Cup Knockout Bracket',
-      bracketSub:'Projected tournament path (R32 → R16 → QF → SF → Final). Preview is collapsed for a cleaner home page.',
+      bracketSub:'Stage 1 shows the group tables; Stage 2 shows the knockout path (R32 → R16 → QF → SF → Final).',
       more:'MORE',showFullBracket:'Show Full Bracket',
+      bracketStage1:'Stage 1 · Groups',bracketStage2:'Stage 2 · Round of 32',gtTeam:'Team',
+      bracketGroupsEmpty:'Group standings will appear once the group stage is synced.',
       kickerLive:'Live Now',kickerNext:'Next World Cup Match',kickerMatches:'World Cup Matches',
       viewMatches:'View Matches',submitPrediction:'Submit Prediction',worldCupFeed:'World Cup Feed',matchesSynced:'matches synced',
       dailyGoalRush:'Daily Goal Rush',onePlayPerDay:'One play per day',
@@ -7106,8 +7200,10 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       progressTitle:'تقدّم البطولة',stageKnockout:'دور خروج المغلوب',completed:'مكتملة',
       stageQF:'ربع النهائي',matchesFromApi:'مباريات',stageSF:'نصف النهائي',stageFinal:'النهائي',matchFromApi:'مباراة',
       viewFullMatches:'عرض كل المباريات',bracketTitle:'مخطط أدوار خروج المغلوب',
-      bracketSub:'المسار المتوقع للبطولة (دور 32 ← دور 16 ← ربع ← نصف ← النهائي). المعاينة مطوية لصفحة أنظف.',
+      bracketSub:'المرحلة 1 تعرض جداول المجموعات، والمرحلة 2 تعرض مسار الأدوار الإقصائية (دور 32 ← دور 16 ← ربع ← نصف ← النهائي).',
       more:'المزيد',showFullBracket:'عرض المخطط كاملًا',
+      bracketStage1:'المرحلة 1 · المجموعات',bracketStage2:'المرحلة 2 · دور 32',gtTeam:'الفريق',
+      bracketGroupsEmpty:'ستظهر ترتيب المجموعات بعد مزامنة دور المجموعات.',
       kickerLive:'مباشر الآن',kickerNext:'المباراة القادمة',kickerMatches:'مباريات كأس العالم',
       viewMatches:'عرض المباريات',submitPrediction:'أرسل توقعك',worldCupFeed:'تغذية كأس العالم',matchesSynced:'مباراة متزامنة',
       dailyGoalRush:'تحدي الأهداف اليومي',onePlayPerDay:'محاولة واحدة يوميًا',
@@ -8126,6 +8222,45 @@ html[dir="rtl"] .help-item{flex-direction:row-reverse;text-align:right}
 html[dir="rtl"] .pts-table th,html[dir="rtl"] .pts-table td{text-align:right}
 html[dir="rtl"] .wc-agent-fab{inset-inline-end:auto;inset-inline-start:24px}
 html[dir="rtl"] .wc-agent-panel{inset-inline-end:auto;inset-inline-start:24px}
+
+/* ===== Knockout bracket — Stage switcher + Stage 1 group tables ===== */
+.bracket-stage-tabs{display:flex;gap:8px;padding:14px 18px 0;flex-wrap:wrap}
+.bstage-tab{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;padding:10px 16px;border-radius:13px 13px 0 0;
+    border:1px solid rgba(168,231,255,.18);border-bottom:0;background:rgba(255,255,255,.05);color:rgba(255,255,255,.72);
+    font-family:inherit;font-weight:900;font-size:12.5px;cursor:pointer;transition:.18s}
+.bstage-tab:hover{background:rgba(255,255,255,.10);color:#fff}
+.bstage-tab.active{background:linear-gradient(180deg,rgba(245,200,91,.20),rgba(245,200,91,.07));color:#F5C85B;border-color:rgba(245,200,91,.42)}
+/* hide the bracket zoom + minimize controls while on the group-stage table */
+#knockoutBracketCard.stage1-active .bracket-zoom,
+#knockoutBracketCard.stage1-active .bracket-more-btn,
+#knockoutBracketCard.stage1-active .bracket-preview-footer{display:none !important}
+
+.bracket-stage[hidden]{display:none !important}
+#bracketStage1{padding:16px 18px 20px}
+.group-tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.group-table-card{background:linear-gradient(135deg,rgba(255,255,255,.07),rgba(255,255,255,.025));
+    border:1px solid rgba(168,231,255,.16);border-radius:16px;padding:12px 12px 6px;overflow:hidden}
+.group-table-title{font-size:12px;font-weight:900;color:#A8E7FF;letter-spacing:.4px;text-transform:uppercase;margin:0 0 8px 2px}
+table.group-table{width:100%;border-collapse:collapse;font-size:12px}
+table.group-table th{font-size:9.5px;font-weight:900;color:rgba(234,244,255,.6);text-transform:uppercase;letter-spacing:.3px;
+    padding:4px 5px;text-align:center;border-bottom:1px solid rgba(168,231,255,.16)}
+table.group-table th.gt-team{text-align:start}
+table.group-table td{padding:6px 5px;border-bottom:1px solid rgba(255,255,255,.06);color:#eaf6ff;font-weight:800;text-align:center}
+table.group-table tr:last-child td{border-bottom:0}
+.group-table .gt-pos{width:22px;color:rgba(234,244,255,.7)}
+.group-table .gt-team{display:flex;align-items:center;gap:8px;text-align:start;min-width:0}
+.group-table .gt-team img,.group-table .gt-flag-fallback{width:20px;height:20px;border-radius:5px;object-fit:cover;flex:0 0 auto;
+    box-shadow:0 4px 10px rgba(0,0,0,.25)}
+.group-table .gt-flag-fallback{display:inline-grid;place-items:center;background:rgba(168,231,255,.16);font-size:10px;font-weight:900;color:#A8E7FF}
+.group-table .gt-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.group-table .gt-num{width:30px;color:rgba(234,244,255,.82)}
+.group-table .gt-pts{color:#F5C85B;font-weight:900}
+.group-table tr.q-top td{background:rgba(126,244,174,.06)}
+.group-table tr.q-top .gt-pos{color:#7EF4AE}
+.group-table tr.q-third .gt-pos{color:#F5C85B}
+html[dir="rtl"] .group-table .gt-team{text-align:right}
+html[dir="rtl"] table.group-table th.gt-team{text-align:right}
+@media(max-width:560px){.group-tables{grid-template-columns:1fr 1fr}.group-table .gt-name{font-size:11px}}
 </style>
 <script>
 (function(){
