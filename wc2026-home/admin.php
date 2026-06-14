@@ -114,6 +114,25 @@ function dWhere(string $col, string &$types, array &$params): string {
     return $sql;
 }
 
+/* Detect the real timestamp / FK columns so KPIs + charts can date-filter and
+   join correctly regardless of the exact schema naming. */
+$predTs   = first_col('WC2026_Predictions',    ['created_at','submitted_at','predicted_at','updated_at']);
+$reactTs  = first_col('WC2026_Match_Reactions', ['created_at','reacted_at','updated_at']);
+$photoTs  = first_col('WC2026_Filter_Photos',   ['created_at','captured_at','saved_at','updated_at']);
+$photoCty = first_col('WC2026_Filter_Photos',   ['country_id','filter_country_id','country']);
+
+/* COUNT/SUM over an activity table with the current filters applied: date range
+   on the table's own timestamp + user attributes via a join to WC2026_Users. */
+function act(string $table, string $alias, string $tsCol, string $expr = 'COUNT(*)', string $extra = ''): int {
+    $t = ''; $p = [];
+    $uw = uWhere('u', $t, $p);
+    $dw = $tsCol !== '' ? dWhere("{$alias}.`{$tsCol}`", $t, $p) : '';
+    return (int) qv("SELECT {$expr}
+                     FROM {$table} {$alias}
+                     JOIN WC2026_Users u ON u.id = {$alias}.user_id
+                     WHERE 1=1 {$extra} {$uw} {$dw}", $t, $p);
+}
+
 /* ---------- participants-with-results dataset (table + export) ---------- */
 function participants(int $limit = 0): array {
     $types = ''; $params = [];
@@ -190,31 +209,38 @@ if (isset($_GET['export'])) {
     }
 }
 
-/* ================= KPIs ================= */
-$kTypes=''; $kParams=[]; $uw = uWhere('', $kTypes, $kParams);
-$kpiTotalUsers   = (int) qv("SELECT COUNT(*) FROM WC2026_Users WHERE 1=1 {$uw}", $kTypes, $kParams);
-$kTypes=''; $kParams=[]; $uw2 = uWhere('', $kTypes, $kParams);
-$kpiActiveUsers  = (int) qv("SELECT COUNT(*) FROM WC2026_Users WHERE status='Active' {$uw2}", $kTypes, $kParams);
-$kpiAdmins       = (int) qv("SELECT COUNT(*) FROM WC2026_Users WHERE LOWER(role)='admin'");
-$kpiOnline24h    = (int) qv("SELECT COUNT(*) FROM WC2026_Users WHERE last_login_at >= NOW() - INTERVAL 24 HOUR");
+/* ================= KPIs (all respect the active filters) ================= */
+/* Users — user-attribute filters + registration date range. */
+$t=''; $p=[]; $uw=uWhere('',$t,$p); $dw=dWhere('created_at',$t,$p);
+$kpiTotalUsers   = (int) qv("SELECT COUNT(*) FROM WC2026_Users WHERE 1=1 {$uw} {$dw}", $t,$p);
+$t=''; $p=[]; $uw=uWhere('',$t,$p); $dw=dWhere('created_at',$t,$p);
+$kpiActiveUsers  = (int) qv("SELECT COUNT(*) FROM WC2026_Users WHERE status='Active' {$uw} {$dw}", $t,$p);
+$t=''; $p=[]; $uw=uWhere('',$t,$p);
+$kpiOnline24h    = (int) qv("SELECT COUNT(*) FROM WC2026_Users WHERE last_login_at >= NOW() - INTERVAL 24 HOUR {$uw}", $t,$p);
 
-$kpiGamePlays    = (int) qv("SELECT COUNT(*) FROM WC2026_Game_Sessions");
-$kpiGamePoints   = (int) qv("SELECT COALESCE(SUM(total_points),0) FROM WC2026_Game_Sessions");
-$kpiPredictions  = (int) qv("SELECT COUNT(*) FROM WC2026_Predictions");
-$kpiPredPoints   = (int) qv("SELECT COALESCE(SUM(points_awarded),0) FROM WC2026_Predictions");
+/* Activity — date range on each table's own timestamp + user filters via join. */
+$kpiGamePlays    = act('WC2026_Game_Sessions', 'g', 'played_at');
+$kpiGamePoints   = act('WC2026_Game_Sessions', 'g', 'played_at', 'COALESCE(SUM(g.total_points),0)');
+$kpiPredictions  = act('WC2026_Predictions',   'pr', $predTs);
+$kpiPredPoints   = act('WC2026_Predictions',   'pr', $predTs, 'COALESCE(SUM(pr.points_awarded),0)');
 
-$kpiFanPosts     = (int) qv("SELECT COUNT(*) FROM WC2026_Fan_Wall WHERE status='Active'");
-$kpiFanComments  = (int) qv("SELECT COUNT(*) FROM WC2026_Fan_Wall_Comments WHERE status='Active'");
-$kpiFanLikes     = (int) qv("SELECT COUNT(*) FROM WC2026_Fan_Wall_Likes");
-$kpiStudioPhotos = (int) qv("SELECT COUNT(*) FROM WC2026_Fan_Wall WHERE photo_path IS NOT NULL AND photo_path <> ''");
-$kpiReactions    = (int) qv("SELECT COUNT(*) FROM WC2026_Match_Reactions");
+$kpiFanPosts     = act('WC2026_Fan_Wall',          'fw', 'created_at', 'COUNT(*)', "AND fw.status='Active'");
+$kpiFanComments  = act('WC2026_Fan_Wall_Comments', 'fc', 'created_at', 'COUNT(*)', "AND fc.status='Active'");
+$kpiFanLikes     = act('WC2026_Fan_Wall_Likes',    'fl', 'created_at');
+$kpiStudioPhotos = act('WC2026_Filter_Photos',     'ph', $photoTs);
+$kpiReactions    = act('WC2026_Match_Reactions',   'mr', $reactTs);
 
+/* Participants — distinct users with any activity, honouring the same filters. */
+$t=''; $p=[];
+$uwG=uWhere('u',$t,$p); $dwG=dWhere('g.played_at',$t,$p);
+$uwP=uWhere('u',$t,$p); $dwP=$predTs!==''?dWhere("pr.`{$predTs}`",$t,$p):'';
+$uwF=uWhere('u',$t,$p); $dwF=dWhere('fw.created_at',$t,$p);
 $kpiParticipants = (int) qv("
     SELECT COUNT(*) FROM (
-        SELECT user_id FROM WC2026_Game_Sessions
-        UNION SELECT user_id FROM WC2026_Predictions
-        UNION SELECT user_id FROM WC2026_Fan_Wall
-    ) t");
+        SELECT g.user_id  FROM WC2026_Game_Sessions g JOIN WC2026_Users u ON u.id=g.user_id  WHERE 1=1 {$uwG} {$dwG}
+        UNION SELECT pr.user_id FROM WC2026_Predictions pr JOIN WC2026_Users u ON u.id=pr.user_id WHERE 1=1 {$uwP} {$dwP}
+        UNION SELECT fw.user_id FROM WC2026_Fan_Wall fw JOIN WC2026_Users u ON u.id=fw.user_id WHERE 1=1 {$uwF} {$dwF}
+    ) t", $t,$p);
 
 /* ================= chart datasets ================= */
 $charts = [];
@@ -234,11 +260,13 @@ $mlSegCol = first_col('Unified_Employees_MasterList',
     ['segment','segment_name','department','dept','section','division','business_unit','businessunit','unit','dept_name','sector']);
 $t=''; $p=[]; $w=uWhere('u',$t,$p);
 if ($mlSegCol !== '') {
+    /* WC2026_Users and the master list share a PRN, so join on that (email rarely
+       matches). Only users actually present in the master list get a segment. */
     $charts['segment'] = q("
         SELECT COALESCE(NULLIF(m.`{$mlSegCol}`,''),'—') k, COUNT(*) c
         FROM WC2026_Users u
-        LEFT JOIN Unified_Employees_MasterList m
-               ON (u.email IS NOT NULL AND u.email <> '' AND LOWER(m.email) = LOWER(u.email))
+        JOIN Unified_Employees_MasterList m
+          ON (u.prn IS NOT NULL AND u.prn <> '' AND m.PRN = u.prn)
         WHERE 1=1 {$w}
         GROUP BY k ORDER BY c DESC LIMIT 15", $t,$p);
 } else {
@@ -274,7 +302,6 @@ $t=''; $p=[]; $dw=dWhere('played_at',$t,$p);
 $charts['game'] = q("SELECT DATE(played_at) d, COUNT(*) c, COALESCE(SUM(total_points),0) pts FROM WC2026_Game_Sessions WHERE 1=1 {$dw} GROUP BY DATE(played_at) ORDER BY d", $t,$p);
 /* Predictions per day — bind to whatever timestamp column the table uses so the
    line actually populates (was blank when the column wasn't named created_at). */
-$predTs = first_col('WC2026_Predictions', ['created_at','submitted_at','predicted_at','updated_at']);
 if ($predTs !== '') {
     $t=''; $p=[]; $dw=dWhere("`{$predTs}`",$t,$p);
     $charts['pred'] = q("SELECT DATE(`{$predTs}`) d, COUNT(*) c FROM WC2026_Predictions WHERE 1=1 {$dw} GROUP BY DATE(`{$predTs}`) ORDER BY d", $t,$p);
@@ -290,21 +317,27 @@ $charts['winner'] = q("SELECT predicted_winner k, COUNT(*) c FROM WC2026_Predict
 /* Match reaction breakdown */
 $charts['reactions'] = q("SELECT reaction k, COUNT(*) c FROM WC2026_Match_Reactions GROUP BY reaction ORDER BY c DESC");
 
-/* Studio photos over time */
-$t=''; $p=[]; $dw=dWhere('created_at',$t,$p);
-$charts['photos'] = q("SELECT DATE(created_at) d, COUNT(*) c FROM WC2026_Fan_Wall WHERE photo_path IS NOT NULL AND photo_path <> '' {$dw} GROUP BY DATE(created_at) ORDER BY d", $t,$p);
+/* Studio photos over time — from the studio table WC2026_Filter_Photos. */
+if ($photoTs !== '') {
+    $t=''; $p=[]; $dw=dWhere("`{$photoTs}`",$t,$p);
+    $charts['photos'] = q("SELECT DATE(`{$photoTs}`) d, COUNT(*) c FROM WC2026_Filter_Photos WHERE 1=1 {$dw} GROUP BY DATE(`{$photoTs}`) ORDER BY d", $t,$p);
+} else {
+    $charts['photos'] = q("SELECT DATE(created_at) d, COUNT(*) c FROM WC2026_Filter_Photos GROUP BY DATE(created_at) ORDER BY d");
+}
 
-/* Studio photos created by country (the fan's selected location) */
-$t=''; $p=[]; $dw=dWhere('created_at',$t,$p);
-$charts['photoCountry'] = q("SELECT COALESCE(NULLIF(author_location,''),'—') k, COUNT(*) c
-    FROM WC2026_Fan_Wall WHERE photo_path IS NOT NULL AND photo_path <> '' {$dw}
-    GROUP BY k ORDER BY c DESC LIMIT 15", $t,$p);
-
-/* Studio photos by moderation status */
-$t=''; $p=[]; $dw=dWhere('created_at',$t,$p);
-$charts['photoStatus'] = q("SELECT COALESCE(NULLIF(status,''),'—') k, COUNT(*) c
-    FROM WC2026_Fan_Wall WHERE photo_path IS NOT NULL AND photo_path <> '' {$dw}
-    GROUP BY k ORDER BY c DESC", $t,$p);
+/* Studio photos created by country — WC2026_Filter_Photos joined to the
+   WC2026_Filter_Countries lookup on the saved country_id. */
+if ($photoCty !== '') {
+    $t=''; $p=[]; $dw=$photoTs!==''?dWhere("ph.`{$photoTs}`",$t,$p):'';
+    $charts['photoCountry'] = q("
+        SELECT COALESCE(NULLIF(c.country_name,''),'—') k, COUNT(*) c
+        FROM WC2026_Filter_Photos ph
+        LEFT JOIN WC2026_Filter_Countries c ON c.id = ph.`{$photoCty}`
+        WHERE 1=1 {$dw}
+        GROUP BY k ORDER BY c DESC LIMIT 15", $t,$p);
+} else {
+    $charts['photoCountry'] = [];
+}
 
 /* Top participants (leaderboard) */
 $leaders = participants(15);
@@ -330,7 +363,6 @@ $JS = [
     'reactions'    => xy($charts['reactions'], 'k', 'c'),
     'photos'       => xy($charts['photos'], 'd', 'c'),
     'photoCountry' => xy($charts['photoCountry'], 'k', 'c'),
-    'photoStatus'  => xy($charts['photoStatus'], 'k', 'c'),
 ];
 
 /* ---------- filter dropdown options ---------- */
@@ -485,9 +517,8 @@ td{font-weight:700;color:#eaf6ff}
     <!-- Studio photos -->
     <h2 class="section">Studio photos</h2>
     <div class="grid">
-        <div class="card col-12"><h3>Studio photos created <small>per day</small></h3><div class="chart-box"><canvas id="cPhotos"></canvas></div></div>
-        <div class="card col-8"><h3>Studio photos by country</h3><div class="chart-box"><canvas id="cPhotoCountry"></canvas></div></div>
-        <div class="card col-4"><h3>Studio photos by status</h3><div class="chart-box chart-sm"><canvas id="cPhotoStatus"></canvas></div></div>
+        <div class="card col-6"><h3>Studio photos created <small>per day</small></h3><div class="chart-box"><canvas id="cPhotos"></canvas></div></div>
+        <div class="card col-6"><h3>Studio photos by country</h3><div class="chart-box"><canvas id="cPhotoCountry"></canvas></div></div>
     </div>
 
     <!-- Leaderboard -->
@@ -572,9 +603,6 @@ mk('cPhotos',{type:'line',data:{labels:D.photos.labels,datasets:[{label:'Photos'
 
 /* Studio photos by country (horizontal bar) */
 mk('cPhotoCountry',{type:'bar',data:{labels:D.photoCountry.labels,datasets:[{label:'Photos',data:D.photoCountry.data,backgroundColor:PAL,borderRadius:6}]},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{...GRID,beginAtZero:true,ticks:{precision:0}},y:GRID},plugins:{legend:{display:false}}}});
-
-/* Studio photos by status (doughnut) */
-mk('cPhotoStatus',{type:'doughnut',data:{labels:D.photoStatus.labels,datasets:[{data:D.photoStatus.data,backgroundColor:PAL,borderWidth:1,borderColor:'rgba(0,0,0,.2)'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
 </script>
 </body>
 </html>
