@@ -385,6 +385,43 @@ if (isset($_GET['export'])) {
     }
 }
 
+/* ---------- Re-score predictions to the CURRENT scoring values ----------
+   The lazy scorer only re-scores when a user reopens a finished match, so after
+   a change to the point values existing points_awarded are stale. This admin
+   action recomputes points_awarded for every prediction on a finished match
+   (using the actual result from wc_fixtures) at the current constants. */
+if (isset($_GET['rescore']) && $_GET['rescore'] === 'predictions') {
+    $updated = 0; $checked = 0;
+    $rows = q("
+        SELECT p.user_id, p.match_id, p.predicted_home_score, p.predicted_away_score,
+               COALESCE(f.goals_home, f.ft_home) AS ah, COALESCE(f.goals_away, f.ft_away) AS aa
+        FROM WC2026_Predictions p
+        JOIN wc_fixtures f ON f.fixture_id = p.match_id
+        WHERE f.status_short IN ('FT','AET','PEN')
+          AND COALESCE(f.goals_home, f.ft_home) IS NOT NULL
+          AND COALESCE(f.goals_away, f.ft_away) IS NOT NULL");
+    $up = $conn->prepare("UPDATE WC2026_Predictions SET points_awarded = ?, points_calculated = 1, updated_at = NOW()
+                          WHERE user_id = ? AND match_id = ?");
+    foreach ($rows as $r) {
+        $checked++;
+        $ah = (int)$r['ah']; $aa = (int)$r['aa'];
+        $ph = (int)$r['predicted_home_score']; $pa = (int)$r['predicted_away_score'];
+        $aw = $ah > $aa ? 'H' : ($aa > $ah ? 'A' : 'D');   // actual winner
+        $pw = $ph > $pa ? 'H' : ($pa > $ph ? 'A' : 'D');   // predicted winner (from predicted score)
+        if ($ph === $ah && $pa === $aa)      $pts = WC_PTS_PREDICT_SCORE;   // exact score
+        elseif ($pw === $aw)                 $pts = WC_PTS_PREDICT_WINNER;  // correct winner only
+        else                                 $pts = 0;
+        if ($up) {
+            $uid = (int)$r['user_id']; $mid = (int)$r['match_id'];
+            $up->bind_param('iii', $pts, $uid, $mid);
+            if ($up->execute()) $updated++;
+        }
+    }
+    if ($up) $up->close();
+    header('Location: /WC2026/?view=admin&rescored=' . $updated . '&checked=' . $checked);
+    exit;
+}
+
 /* ================= KPIs (all respect the active filters) ================= */
 /* Users — user-attribute filters + registration date range. */
 $t=''; $p=[]; $uw=uWhere('',$t,$p); $dw=dWhere('created_at',$t,$p);
@@ -670,6 +707,7 @@ td{font-weight:700;color:#eaf6ff}
     color:#fff;padding:9px 14px;font-family:inherit;font-weight:700;font-size:13px}
 .behav-search::placeholder{color:rgba(234,244,255,.5)}
 .behav-count{font-size:12px;font-weight:800;color:var(--muted)}
+.rescore-note{margin:12px 4px 0;padding:11px 15px;border-radius:13px;font-weight:800;font-size:13px;color:#062417;background:linear-gradient(135deg,#7EF4AE,#22C55E);box-shadow:0 10px 22px rgba(34,197,94,.35)}
 #behavTable tbody tr.hide{display:none}
 .score-card h3{margin:0 0 10px}
 .score-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px}
@@ -723,7 +761,12 @@ td{font-weight:700;color:#eaf6ff}
         <a class="btn btn-gold" href="?export=studio&<?= h(qstr()) ?>">⬇ Export studio</a>
         <a class="btn btn-gold" href="?export=behavior&<?= h(qstr()) ?>">⬇ Behaviour CSV</a>
         <a class="btn btn-gold" href="?export=behavior&fmt=xlsx&<?= h(qstr()) ?>">⬇ Behaviour Excel</a>
+        <a class="btn btn-blue" href="/WC2026/?view=admin&rescore=predictions"
+           onclick="return confirm('Recompute points for ALL finished-match predictions using the current scoring values (winner <?= (int)WC_PTS_PREDICT_WINNER ?> / score <?= (int)WC_PTS_PREDICT_SCORE ?>)?');">♻ Re-score predictions</a>
     </form>
+    <?php if (isset($_GET['rescored'])): ?>
+        <div class="rescore-note">✅ Re-scored <b><?= (int)$_GET['rescored'] ?></b> of <?= (int)($_GET['checked'] ?? 0) ?> finished-match predictions to the current values (winner <?= (int)WC_PTS_PREDICT_WINNER ?> / score <?= (int)WC_PTS_PREDICT_SCORE ?>).</div>
+    <?php endif; ?>
 
     <!-- KPIs -->
     <h2 class="section">Overview</h2>

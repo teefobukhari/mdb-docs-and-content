@@ -81,7 +81,7 @@ function wc_rows(mysqli $conn, string $sql, string $types = '', array $params = 
 $wcIsAdmin = false;
 $wcAdminRoleRows = wc_rows($conn, "SELECT role FROM WC2026_Users WHERE id = ? LIMIT 1", "i", [$userId]);
 if ($wcAdminRoleRows) { $wcIsAdmin = strtolower(trim((string)($wcAdminRoleRows[0]['role'] ?? ''))) === 'admin'; }
-if ($wcIsAdmin && ((($_GET['view'] ?? '') === 'admin') || isset($_GET['admin']) || isset($_GET['export']))
+if ($wcIsAdmin && ((($_GET['view'] ?? '') === 'admin') || isset($_GET['admin']) || isset($_GET['export']) || isset($_GET['rescore']))
     && is_file(__DIR__ . '/admin.php')) {
     require __DIR__ . '/admin.php';
     exit;
