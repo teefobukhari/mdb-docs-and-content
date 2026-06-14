@@ -755,11 +755,19 @@ body.popup-mode .card{background:transparent !important}
                 $awayCode = wc_country_code($match['away_team'] ?? '');
                 $homeEmoji = wc_flag_emoji($homeCode);
                 $awayEmoji = wc_flag_emoji($awayCode);
+                // Flags from WC2026_Filter_Countries (single source) -> flagcdn fallback.
+                require_once __DIR__ . '/_flags.php';
+                $pFlag = wc_load_flag_maps($conn);
+                $homeFlagSrc = !empty($match['home_logo']) ? (string)$match['home_logo']
+                    : wc_flag((string)($match['home_team'] ?? ''), $pFlag['byName'], $pFlag['byCode']);
+                $awayFlagSrc = !empty($match['away_logo']) ? (string)$match['away_logo']
+                    : wc_flag((string)($match['away_team'] ?? ''), $pFlag['byName'], $pFlag['byCode']);
             ?>
             <div class="teams">
                 <div class="team">
-                    <?php if (!empty($match['home_logo'])): ?>
-                        <img class="team-logo" src="<?= h($match['home_logo']) ?>" alt="<?= h($match['home_team']) ?>">
+                    <?php if ($homeFlagSrc !== ''): ?>
+                        <img class="team-logo" src="<?= h($homeFlagSrc) ?>" alt="<?= h($match['home_team']) ?>" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-grid';">
+                        <span class="team-logo-fallback" style="display:none"><?= $homeEmoji !== '' ? $homeEmoji : '⚽' ?></span>
                     <?php elseif ($homeCode !== ''): ?>
                         <img class="team-logo" style="object-fit:cover;padding:0" src="https://flagcdn.com/w160/<?= h(strtolower($homeCode)) ?>.png" alt="<?= h($match['home_team']) ?> flag" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-grid';">
                         <div class="team-logo" style="display:none;place-items:center;color:#071A35;"><?= $homeEmoji !== '' ? $homeEmoji : '⚽' ?></div>
@@ -772,8 +780,9 @@ body.popup-mode .card{background:transparent !important}
                 <div class="vs">VS</div>
 
                 <div class="team">
-                    <?php if (!empty($match['away_logo'])): ?>
-                        <img class="team-logo" src="<?= h($match['away_logo']) ?>" alt="<?= h($match['away_team']) ?>">
+                    <?php if ($awayFlagSrc !== ''): ?>
+                        <img class="team-logo" src="<?= h($awayFlagSrc) ?>" alt="<?= h($match['away_team']) ?>" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-grid';">
+                        <div class="team-logo" style="display:none;place-items:center;color:#071A35;"><?= $awayEmoji !== '' ? $awayEmoji : '⚽' ?></div>
                     <?php elseif ($awayCode !== ''): ?>
                         <img class="team-logo" style="object-fit:cover;padding:0" src="https://flagcdn.com/w160/<?= h(strtolower($awayCode)) ?>.png" alt="<?= h($match['away_team']) ?> flag" onerror="this.style.display='none';this.nextElementSibling.style.display='inline-grid';">
                         <div class="team-logo" style="display:none;place-items:center;color:#071A35;"><?= $awayEmoji !== '' ? $awayEmoji : '⚽' ?></div>

@@ -424,6 +424,13 @@ $ffCountries = wc_rows($conn, "
     ORDER BY sort_order ASC, country_name ASC
 ");
 $ffSelectedCountry = $ffCountries[0] ?? null;
+
+/* Team flags come from WC2026_Filter_Countries (single source of truth). Reuse
+   the rows already loaded above to build name/code maps for the match cards. */
+require_once __DIR__ . '/_flags.php';
+$wcFlagMaps  = wc_flag_maps_from_rows($ffCountries);
+$wcFlagByName = $wcFlagMaps['byName'];
+$wcFlagByCode = $wcFlagMaps['byCode'];
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -1708,6 +1715,11 @@ body{
                         $awayCode  = wc_country_code($m['away_team'] ?? '');
                         $homeEmoji = wc_flag_emoji($homeCode);
                         $awayEmoji = wc_flag_emoji($awayCode);
+                        // Flag source priority: DB logo -> WC2026_Filter_Countries.flag_path -> flagcdn.
+                        $homeFlagSrc = !empty($m['home_logo']) ? (string)$m['home_logo']
+                            : wc_asset_path(wc_flag((string)($m['home_team'] ?? ''), $wcFlagByName, $wcFlagByCode));
+                        $awayFlagSrc = !empty($m['away_logo']) ? (string)$m['away_logo']
+                            : wc_asset_path(wc_flag((string)($m['away_team'] ?? ''), $wcFlagByName, $wcFlagByCode));
                     ?>
                     <article class="match-card">
                         <!-- [WC2026 UI ENHANCEMENT] Faint football watermark (decorative only) -->
@@ -1727,8 +1739,10 @@ body{
                                  Priority: DB logo -> flag image (flagcdn) -> emoji -> ball. -->
                             <div class="team" data-team-pick>
                                 <span class="team-flag-frame">
-                                    <?php if (!empty($m['home_logo'])): ?>
-                                        <img class="team-flag" src="<?= h($m['home_logo']) ?>" alt="<?= h($m['home_team']) ?>" loading="lazy">
+                                    <?php if ($homeFlagSrc !== ''): ?>
+                                        <img class="team-flag" src="<?= h($homeFlagSrc) ?>" alt="<?= h($m['home_team']) ?>" loading="lazy"
+                                             onerror="this.style.display='none';this.nextElementSibling.style.display='grid';">
+                                        <span class="team-flag-fallback" aria-hidden="true" style="display:none;"><?= $homeEmoji !== '' ? $homeEmoji : '⚽' ?></span>
                                     <?php elseif ($homeCode !== ''): ?>
                                         <img class="team-flag"
                                              src="https://flagcdn.com/w160/<?= h(strtolower($homeCode)) ?>.png"
@@ -1748,8 +1762,10 @@ body{
                             <!-- [WC2026 UI ENHANCEMENT] AWAY team: same flag-on-top layout. -->
                             <div class="team" data-team-pick>
                                 <span class="team-flag-frame">
-                                    <?php if (!empty($m['away_logo'])): ?>
-                                        <img class="team-flag" src="<?= h($m['away_logo']) ?>" alt="<?= h($m['away_team']) ?>" loading="lazy">
+                                    <?php if ($awayFlagSrc !== ''): ?>
+                                        <img class="team-flag" src="<?= h($awayFlagSrc) ?>" alt="<?= h($m['away_team']) ?>" loading="lazy"
+                                             onerror="this.style.display='none';this.nextElementSibling.style.display='grid';">
+                                        <span class="team-flag-fallback" aria-hidden="true" style="display:none;"><?= $awayEmoji !== '' ? $awayEmoji : '⚽' ?></span>
                                     <?php elseif ($awayCode !== ''): ?>
                                         <img class="team-flag"
                                              src="https://flagcdn.com/w160/<?= h(strtolower($awayCode)) ?>.png"
