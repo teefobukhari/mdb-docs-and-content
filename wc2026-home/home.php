@@ -971,8 +971,41 @@ foreach ($knockoutMatches as $r) {
     if (!empty($r['is_finished'])) $knockoutFinished++;
 }
 
-$leaderboard = wc_rows($conn, "
-    SELECT 
+$leaderboard = [];
+
+/* ---- Daily Fan Studio bonus: WC_STUDIO_DAILY_PTS per distinct day a user
+   creates a studio photo (one award per day), folded into the live score so it
+   counts on the leaderboard and rank. Schema-detected and isolated so a missing
+   table/column can never break the core leaderboard query. ---- */
+if (!defined('WC_STUDIO_DAILY_PTS')) define('WC_STUDIO_DAILY_PTS', 3);
+$wcStudioTsCol = (string) wc_scalar($conn, "
+    SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WC2026_Filter_Photos'
+      AND COLUMN_NAME IN ('created_at','captured_at','saved_at','updated_at')
+    ORDER BY FIELD(COLUMN_NAME,'created_at','captured_at','saved_at','updated_at') LIMIT 1");
+$wcStudioHasUser = (int) wc_scalar($conn, "
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WC2026_Filter_Photos' AND COLUMN_NAME = 'user_id'");
+
+$studioBonusByUser = [];
+$myStudioBonus = 0;
+$myStudioBonusWeek = 0;
+if ($wcStudioTsCol !== '' && $wcStudioHasUser) {
+    foreach (wc_rows($conn, "SELECT user_id, COUNT(DISTINCT DATE(`{$wcStudioTsCol}`)) AS days
+                             FROM WC2026_Filter_Photos GROUP BY user_id") as $r) {
+        $studioBonusByUser[(int)$r['user_id']] = (int)$r['days'] * WC_STUDIO_DAILY_PTS;
+    }
+    $myStudioBonus = $studioBonusByUser[$userId] ?? 0;
+    $myStudioBonusWeek = (int) wc_scalar($conn,
+        "SELECT COUNT(DISTINCT DATE(`{$wcStudioTsCol}`)) FROM WC2026_Filter_Photos
+         WHERE user_id = ? AND YEARWEEK(`{$wcStudioTsCol}`,3) = YEARWEEK(CURDATE(),3)",
+        "i", [$userId]) * WC_STUDIO_DAILY_PTS;
+}
+
+/* Overall leaderboard — game points + studio bonus, merged and ranked in PHP. */
+$lbRows = wc_rows($conn, "
+    SELECT
+        u.id,
         u.full_name,
         u.location,
         COALESCE(SUM(g.total_points),0) AS total_points,
@@ -981,24 +1014,27 @@ $leaderboard = wc_rows($conn, "
     JOIN WC2026_Game_Sessions g ON g.user_id = u.id
     WHERE u.status='Active'
     GROUP BY u.id, u.full_name, u.location
-    ORDER BY total_points DESC, goals DESC, u.full_name ASC
-    LIMIT 5
 ");
+foreach ($lbRows as &$lr) {
+    $lr['total_points'] = (int)$lr['total_points'] + ($studioBonusByUser[(int)$lr['id']] ?? 0);
+    $lr['goals']        = (int)$lr['goals'];
+}
+unset($lr);
+usort($lbRows, fn($a, $b) =>
+    ($b['total_points'] <=> $a['total_points'])
+    ?: ($b['goals'] <=> $a['goals'])
+    ?: strcmp((string)$a['full_name'], (string)$b['full_name']));
+$leaderboard = array_slice($lbRows, 0, 5);
 
+/* My overall rank (dense, by total points) over the same merged totals. */
 $myRank = '--';
-$rankRow = wc_rows($conn, "
-    SELECT rank_no FROM (
-        SELECT 
-            user_id,
-            DENSE_RANK() OVER (ORDER BY COALESCE(SUM(total_points),0) DESC, COALESCE(SUM(goals),0) DESC) AS rank_no
-        FROM WC2026_Game_Sessions
-        GROUP BY user_id
-    ) r
-    WHERE user_id=?
-    LIMIT 1
-", "i", [$userId]);
-
-if ($rankRow) $myRank = '#' . (int)$rankRow[0]['rank_no'];
+$myTotalForRank = null;
+foreach ($lbRows as $r) { if ((int)$r['id'] === $userId) { $myTotalForRank = (int)$r['total_points']; break; } }
+if ($myTotalForRank !== null) {
+    $higher = [];
+    foreach ($lbRows as $r) { if ((int)$r['total_points'] > $myTotalForRank) $higher[(int)$r['total_points']] = true; }
+    $myRank = '#' . (count($higher) + 1);
+}
 
 $bonusQuestion = wc_rows($conn, "
     SELECT id, question_text, option_a, option_b, option_c, option_d
@@ -1012,8 +1048,9 @@ $bonusQuestionJson = !empty($bonusQuestion)
     ? json_encode($bonusQuestion[0], JSON_UNESCAPED_UNICODE)
     : 'null';
 
-/* ---- Weekly + overall score (current ISO week vs all-time) ---- */
-$overallScore = (int)$myGamePoints;
+/* ---- Weekly + overall score (current ISO week vs all-time) — includes the
+   daily Fan Studio bonus so the displayed score matches the leaderboard. ---- */
+$overallScore = (int)$myGamePoints + (int)$myStudioBonus;
 $weeklyScore  = (int)wc_scalar(
     $conn,
     "SELECT COALESCE(SUM(total_points),0)
@@ -1021,7 +1058,7 @@ $weeklyScore  = (int)wc_scalar(
      WHERE user_id=? AND YEARWEEK(play_date,3)=YEARWEEK(CURDATE(),3)",
     "i",
     [$userId]
-);
+) + (int)$myStudioBonusWeek;
 $weeklyRank = '--';
 $wr = wc_rows($conn, "
     SELECT rank_no FROM (

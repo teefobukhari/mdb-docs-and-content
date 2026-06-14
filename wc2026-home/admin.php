@@ -114,6 +114,9 @@ function dWhere(string $col, string &$types, array &$params): string {
     return $sql;
 }
 
+/* Points awarded per distinct day a user uses the Fan Studio (one award/day). */
+if (!defined('WC_STUDIO_DAILY_PTS')) define('WC_STUDIO_DAILY_PTS', 3);
+
 /* Detect the real timestamp / FK columns so KPIs + charts can date-filter and
    join correctly regardless of the exact schema naming. */
 $predTs   = first_col('WC2026_Predictions',    ['created_at','submitted_at','predicted_at','updated_at']);
@@ -135,10 +138,22 @@ function act(string $table, string $alias, string $tsCol, string $expr = 'COUNT(
 
 /* ---------- participants-with-results dataset (table + export) ---------- */
 function participants(int $limit = 0): array {
+    global $photoTs;
     $types = ''; $params = [];
     $uw = uWhere('u', $types, $params);
     $dw = dWhere('u.created_at', $types, $params);
     $lim = $limit > 0 ? (' LIMIT ' . (int)$limit) : '';
+
+    /* Daily Fan Studio bonus: WC_STUDIO_DAILY_PTS per distinct day a user creates
+       a studio photo. Only joined when the table/column exist so the query never
+       breaks the leaderboard/export. */
+    $stSel = '0 AS studio_days, 0 AS studio_points'; $stJoin = ''; $stAdd = '';
+    if (!empty($photoTs)) {
+        $stJoin = "LEFT JOIN (SELECT user_id, COUNT(DISTINCT DATE(`{$photoTs}`)) days FROM WC2026_Filter_Photos GROUP BY user_id) st ON st.user_id = u.id";
+        $stSel  = "COALESCE(st.days,0) AS studio_days, (COALESCE(st.days,0) * " . WC_STUDIO_DAILY_PTS . ") AS studio_points";
+        $stAdd  = " + (COALESCE(st.days,0) * " . WC_STUDIO_DAILY_PTS . ")";
+    }
+
     return q("
         SELECT
             u.id, u.full_name, u.mobile, u.email, u.department, u.location, u.role, u.status,
@@ -149,11 +164,13 @@ function participants(int $limit = 0): array {
             COALESCE(pr.scored,0) AS predictions_scored,
             COALESCE(pr.pts,0)    AS prediction_points,
             COALESCE(fw.posts,0)  AS fanwall_posts,
-            (COALESCE(gs.pts,0) + COALESCE(pr.pts,0)) AS total_points
+            {$stSel},
+            (COALESCE(gs.pts,0) + COALESCE(pr.pts,0){$stAdd}) AS total_points
         FROM WC2026_Users u
         LEFT JOIN (SELECT user_id, SUM(total_points) pts, COUNT(*) plays FROM WC2026_Game_Sessions GROUP BY user_id) gs ON gs.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) preds, SUM(points_calculated) scored, SUM(points_awarded) pts FROM WC2026_Predictions GROUP BY user_id) pr ON pr.user_id = u.id
         LEFT JOIN (SELECT user_id, COUNT(*) posts FROM WC2026_Fan_Wall GROUP BY user_id) fw ON fw.user_id = u.id
+        {$stJoin}
         WHERE 1=1 {$uw} {$dw}
         ORDER BY total_points DESC, u.created_at DESC
         {$lim}
@@ -185,11 +202,13 @@ if (isset($_GET['export'])) {
             }));
         }
         $headers = ['ID','Full name','Mobile','Email','Department','Location','Role','Status','Registered','Last login',
-                    'Game points','Game plays','Predictions','Predictions scored','Prediction points','Fan Wall posts','Total points'];
+                    'Game points','Game plays','Predictions','Predictions scored','Prediction points','Fan Wall posts',
+                    'Studio days','Studio points','Total points'];
         $data = array_map(function ($r) {
             return [$r['id'],$r['full_name'],$r['mobile'],$r['email'],$r['department'],$r['location'],$r['role'],$r['status'],
                     $r['created_at'],$r['last_login_at'],$r['game_points'],$r['game_plays'],$r['predictions'],
-                    $r['predictions_scored'],$r['prediction_points'],$r['fanwall_posts'],$r['total_points']];
+                    $r['predictions_scored'],$r['prediction_points'],$r['fanwall_posts'],
+                    $r['studio_days'] ?? 0,$r['studio_points'] ?? 0,$r['total_points']];
         }, $rows);
         csv_out("wc2026_{$ex}_{$date}.csv", $headers, $data);
     }
@@ -528,7 +547,7 @@ td{font-weight:700;color:#eaf6ff}
         <table>
             <thead><tr>
                 <th>#</th><th>Name</th><th>Dept</th><th>Location</th>
-                <th>Game pts</th><th>Plays</th><th>Predictions</th><th>Pred. pts</th><th>Posts</th><th>Total</th>
+                <th>Game pts</th><th>Plays</th><th>Predictions</th><th>Pred. pts</th><th>Posts</th><th>Studio pts</th><th>Total</th>
             </tr></thead>
             <tbody>
             <?php if ($leaders): foreach ($leaders as $i => $r): ?>
@@ -542,10 +561,11 @@ td{font-weight:700;color:#eaf6ff}
                     <td><?= number_format((int)$r['predictions']) ?></td>
                     <td><?= number_format((int)$r['prediction_points']) ?></td>
                     <td><?= number_format((int)$r['fanwall_posts']) ?></td>
+                    <td><?= number_format((int)($r['studio_points'] ?? 0)) ?></td>
                     <td class="pts"><?= number_format((int)$r['total_points']) ?></td>
                 </tr>
             <?php endforeach; else: ?>
-                <tr><td colspan="10" class="empty">No participant data yet.</td></tr>
+                <tr><td colspan="11" class="empty">No participant data yet.</td></tr>
             <?php endif; ?>
             </tbody>
         </table>
