@@ -115,8 +115,8 @@ function dWhere(string $col, string &$types, array &$params): string {
 }
 
 /* Points awarded per distinct day a user uses the Fan Studio (one award/day). */
-if (!defined('WC_STUDIO_DAILY_PTS')) define('WC_STUDIO_DAILY_PTS', 3);
 if (!defined('WC_PTS_PHOTO')) define('WC_PTS_PHOTO', 10); // Fan Filter photo (once per day) per the scoring rules
+if (!defined('WC_STUDIO_DAILY_PTS')) define('WC_STUDIO_DAILY_PTS', WC_PTS_PHOTO); // align studio bonus to the +10 rule
 
 /** Total earned points for a behaviour row: predictions (winner+score+champion,
  *  already in points_awarded) + game score + studio photos (once/day × WC_PTS_PHOTO). */

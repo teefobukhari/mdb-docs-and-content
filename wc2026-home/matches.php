@@ -2272,6 +2272,8 @@ html[data-theme="saudi"] .tm-frame-wrap{border-color:rgba(126,244,174,.22)}
             <tbody>
                 <tr><td data-i18n="ptsGoal">Daily game — score a goal (by zone)</td><td><b>+10 / +20 / +30</b></td></tr>
                 <tr><td data-i18n="ptsGolden">Golden ball goal (bonus)</td><td><b>+50</b></td></tr>
+                <tr><td data-i18n="ptsCombo">Combo streak (every 3 / 5 goals)</td><td><b>+20 / +50</b></td></tr>
+                <tr><td data-i18n="ptsMystery">Daily food bonus roll</td><td><b>+10 → +100</b></td></tr>
                 <tr><td data-i18n="ptsPredWin">Predict the match winner</td><td><b>+3</b></td></tr>
                 <tr><td data-i18n="ptsPredScore">Predict the correct score</td><td><b>+5</b></td></tr>
                 <tr><td data-i18n="ptsChampion">Predict the champion (Final only)</td><td><b>+15</b></td></tr>
@@ -2312,7 +2314,7 @@ html[data-theme="saudi"] .tm-frame-wrap{border-color:rgba(126,244,174,.22)}
       howStep3t:'Create a Fan Filter photo',howStep3d:'Pick your country and a frame, snap a selfie or upload a photo, then save & download it.',
       howStep4t:'Join the Fan Wall',howStep4d:'Post your moment, like and comment on others.',
       howStep5t:'Climb the leaderboard',howStep5d:'Collect points from games, predictions and your daily photo to rise up the rankings.',
-      pointsTitle:'How to collect points',ptsAction:'Action',ptsReward:'Reward',ptsGoal:'Daily game — score a goal (by zone)',ptsGolden:'Golden ball goal (bonus)',ptsPredWin:'Predict the match winner',ptsPredScore:'Predict the correct score',ptsChampion:'Predict the champion (Final only)',ptsPhoto:'Fan Filter photo (once per day)',
+      pointsTitle:'How to collect points',ptsAction:'Action',ptsReward:'Reward',ptsGoal:'Daily game — score a goal (by zone)',ptsGolden:'Golden ball goal (bonus)',ptsCombo:'Combo streak (every 3 / 5 goals)',ptsMystery:'Daily food bonus roll',ptsPredWin:'Predict the match winner',ptsPredScore:'Predict the correct score',ptsChampion:'Predict the champion (Final only)',ptsPhoto:'Fan Filter photo (once per day)',
       ptsNote:'Submit predictions before kickoff — points are awarded automatically once the official result is synced. Save your daily Fan Filter photo for the photo bonus.'},
     ar:{navHome:'الرئيسية',navMatches:'المباريات',navTeamsMap:'خريطة المنتخبات',navFanFilter:'فلتر المشجع',navProfile:'ملفي',navHowTo:'طريقة الاستخدام',navPoints:'النقاط',navLogout:'خروج',
       heroBadge:'القراءة من قاعدة البيانات',heroTitle:'مباريات حقيقية.<br><span>نتائج حقيقية.</span>',
@@ -2329,7 +2331,7 @@ html[data-theme="saudi"] .tm-frame-wrap{border-color:rgba(126,244,174,.22)}
       howStep3t:'أنشئ صورة فلتر المشجع',howStep3d:'اختر دولتك وإطارًا، التقط صورة أو ارفع واحدة، ثم احفظها ونزّلها.',
       howStep4t:'انضم إلى جدار المشجعين',howStep4d:'انشر لحظتك وتفاعل وعلّق على الآخرين.',
       howStep5t:'تصدّر لوحة الصدارة',howStep5d:'اجمع النقاط من الألعاب والتوقعات وصورتك اليومية لترتقي في التصنيف.',
-      pointsTitle:'كيف تجمع النقاط',ptsAction:'الإجراء',ptsReward:'المكافأة',ptsGoal:'اللعبة اليومية — تسجيل هدف (حسب المنطقة)',ptsGolden:'هدف الكرة الذهبية (مكافأة)',ptsPredWin:'توقّع الفائز بالمباراة',ptsPredScore:'توقّع النتيجة الصحيحة',ptsChampion:'توقّع البطل (النهائي فقط)',ptsPhoto:'صورة فلتر المشجع (مرة يوميًا)',
+      pointsTitle:'كيف تجمع النقاط',ptsAction:'الإجراء',ptsReward:'المكافأة',ptsGoal:'اللعبة اليومية — تسجيل هدف (حسب المنطقة)',ptsGolden:'هدف الكرة الذهبية (مكافأة)',ptsCombo:'سلسلة متتالية (كل 3 / 5 أهداف)',ptsMystery:'لفة المكافأة الغذائية اليومية',ptsPredWin:'توقّع الفائز بالمباراة',ptsPredScore:'توقّع النتيجة الصحيحة',ptsChampion:'توقّع البطل (النهائي فقط)',ptsPhoto:'صورة فلتر المشجع (مرة يوميًا)',
       ptsNote:'أرسل التوقعات قبل انطلاق المباراة — تُمنح النقاط تلقائيًا بعد مزامنة النتيجة الرسمية. احفظ صورة فلتر المشجع اليومية للحصول على مكافأة الصورة.'}
   };
   var lang=(function(){ try{ return localStorage.getItem('wc_lang')||'en'; }catch(e){ return 'en'; } })();

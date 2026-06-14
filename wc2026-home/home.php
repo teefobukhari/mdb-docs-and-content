@@ -1140,8 +1140,9 @@ $leaderboard = [];
 /* ---- Daily Fan Studio bonus: WC_STUDIO_DAILY_PTS per distinct day a user
    creates a studio photo (one award per day), folded into the live score so it
    counts on the leaderboard and rank. Schema-detected and isolated so a missing
-   table/column can never break the core leaderboard query. ---- */
-if (!defined('WC_STUDIO_DAILY_PTS')) define('WC_STUDIO_DAILY_PTS', 3);
+   table/column can never break the core leaderboard query.
+   Value = WC_PTS_PHOTO (+10) per the official scoring rules. ---- */
+if (!defined('WC_STUDIO_DAILY_PTS')) define('WC_STUDIO_DAILY_PTS', WC_PTS_PHOTO);
 $wcStudioTsCol = (string) wc_scalar($conn, "
     SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'WC2026_Filter_Photos'
