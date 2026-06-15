@@ -1,7 +1,7 @@
 <?php
 // /WC2026/home.php
 
-require_once __DIR__ . '/_session.php';
+if (is_file(__DIR__ . "/_session.php")) { require_once __DIR__ . "/_session.php"; } elseif (session_status() === PHP_SESSION_NONE) { session_name("WC2026SESSID"); session_start(); }
 
 require_once __DIR__ . '/connections/config.php';
 require_once __DIR__ . '/connections/functions.php';
