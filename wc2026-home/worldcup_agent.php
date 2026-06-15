@@ -115,7 +115,7 @@ if (isset($_GET['ai'])) {
     }
 
     /* session + DB connection (same bootstrap pattern as admin.php) */
-    if (session_status() === PHP_SESSION_NONE) { session_name('WC2026SESSID'); session_start(); }
+    require_once __DIR__ . '/_session.php';
     $conn = null;
     if (is_file(__DIR__ . '/connections/config.php')) { require __DIR__ . '/connections/config.php'; }
 

@@ -4,10 +4,7 @@
 
 declare(strict_types=1);
 
-if (session_status() === PHP_SESSION_NONE) {
-    session_name('WC2026SESSID');
-    session_start();
-}
+require_once __DIR__ . '/../_session.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');

@@ -683,9 +683,9 @@ button:hover{transform:translateY(-1px);background:#4D86D6;box-shadow:0 20px 34p
 .error{color:var(--danger);background:#FFF1F0;border:1px solid #FFD6D2}
 .success{color:var(--success);background:#EFFFF7;border:1px solid #C7F3DF}
 .footer{
-    margin-top:28px;
+
     text-align:center;
-    color:#91A0B2;
+    color:white;
     font-size:11px;
     font-weight:900;
     white-space:nowrap;
@@ -696,7 +696,7 @@ button:hover{transform:translateY(-1px);background:#4D86D6;box-shadow:0 20px 34p
 .visual-side{
     order:1;
     position:relative;
-    min-height:640px;
+    min-height:440px;
     padding:48px;
     color:#fff;
     display:flex;
@@ -1267,9 +1267,7 @@ html[dir="rtl"] .btn-arrow{
                 <div class="message success"><?= htmlspecialchars($displaySuccess, ENT_QUOTES, 'UTF-8') ?></div>
             <?php endif; ?>
 
-            <div class="footer">
-                <?= wc_t('Designed & Developed by CATRION IT Team • Saudi Made', 'تصميم وتطوير فريق تقنية المعلومات في كاتريون   ') ?>
-            </div>
+
 
             <div class="brand-bottom">
                 <div class="brand-policy-links">
@@ -1298,7 +1296,12 @@ html[dir="rtl"] .btn-arrow{
         <?= wc_t('Cheer with', 'شجع مع') ?><br>
         <span><?= wc_t('CATRION', 'كاتريون') ?></span>
     </h1>
+                <div class="footer">
+                <?= wc_t('Developed in-house by CATRION IT Team |', ' | تصميم وتطوير فريق تقنية المعلومات في كاتريون') ?>
+                <?= wc_t(' Corporate Communications • Saudi Made', ' التواصل المؤسسي') ?>
+            </div>
 </div>
+
     </section>
 
 </div>
