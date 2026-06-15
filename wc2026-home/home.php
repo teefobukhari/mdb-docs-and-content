@@ -8490,7 +8490,7 @@ table.group-table tr:last-child td{border-bottom:0}
 .group-table tr.q-third .gt-pos{color:#F5C85B}
 html[dir="rtl"] .group-table .gt-team{text-align:right}
 html[dir="rtl"] table.group-table th.gt-team{text-align:right}
-@media(max-width:560px){.group-tables{grid-template-columns:1fr}}
+@media(max-width:768px){#bracketStage1 .group-tables{grid-template-columns:1fr !important}}
 
 /* ===== Match News pop-up (key news grouped by team) ===== */
 .news-modal{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;padding:18px}
