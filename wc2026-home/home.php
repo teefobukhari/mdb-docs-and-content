@@ -1274,6 +1274,12 @@ wc_attach_flags($next24Matches, $flagByName, $flagByCode);
 $next24Fallback = (empty($next24Matches) && !empty($nextMatch)) ? $nextMatch : [];
 wc_attach_flags($next24Fallback, $flagByName, $flagByCode);
 
+/* Match IDs this user has already predicted — to toggle Submit vs Update on cards. */
+$myPredictedMatches = [];
+foreach (wc_rows($conn, "SELECT match_id FROM WC2026_Predictions WHERE user_id = ?", "i", [$userId]) as $pr) {
+    $myPredictedMatches[(int)$pr['match_id']] = true;
+}
+
 /* ---- Recently-online users (activity in the last 15 minutes) ---- */
 $onlineUsers = wc_rows($conn, "
     SELECT u.full_name, u.location, MAX(g.played_at) AS last_seen
@@ -5087,7 +5093,8 @@ body:before{
                     <?php if ($nxVenue !== ''): ?><div class="next24-venue"><?= htmlspecialchars($nxVenue, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
                     <div class="next24-actions">
                         <?php if ($kickoffOpen): ?>
-                            <button type="button" class="match-link primary" data-predict-url="/WC2026/predict?match=<?= (int)$nx['id'] ?>" data-i18n="submitPrediction">Submit Prediction</button>
+                            <?php $nxPredicted = isset($myPredictedMatches[(int)$nx['id']]); ?>
+                            <button type="button" class="match-link primary" data-predict-url="/WC2026/predict?match=<?= (int)$nx['id'] ?>" data-i18n="<?= $nxPredicted ? 'updatePrediction' : 'submitPrediction' ?>"><?= $nxPredicted ? 'Update Prediction' : 'Submit Prediction' ?></button>
                         <?php else: ?>
                             <span class="match-link soft" style="opacity:.6;cursor:not-allowed" data-i18n="predictionsClosed">Predictions Closed</span>
                         <?php endif; ?>
@@ -7320,7 +7327,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       r32NotStarted:"The Round of 32 hasn't started yet — check back after the group stage.",
       r32Projected:"Projected from the current group standings — the Round of 32 hasn't started yet.",
       kickerLive:'Live Now',kickerNext:'Next World Cup Match',kickerMatches:'World Cup Matches',
-      viewMatches:'View Matches',submitPrediction:'Submit Prediction',worldCupFeed:'World Cup Feed',matchesSynced:'matches synced',
+      viewMatches:'View Matches',submitPrediction:'Submit Prediction',updatePrediction:'Update Prediction',worldCupFeed:'World Cup Feed',matchesSynced:'matches synced',
       dailyGoalRush:'Daily Goal Rush',onePlayPerDay:'One play per day',
       gameTime:'Time',gameGoals:'Goals',gamePoints:'Points',
       tapToShoot:'Tap the ball to shoot!',tapHintSub:'Use the moving target line and avoid the goalkeeper',
@@ -7388,7 +7395,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
       r32NotStarted:'لم يبدأ دور الـ32 بعد — تابع بعد انتهاء دور المجموعات.',
       r32Projected:'متوقّع بناءً على ترتيب المجموعات الحالي — لم يبدأ دور الـ32 بعد.',
       kickerLive:'مباشر الآن',kickerNext:'المباراة القادمة',kickerMatches:'مباريات كأس العالم',
-      viewMatches:'عرض المباريات',submitPrediction:'أرسل توقعك',worldCupFeed:'تغذية كأس العالم',matchesSynced:'مباراة متزامنة',
+      viewMatches:'عرض المباريات',submitPrediction:'أرسل توقعك',updatePrediction:'حدّث توقعك',worldCupFeed:'تغذية كأس العالم',matchesSynced:'مباراة متزامنة',
       dailyGoalRush:'تحدي الأهداف اليومي',onePlayPerDay:'محاولة واحدة يوميًا',
       gameTime:'الوقت',gameGoals:'أهداف',gamePoints:'نقاط',
       tapToShoot:'انقر الكرة للتسديد!',tapHintSub:'استخدم خط التصويب المتحرك وتفادَ الحارس',
