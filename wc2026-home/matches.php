@@ -656,6 +656,7 @@ body{
     border-radius:14px;
     padding:0 14px;
     font-weight:700;
+    font-size:16px; /* >=16px so iOS Safari doesn't zoom on focus */
     outline:none;
 }
 .search button{
@@ -861,7 +862,7 @@ body{
     justify-content:center;
     padding:22px;
     background:rgba(7,26,53,.72);
-    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
 }
 .predict-popup.active{
     display:flex;
@@ -1433,7 +1434,7 @@ body{
     font-size:11px;
     font-weight:900;
     letter-spacing:.6px;
-    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
 }
 .hud-live i{
     width:8px;height:8px;border-radius:50%;
@@ -1451,7 +1452,7 @@ body{
     border-radius:12px;
     background:rgba(255,255,255,.08);
     border:1px solid rgba(255,255,255,.16);
-    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
     min-width:62px;
 }
 .hud-chip b{font-size:16px;font-weight:900;color:var(--gold2);line-height:1}
@@ -1953,7 +1954,7 @@ html[data-theme="saudi"] .theme-btn.active,html[data-theme="saudi"] .lang-btn.ac
 button.nav-link{font-family:inherit}
 
 /* modals */
-.wc-modal{position:fixed;inset:0;z-index:500;background:rgba(4,18,40,.78);display:none;align-items:center;justify-content:center;padding:22px;backdrop-filter:blur(8px)}
+.wc-modal{position:fixed;inset:0;z-index:500;background:rgba(4,18,40,.78);display:none;align-items:center;justify-content:center;padding:22px;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
 .wc-modal.active{display:flex}
 .wc-modal-card{width:100%;max-width:560px;background:linear-gradient(150deg,#0B2C55,#071A35);border:1px solid rgba(168,231,255,.2);border-radius:24px;padding:26px;color:#fff;box-shadow:0 30px 80px rgba(0,0,0,.5);max-height:88vh;overflow:auto}
 .wc-modal-kicker{color:var(--cyan);font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}

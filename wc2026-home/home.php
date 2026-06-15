@@ -1526,7 +1526,7 @@ body{
 .daily-card{
     background:rgba(255,255,255,.13);
     border:1px solid rgba(255,255,255,.22);
-    backdrop-filter:blur(16px);
+    -webkit-backdrop-filter:blur(16px);backdrop-filter:blur(16px);
     border-radius:28px;
     padding:24px;
 }
@@ -1945,7 +1945,7 @@ body{
     border-radius:20px;
     background:rgba(7,26,53,.78);
     border:1px solid rgba(255,255,255,.18);
-    backdrop-filter:blur(14px);
+    -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
     box-shadow:0 18px 38px rgba(0,0,0,.25);
 }
 
@@ -2210,7 +2210,7 @@ body{
     font-size:17px;
     font-weight:900;
     box-shadow:0 14px 30px rgba(0,0,0,.25);
-    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
 }
 
 .tap-hint small{
@@ -2823,6 +2823,7 @@ body{
    ========================================================== */
 body{
     min-height:100vh;
+    min-height:100dvh;
     background-attachment:fixed;
 }
 .hero{
@@ -3500,7 +3501,7 @@ body{
     background:rgba(7,26,53,.68);
     border:1px solid rgba(255,255,255,.16);
     box-shadow:0 22px 42px rgba(0,0,0,.24);
-    backdrop-filter:blur(12px);
+    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
 }
 .map-pin-card:nth-child(1){left:4%;top:16%}
 .map-pin-card:nth-child(2){left:32%;top:2%}
@@ -3552,7 +3553,7 @@ body{
     border-radius:22px;
     background:rgba(255,255,255,.08);
     border:1px solid rgba(255,255,255,.14);
-    backdrop-filter:blur(12px);
+    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
 }
 .progress-title{
     color:#fff;
@@ -7235,7 +7236,7 @@ html[dir="rtl"] .wc-msg.user{border-bottom-right-radius:15px;border-bottom-left-
 .wc-chip{font-size:12px;color:#FFE19A;padding:7px 11px;border-radius:20px;background:rgba(245,200,91,.10);border:1px solid rgba(245,200,91,.3);cursor:pointer;font-family:inherit;font-weight:700}
 .wc-chip:hover{background:rgba(245,200,91,.22);color:#fff}
 .wc-agent-input{display:flex;gap:8px;padding:11px 16px 15px;border-top:1px solid rgba(168,231,255,.14)}
-.wc-agent-input input{flex:1;min-height:42px;border-radius:12px;border:1px solid rgba(168,231,255,.22);background:rgba(255,255,255,.06);color:#fff;padding:0 13px;font:inherit;font-size:13px}
+.wc-agent-input input{flex:1;min-height:42px;border-radius:12px;border:1px solid rgba(168,231,255,.22);background:rgba(255,255,255,.06);color:#fff;padding:0 13px;font:inherit;font-size:16px}
 .wc-agent-input input::placeholder{color:rgba(255,255,255,.5)}
 .wc-agent-input button{width:42px;height:42px;flex:none;border:0;border-radius:12px;cursor:pointer;color:#06202e;background:linear-gradient(135deg,#F5C85B,#FFE19A);display:flex;align-items:center;justify-content:center}
 .wc-agent-input button svg{width:20px;height:20px}
@@ -7610,7 +7611,7 @@ html[dir="rtl"] .bracket-match:after{right:auto;left:-16px}
 .s-comments{margin-top:10px;display:flex;flex-direction:column;gap:8px}
 .s-comment{display:flex;gap:8px;font-size:13px}.s-comment b{color:#fff}.s-comment span{color:rgba(255,255,255,.78)}
 .s-comment-form{display:flex;gap:8px;margin-top:8px}
-.s-comment-form input{flex:1;min-height:36px;border-radius:10px;border:1px solid rgba(168,231,255,.18);background:rgba(255,255,255,.05);color:#fff;font:inherit;font-size:13px;padding:0 11px}
+.s-comment-form input{flex:1;min-height:36px;border-radius:10px;border:1px solid rgba(168,231,255,.18);background:rgba(255,255,255,.05);color:#fff;font:inherit;font-size:16px;padding:0 11px}
 .s-comment-form button{border:0;border-radius:10px;padding:0 13px;background:rgba(245,200,91,.9);color:#06202e;font-weight:900;cursor:pointer}
 
 /* (1) fan filter pop-up */
@@ -7767,7 +7768,7 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 
 /* (5) Live World Cup Map — richer + mobile-friendly */
 .world-map-svg{opacity:.72 !important}
-.map-pin-card{background:rgba(6,26,54,.92) !important;backdrop-filter:blur(10px)}
+.map-pin-card{background:rgba(6,26,54,.92) !important;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .map-pin-status.Live{animation:wmLandGlow 1.6s ease-in-out infinite}
 @media(max-width:768px){
     .world-map-svg{position:relative !important;top:auto !important;height:150px !important;opacity:.9 !important;margin-bottom:12px;border-radius:16px;background:linear-gradient(135deg,#05162F,#0a2f5e)}
@@ -7849,7 +7850,7 @@ html[dir="rtl"] .bracket-col:not(:first-child) .bracket-match:before{left:auto;r
 .ff-countries-empty{padding:8px 2px;color:rgba(255,255,255,.55);font-size:12px;font-weight:700}
 
 /* (B3) home prediction pop-up (dark, matches the theme) */
-.predict-popup{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(4,18,40,.78);backdrop-filter:blur(10px)}
+.predict-popup{position:fixed;inset:0;z-index:300;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(4,18,40,.78);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
 .predict-popup.active{display:flex}
 .predict-popup-card{width:100%;max-width:820px;height:min(86vh,760px);background:#0c1830;border:1px solid rgba(168,231,255,.2);border-radius:24px;overflow:hidden;box-shadow:0 35px 90px rgba(0,0,0,.5);position:relative}
 .predict-popup-top{height:60px;display:flex;align-items:center;justify-content:space-between;padding:0 12px 0 22px;border-bottom:1px solid rgba(168,231,255,.14)}
@@ -8487,7 +8488,7 @@ html[dir="rtl"] table.group-table th.gt-team{text-align:right}
 /* ===== Match News pop-up (key news grouped by team) ===== */
 .news-modal{position:fixed;inset:0;z-index:9000;display:flex;align-items:center;justify-content:center;padding:18px}
 .news-modal[hidden]{display:none}
-.news-modal-backdrop{position:absolute;inset:0;background:rgba(4,14,30,.72);backdrop-filter:blur(4px)}
+.news-modal-backdrop{position:absolute;inset:0;background:rgba(4,14,30,.72);-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px)}
 .news-modal-card{position:relative;width:min(760px,100%);max-height:86vh;display:flex;flex-direction:column;
     background:linear-gradient(160deg,#0b2347,#08203f 60%,#0a3a76);
     border:1px solid rgba(168,231,255,.22);border-radius:22px;box-shadow:0 40px 90px rgba(0,0,0,.5);overflow:hidden}

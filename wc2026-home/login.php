@@ -652,7 +652,7 @@ input{
     background:#fff;
     color:#102033;
     outline:none;
-    font-size:14px;
+    font-size:16px;
     box-shadow:0 8px 20px rgba(7,42,85,.03);
     font-family:inherit;
 }
@@ -750,7 +750,7 @@ button:hover{transform:translateY(-1px);background:#4D86D6;box-shadow:0 20px 34p
     font-size:12px;
     font-weight:900;
     box-shadow:0 14px 30px rgba(0,0,0,.16);
-    backdrop-filter:blur(12px);
+    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
 }
 .visual-kicker i{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 18px rgba(245,200,91,.95);animation:pulseDot 1.5s ease-in-out infinite}
 @keyframes pulseDot{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.45);opacity:.75}}
@@ -764,7 +764,7 @@ button:hover{transform:translateY(-1px);background:#4D86D6;box-shadow:0 20px 34p
     background:rgba(255,255,255,.94);
     border:1px solid rgba(255,255,255,.45);
     box-shadow:0 14px 35px rgba(0,0,0,.18);
-    backdrop-filter:blur(12px);
+    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);
 }
 .visual-logo-card img{max-width:122px;max-height:36px;object-fit:contain}
 
@@ -801,7 +801,7 @@ html[dir="rtl"] .visual-main h1{letter-spacing:0}
 }
 @media(max-width:560px){
     body{padding:0;background:#071A35}
-    .page-shell{border-radius:0;box-shadow:none;min-height:100vh}
+    .page-shell{border-radius:0;box-shadow:none;min-height:100vh;min-height:100dvh}
     .visual-side{min-height:330px;padding:24px 20px}
     .visual-top{top:22px;left:20px;right:20px}
     .visual-kicker{font-size:10px;padding:9px 11px}

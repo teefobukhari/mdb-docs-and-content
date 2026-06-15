@@ -696,7 +696,7 @@ h2.section:before{content:"";width:9px;height:9px;border-radius:50%;background:v
 .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:end;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:18px;padding:14px}
 .fld{display:flex;flex-direction:column;gap:5px}
 .fld label{font-size:11px;font-weight:900;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
-.fld input,.fld select{min-height:40px;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.06);color:#fff;padding:8px 12px;font-family:inherit;font-weight:700;font-size:13px}
+.fld input,.fld select{min-height:40px;border-radius:11px;border:1px solid var(--line);background:rgba(255,255,255,.06);color:#fff;padding:8px 12px;font-family:inherit;font-weight:700;font-size:16px}
 .fld select option{color:#000}
 /* KPI cards */
 .kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px}
@@ -723,7 +723,7 @@ td{font-weight:700;color:#eaf6ff}
 .empty{color:var(--muted);font-weight:700;text-align:center;padding:30px;font-size:13px}
 .behav-toolbar{display:flex;align-items:center;gap:12px;margin:0 0 12px;flex-wrap:wrap}
 .behav-search{flex:1;min-width:220px;min-height:42px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,.06);
-    color:#fff;padding:9px 14px;font-family:inherit;font-weight:700;font-size:13px}
+    color:#fff;padding:9px 14px;font-family:inherit;font-weight:700;font-size:16px}
 .behav-search::placeholder{color:rgba(234,244,255,.5)}
 .behav-count{font-size:12px;font-weight:800;color:var(--muted)}
 .rescore-note{margin:12px 4px 0;padding:11px 15px;border-radius:13px;font-weight:800;font-size:13px;color:#062417;background:linear-gradient(135deg,#7EF4AE,#22C55E);box-shadow:0 10px 22px rgba(34,197,94,.35)}
