@@ -61,7 +61,7 @@ if ($mode === 'auto') {
 try {
     switch ($mode) {
         case 'schedule':  run_schedule($pdo, $API_BASE, $API_KEY, $LEAGUE, $SEASON); break;
-        case 'live':      run_live($pdo, $ENV, $API_BASE, $API_KEY, $LEAGUE);        break;
+        case 'live':      run_live($pdo, $ENV, $API_BASE, $API_KEY, $LEAGUE, $SEASON); break;
         case 'standings': run_standings($pdo, $API_BASE, $API_KEY, $LEAGUE, $SEASON);break;
         case 'all':       run_schedule($pdo, $API_BASE, $API_KEY, $LEAGUE, $SEASON);
                           run_standings($pdo, $API_BASE, $API_KEY, $LEAGUE, $SEASON);break;
@@ -135,7 +135,7 @@ function run_schedule(PDO $pdo, string $base, string $key, int $league, int $sea
     log_sync($pdo, 'schedule', $code, $n, "upserted $n fixtures", $q);
 }
 
-function run_live(PDO $pdo, array $env, string $base, string $key, int $league): void
+function run_live(PDO $pdo, array $env, string $base, string $key, int $league, int $season): void
 {
     if (!quota_ok($pdo)) { log_sync($pdo, 'live', null, 0, 'quota floor reached'); return; }
     // The API rejects a bare single id for `live` (regex wants "all" or "id-id-..").
@@ -152,6 +152,13 @@ function run_live(PDO $pdo, array $env, string $base, string $key, int $league):
         notify_goal($pdo, $env, $g);
     }
     log_sync($pdo, 'live', $code, $n, "live=$n goals_new=" . count($goals), $q);
+
+    // Keep the standings table current while matches are in play: when there is
+    // at least one live fixture in our league, refresh standings too (API-Football
+    // reflects live points). Costs one extra request, still gated by quota_ok().
+    if ($n > 0) {
+        run_standings($pdo, $base, $key, $league, $season);
+    }
 }
 
 function run_standings(PDO $pdo, string $base, string $key, int $league, int $season): void
