@@ -1164,7 +1164,22 @@ if ($wcStudioTsCol !== '' && $wcStudioHasUser) {
         "i", [$userId]) * WC_STUDIO_DAILY_PTS;
 }
 
-/* Overall leaderboard — game points + studio bonus, merged and ranked in PHP. */
+/* ---- Prediction points (winner / correct score / champion — from points_awarded) ---- */
+$predPointsByUser = [];
+foreach (wc_rows($conn, "SELECT user_id, COALESCE(SUM(points_awarded),0) AS pts FROM WC2026_Predictions GROUP BY user_id") as $r) {
+    $predPointsByUser[(int)$r['user_id']] = (int)$r['pts'];
+}
+$myPredPoints = $predPointsByUser[$userId] ?? 0;
+$myPredPointsWeek = (int) wc_scalar(
+    $conn,
+    "SELECT COALESCE(SUM(points_awarded),0) FROM WC2026_Predictions
+     WHERE user_id = ? AND points_awarded > 0 AND YEARWEEK(updated_at,3) = YEARWEEK(CURDATE(),3)",
+    "i",
+    [$userId]
+);
+
+/* Overall leaderboard — game + prediction + studio points, merged and ranked in
+   PHP. LEFT JOIN so users who only predicted / used the studio still rank. */
 $lbRows = wc_rows($conn, "
     SELECT
         u.id,
@@ -1173,12 +1188,14 @@ $lbRows = wc_rows($conn, "
         COALESCE(SUM(g.total_points),0) AS total_points,
         COALESCE(SUM(g.goals),0) AS goals
     FROM WC2026_Users u
-    JOIN WC2026_Game_Sessions g ON g.user_id = u.id
+    LEFT JOIN WC2026_Game_Sessions g ON g.user_id = u.id
     WHERE u.status='Active'
     GROUP BY u.id, u.full_name, u.location
 ");
 foreach ($lbRows as &$lr) {
-    $lr['total_points'] = (int)$lr['total_points'] + ($studioBonusByUser[(int)$lr['id']] ?? 0);
+    $lr['total_points'] = (int)$lr['total_points']
+        + ($predPointsByUser[(int)$lr['id']] ?? 0)
+        + ($studioBonusByUser[(int)$lr['id']] ?? 0);
     $lr['goals']        = (int)$lr['goals'];
 }
 unset($lr);
@@ -1210,9 +1227,10 @@ $bonusQuestionJson = !empty($bonusQuestion)
     ? json_encode($bonusQuestion[0], JSON_UNESCAPED_UNICODE)
     : 'null';
 
-/* ---- Weekly + overall score (current ISO week vs all-time) — includes the
-   daily Fan Studio bonus so the displayed score matches the leaderboard. ---- */
-$overallScore = (int)$myGamePoints + (int)$myStudioBonus;
+/* ---- Weekly + overall score (current ISO week vs all-time) — game points +
+   prediction points (winner/score/champion) + daily Fan Studio bonus, so the
+   cards match the leaderboard total. ---- */
+$overallScore = (int)$myGamePoints + (int)$myPredPoints + (int)$myStudioBonus;
 $weeklyScore  = (int)wc_scalar(
     $conn,
     "SELECT COALESCE(SUM(total_points),0)
@@ -1220,7 +1238,7 @@ $weeklyScore  = (int)wc_scalar(
      WHERE user_id=? AND YEARWEEK(play_date,3)=YEARWEEK(CURDATE(),3)",
     "i",
     [$userId]
-) + (int)$myStudioBonusWeek;
+) + (int)$myPredPointsWeek + (int)$myStudioBonusWeek;
 $weeklyRank = '--';
 $wr = wc_rows($conn, "
     SELECT rank_no FROM (
